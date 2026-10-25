@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { NFC_USDC_DROP_PATH } from "@/lib/faucet/nfc-usdc-drop"
 import { hasSupabaseAuthCookies } from "@/lib/supabase/authCookies"
 
 export async function updateSession(request: NextRequest) {
@@ -51,6 +52,11 @@ export async function updateSession(request: NextRequest) {
   // Faucet claim page + map are public NFC entry points (covers /faucet/* and /faucets/*).
   // Unauthenticated users see the "create wallet" state and bounce through /auth?faucet=<slug>.
   if (pathname.startsWith("/faucet")) {
+    return NextResponse.next()
+  }
+
+  // Standing Sozu Faucet NFC drop. The page sends new phones to /auth?redirect=/get/usdc.
+  if (pathname === NFC_USDC_DROP_PATH) {
     return NextResponse.next()
   }
 
@@ -219,6 +225,9 @@ export async function updateSession(request: NextRequest) {
         return supabaseResponse
       }
       if (request.nextUrl.searchParams.get("faucet") === "1") {
+        return supabaseResponse
+      }
+      if (request.nextUrl.searchParams.get("redirect") === NFC_USDC_DROP_PATH) {
         return supabaseResponse
       }
       const url = request.nextUrl.clone()
