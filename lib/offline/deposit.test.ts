@@ -6,12 +6,16 @@ const OWNER = Uint8Array.from([
   234, 74, 108, 99, 226, 156, 82, 10, 190, 245, 80, 123, 19, 46, 197, 249, 149, 71, 118, 174, 190,
   190, 123, 146, 66, 30, 234, 105, 20, 70, 210, 44,
 ])
-const DEVICE_KEY = Uint8Array.from([
-  2, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
-  17, 17, 17, 17, 17, 17, 17, 17,
-])
-const DEVICE_SIG = Uint8Array.from(Array.from({ length: 64 }, (_, i) => i + 1))
+const DEVICE_KEY = hex("02515c3d6eb9e396b904d3feca7f54fdcd0cc1e997bf375dca515ad0a6c3b4035f")
+const DEVICE_SIG = hex(
+  "7adc1753ff3e4c0c9f3f3c49c4571ed53c63cbc2bfc3365ec4ee8313775abb215b4d87a3500c40b624e4b30aefc49a6e73278becf0c31d10f76ef24d4347a1d2",
+)
+const CHEQUE_BODY = new TextEncoder().encode("sozu-offline-deposit")
 const PASSKEY_ASSERTION = Uint8Array.from(Array.from({ length: 64 }, () => 0xab))
+
+function hex(value: string): Uint8Array {
+  return Uint8Array.from(Buffer.from(value, "hex"))
+}
 
 describe("deposit", () => {
   it("stores the logged-in classic account as the 32-byte owner", () => {
@@ -26,7 +30,7 @@ describe("deposit", () => {
       classicAccount: CLASSIC_ACCOUNT,
       deviceKey: DEVICE_KEY,
       deviceKeySignature: DEVICE_SIG,
-      passkeyAssertion: PASSKEY_ASSERTION,
+      chequeBody: CHEQUE_BODY,
     })
 
     expect(stored?.deviceKey).toEqual(DEVICE_KEY)
@@ -37,7 +41,8 @@ describe("deposit", () => {
     const stored = deposit({
       classicAccount: CLASSIC_ACCOUNT,
       deviceKey: DEVICE_KEY,
-      passkeyAssertion: PASSKEY_ASSERTION,
+      deviceKeySignature: PASSKEY_ASSERTION,
+      chequeBody: CHEQUE_BODY,
     })
 
     expect(stored?.owner).toEqual(OWNER)
@@ -48,7 +53,7 @@ describe("deposit", () => {
     const signed = {
       deviceKey: DEVICE_KEY,
       deviceKeySignature: DEVICE_SIG,
-      passkeyAssertion: PASSKEY_ASSERTION,
+      chequeBody: CHEQUE_BODY,
     }
 
     expect(deposit({ classicAccount: null, ...signed })).toBeNull()
