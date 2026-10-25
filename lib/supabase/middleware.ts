@@ -43,6 +43,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Public Hack Meridian watch page: live testnet ledger of offline vault txs.
+  if (pathname === "/offline" || pathname.startsWith("/offline/")) {
+    return NextResponse.next()
+  }
+
   // Faucet claim page + map are public NFC entry points (covers /faucet/* and /faucets/*).
   // Unauthenticated users see the "create wallet" state and bounce through /auth?faucet=<slug>.
   if (pathname.startsWith("/faucet")) {
@@ -85,6 +90,7 @@ export async function updateSession(request: NextRequest) {
   const isCityRoute = pathname.startsWith("/city")
   const isTrackerRoute = pathname.startsWith("/tracker")
   const isOnboardingRoute = pathname.startsWith("/onboarding")
+  const isOfflineLedgerRoute = pathname === "/offline" || pathname.startsWith("/offline/")
   const isAuthRoute = pathname.startsWith("/auth")
   const isApiRoute = pathname.startsWith("/api")
   const isDevMode = process.env.NODE_ENV === "development"
@@ -187,7 +193,8 @@ export async function updateSession(request: NextRequest) {
     !isTestKeysRoute &&
     !isCityRoute &&
     !isTrackerRoute &&
-    !isOnboardingRoute
+    !isOnboardingRoute &&
+    !isOfflineLedgerRoute
   ) {
     const url = request.nextUrl.clone()
     url.pathname = "/auth"
