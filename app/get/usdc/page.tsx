@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import { NfcUsdcDrop } from "@/components/faucet/nfc-usdc-drop"
 
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 
 /** NFC tag URL on staging: https://dev.sozu.capital/get/usdc */
 export default function GetUsdcPage() {
-  return <NfcUsdcDrop />
+  return (
+    <Suspense fallback={<main className="fixed inset-0 bg-black" />}>
+      <NfcUsdcDrop />
+    </Suspense>
+  )
 }

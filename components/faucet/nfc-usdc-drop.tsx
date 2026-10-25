@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { HapticProbe } from "@/components/faucet/haptic-probe"
 import { isClientAuthed } from "@/lib/client-auth-gate"
 import { NFC_USDC_DROP_PATH } from "@/lib/faucet/nfc-usdc-drop"
 import {
@@ -47,6 +48,12 @@ export function resetNfcUsdcClaimForRetry() {
 }
 
 export function NfcUsdcDrop() {
+  const hapticTest = useSearchParams().get("haptic") === "1"
+  if (hapticTest) return <HapticProbe />
+  return <NfcUsdcClaim />
+}
+
+function NfcUsdcClaim() {
   const router = useRouter()
   const [result, setResult] = useState<SozuFaucetFundResult | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
