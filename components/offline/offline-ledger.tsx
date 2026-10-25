@@ -74,7 +74,15 @@ export function OfflineLedgerView({ vaultQuery }: { vaultQuery: string | null })
           {ledger.txs.map((tx) => (
             <li key={tx.hash} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.16em] text-white/40">{tx.reason}</p>
-              <p className="mt-1 text-sm font-medium">{tx.label}</p>
+              <p
+                className={
+                  tx.reason === "note-used"
+                    ? "mt-1 text-sm font-medium text-[#C4552A]"
+                    : "mt-1 text-sm font-medium"
+                }
+              >
+                {tx.label}
+              </p>
               {tx.createdAt ? <p className="mt-1 text-xs text-white/40">{tx.createdAt}</p> : null}
               <a
                 href={tx.explorerUrl}
