@@ -1031,6 +1031,12 @@ function AuthPageContent() {
         <p className="max-w-sm px-2 text-center text-[10px] font-extralight tracking-[0.12em] text-white">
           {t.authPasskeyCaption}
         </p>
+        <a
+          href="/offline"
+          className="pointer-events-auto text-[10px] font-extralight tracking-[0.12em] text-white/55 underline-offset-4 hover:text-white hover:underline"
+        >
+          Offline ledger
+        </a>
 
         {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
       </div>
