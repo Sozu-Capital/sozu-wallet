@@ -10,11 +10,14 @@ export type DepositRecord = {
 }
 
 export function deposit(input: {
-  classicAccount: string
+  classicAccount: string | null
   deviceKey: Uint8Array
   deviceKeySignature?: Uint8Array | null
   passkeyAssertion?: Uint8Array | null
-}): DepositRecord {
+}): DepositRecord | null {
+  if (!input.classicAccount || !StrKey.isValidEd25519PublicKey(input.classicAccount)) {
+    return null
+  }
   const owner = Uint8Array.from(StrKey.decodeEd25519PublicKey(input.classicAccount))
   const deviceKeySignature = input.deviceKeySignature
   const signature =

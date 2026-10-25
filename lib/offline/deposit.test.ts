@@ -43,4 +43,21 @@ describe("deposit", () => {
     expect(stored?.owner).toEqual(OWNER)
     expect(stored?.signature).toBeNull()
   })
+
+  it("supplies no owner and does not sign when login has no classic account", () => {
+    const signed = {
+      deviceKey: DEVICE_KEY,
+      deviceKeySignature: DEVICE_SIG,
+      passkeyAssertion: PASSKEY_ASSERTION,
+    }
+
+    expect(deposit({ classicAccount: null, ...signed })).toBeNull()
+    expect(deposit({ classicAccount: "", ...signed })).toBeNull()
+    expect(
+      deposit({
+        classicAccount: "CAEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQSCIJBEEQTD2L",
+        ...signed,
+      }),
+    ).toBeNull()
+  })
 })
