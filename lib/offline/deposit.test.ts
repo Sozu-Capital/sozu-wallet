@@ -10,6 +10,8 @@ const DEVICE_KEY = Uint8Array.from([
   2, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
   17, 17, 17, 17, 17, 17, 17, 17,
 ])
+const DEVICE_SIG = Uint8Array.from(Array.from({ length: 64 }, (_, i) => i + 1))
+const PASSKEY_ASSERTION = Uint8Array.from(Array.from({ length: 64 }, () => 0xab))
 
 describe("deposit", () => {
   it("stores the logged-in classic account as the 32-byte owner", () => {
@@ -17,5 +19,28 @@ describe("deposit", () => {
 
     expect(stored?.owner).toEqual(OWNER)
     expect(stored?.caller).toEqual(OWNER)
+  })
+
+  it("signs the cheque with the device key", () => {
+    const stored = deposit({
+      classicAccount: CLASSIC_ACCOUNT,
+      deviceKey: DEVICE_KEY,
+      deviceKeySignature: DEVICE_SIG,
+      passkeyAssertion: PASSKEY_ASSERTION,
+    })
+
+    expect(stored?.deviceKey).toEqual(DEVICE_KEY)
+    expect(stored?.signature).toEqual(DEVICE_SIG)
+  })
+
+  it("does not use a passkey assertion as the cheque signature", () => {
+    const stored = deposit({
+      classicAccount: CLASSIC_ACCOUNT,
+      deviceKey: DEVICE_KEY,
+      passkeyAssertion: PASSKEY_ASSERTION,
+    })
+
+    expect(stored?.owner).toEqual(OWNER)
+    expect(stored?.signature).toBeNull()
   })
 })
