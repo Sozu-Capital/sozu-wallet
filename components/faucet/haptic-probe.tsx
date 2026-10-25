@@ -50,12 +50,10 @@ export function HapticProbe() {
   const [grow, setGrow] = useState(0)
   const [accepted, setAccepted] = useState<boolean | null>(null)
   const timer = useRef(0)
-  const switchRef = useRef<HTMLInputElement>(null)
   const fillMs = airdropContactDurationMs()
 
   useEffect(() => {
     setCanVibrate(typeof navigator.vibrate === "function")
-    switchRef.current?.setAttribute("switch", "")
     return () => {
       if (timer.current) window.clearTimeout(timer.current)
       try {
@@ -116,12 +114,16 @@ export function HapticProbe() {
             <label className="relative mt-8 inline-flex overflow-hidden rounded-full bg-white px-6 py-3 text-sm font-medium text-black">
               <span>{phase === "sent" ? "Again" : "Feel the claim"}</span>
               <input
-                ref={switchRef}
+                ref={(el) => {
+                  if (!el) return
+                  el.setAttribute("switch", "")
+                  el.style.setProperty("appearance", "auto")
+                  el.style.setProperty("-webkit-appearance", "auto")
+                }}
                 type="checkbox"
                 aria-label="Feel the claim"
                 onChange={start}
                 className="absolute inset-0 m-0 h-full w-full cursor-pointer opacity-[0.02]"
-                style={{ appearance: "auto", WebkitAppearance: "auto" }}
               />
             </label>
           ) : (
