@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   DEMO_OFFLINE_VAULT_ID,
+  chequeSubmitReason,
   classifyVaultEvent,
   emptyOfflineLedger,
   isVaultId,
@@ -67,6 +68,9 @@ describe("vault ledger", () => {
 
   it("classifies spoken reject copy", () => {
     expect(classifyVaultEvent("note already used")).toBe("note-used")
+    expect(chequeSubmitReason('{"reason":"note-used"}')).toBe("note-used")
+    expect(chequeSubmitReason("collateral short")).toBe("collateral")
+    expect(chequeSubmitReason("Vault rejected the cheque.")).toBe("rejected")
     expect(classifyVaultEvent("first settle")).toBe("settled")
   })
 

@@ -1,3 +1,4 @@
+import { LinkPhone } from "@/components/offline/link-phone"
 import { OfflineLedgerView } from "@/components/offline/offline-ledger"
 
 export const dynamic = "force-dynamic"
@@ -9,8 +10,9 @@ export default async function OfflineLedgerPage({
 }) {
   const params = await Promise.resolve(searchParams)
   return (
-    <div className="min-h-[100dvh] bg-black">
+    <>
+      <LinkPhone />
       <OfflineLedgerView vaultQuery={params.vault ?? null} />
-    </div>
+    </>
   )
 }

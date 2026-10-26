@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const settler = typeof body?.settler === "string" ? body.settler : ""
   const result = await submitOfflineCheque(frame, settler)
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 422 })
+    return NextResponse.json({ error: result.error, reason: result.reason }, { status: 422 })
   }
   return NextResponse.json({
     hash: result.hash,

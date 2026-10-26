@@ -62,6 +62,18 @@ export function emptyOfflineLedger(vault: string | null): OfflineLedger {
   }
 }
 
+export type ChequeSubmitReason = "note-used" | "collateral" | "rejected"
+
+/** Why a vault upload failed. The phone uses this to stop a second spend of the same note. */
+export function chequeSubmitReason(text: string): ChequeSubmitReason {
+  const lower = text.toLowerCase()
+  if (lower.includes("note-used") || lower.includes("note_used") || lower.includes("note already used")) {
+    return "note-used"
+  }
+  if (lower.includes("collateral")) return "collateral"
+  return "rejected"
+}
+
 export function classifyVaultEvent(text: string): OfflineLedgerTx["reason"] {
   const lower = text.toLowerCase()
   if (lower.includes("note-used") || lower.includes("note_used") || lower.includes("note already used")) {
