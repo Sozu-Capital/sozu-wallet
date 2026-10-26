@@ -3,7 +3,6 @@ import "server-only"
 import {
   Address,
   Contract,
-  Keypair,
   Networks,
   TransactionBuilder,
   rpc,
@@ -12,87 +11,101 @@ import {
 import { getFunderKeypair } from "@/lib/stellar/soroban-fee-payer"
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address"
 import { chequeWire } from "@/lib/offline/cheque-frame"
+import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
 import { chequeSubmitReason, DEMO_OFFLINE_VAULT_ID } from "@/lib/offline/vault-ledger"
+import { submitSignedSorobanEnvelope } from "@/lib/stellar/send-token"
 
 const RPC_URL = "https://soroban-testnet.stellar.org"
 const VAULT = DEMO_OFFLINE_VAULT_ID
 
 export type SubmitChequeResult =
   | { ok: true; hash: string; settler: string }
+  | { ok: false; error: string; reason: "note-used" | "collateral" | "rejected" | "passkey" }
+
+export type PrepareChequeResult =
+  | {
+      ok: true
+      unsignedXdr: string
+      sorobanDataXdr: string | null
+      settler: string
+    }
   | { ok: false; error: string; reason: "note-used" | "collateral" | "rejected" }
 
-/** The phone that just got internet asks the vault to settle a cheque it already signed. */
-export async function submitOfflineCheque(frame: string, settler: string): Promise<SubmitChequeResult> {
+/**
+ * Builds the vault settle call for the passkey account.
+ * The funder only pays the fee. It is not the settler, and this does not sign.
+ */
+export async function prepareOfflineSettle(frame: string, settler: string): Promise<PrepareChequeResult> {
   const wire = chequeWire(frame)
-  if (!wire) return rejected("Cheque frame is not a 243-byte SOZU1 wire.")
-
-  const funder = getFunderKeypair()
-  if (!funder) return rejected("Funder is not configured.")
+  if (!wire) return failed("Cheque frame is not a 243-byte SOZU1 wire.")
 
   const requested = settler.trim().toUpperCase()
-  const settlerAddress = isValidStellarReceiveAddress(requested) ? requested : funder.publicKey()
-  const first = await invokeSettle(funder, wire, settlerAddress)
-  if (first.ok || settlerAddress === funder.publicKey()) return first
-  return invokeSettle(funder, wire, funder.publicKey())
-}
+  if (!requested.startsWith("C") || !isValidStellarReceiveAddress(requested)) {
+    return failed("The passkey account has to settle this cheque.")
+  }
 
-async function invokeSettle(funder: Keypair, wire: Buffer, settler: string): Promise<SubmitChequeResult> {
+  const funder = getFunderKeypair()
+  if (!funder) return failed("Funder is not configured.")
+
   const server = new rpc.Server(RPC_URL, { allowHttp: false })
   try {
     const account = await server.getAccount(funder.publicKey())
     const contract = new Contract(VAULT)
     const tx = new TransactionBuilder(account, {
-      fee: "100000",
+      fee: "1000000",
       networkPassphrase: Networks.TESTNET,
     })
       .addOperation(
         contract.call(
           "settle",
           xdr.ScVal.scvBytes(wire),
-          Address.fromString(settler).toScVal(),
+          Address.fromString(requested).toScVal(),
         ),
       )
-      .setTimeout(60)
+      .setTimeout(300)
       .build()
 
     const prepared = await server.prepareTransaction(tx)
-    prepared.sign(funder)
-    const sent = await server.sendTransaction(prepared)
-    if (sent.status === "ERROR") {
-      const detail = submitDetail(sent.errorResult)
-      console.error("[offline submit] rejected", detail || "no detail")
-      return rejected(detail || "Vault rejected the cheque.")
+    const unsignedXdr = prepared.toEnvelope().toXDR("base64")
+    return {
+      ok: true,
+      unsignedXdr,
+      sorobanDataXdr: extractSorobanDataXdr(unsignedXdr, Networks.TESTNET),
+      settler: requested,
     }
-    const hash = sent.hash
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      const done = await server.getTransaction(hash)
-      if (done.status === "SUCCESS") return { ok: true, hash, settler }
-      if (done.status === "FAILED") {
-        const detail = "resultXdr" in done && typeof done.resultXdr === "string" ? done.resultXdr : ""
-        console.error("[offline submit] failed", detail)
-        return rejected(detail || "Vault rejected the cheque.")
-      }
-    }
-    return { ok: true, hash, settler }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not prepare the settlement."
+    console.error("[offline prepare]", message)
+    return failed(message)
+  }
+}
+
+/** Submits an envelope the passkey already signed. The funder co-signs the fee. */
+export async function submitSignedOfflineCheque(signedEnvelopeXdr: string): Promise<SubmitChequeResult> {
+  try {
+    const hash = await submitSignedSorobanEnvelope(signedEnvelopeXdr)
+    return { ok: true, hash, settler: "" }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not submit the cheque."
     console.error("[offline submit]", message)
-    return rejected(message)
+    return { ok: false, error: message, reason: chequeSubmitReason(message) }
   }
 }
 
-function rejected(error: string): SubmitChequeResult {
+/**
+ * Phone upload. Simulates as the passkey account and does not submit.
+ * A cheque the vault already spent comes back as note-used. Anything else waits for the passkey.
+ */
+export async function submitOfflineCheque(frame: string, settler: string): Promise<SubmitChequeResult> {
+  const prepared = await prepareOfflineSettle(frame, settler)
+  if (!prepared.ok) return prepared
+  return {
+    ok: false,
+    error: "Confirm this settlement with your passkey.",
+    reason: "passkey",
+  }
+}
+
+function failed(error: string): PrepareChequeResult {
   return { ok: false, error, reason: chequeSubmitReason(error) }
-}
-
-function submitDetail(errorResult: xdr.TransactionResult | undefined): string {
-  if (!errorResult) return ""
-  try {
-    const name = errorResult.result()?.switch?.().name ?? ""
-    const raw = Buffer.from(errorResult.toXDR())
-    return `${name} ${raw.toString("latin1")}`.trim()
-  } catch {
-    return ""
-  }
 }

@@ -1,18 +1,18 @@
-import { LinkPhone } from "@/components/offline/link-phone"
-import { OfflineLedgerView } from "@/components/offline/offline-ledger"
+import { OfflineHome } from "@/components/offline/offline-home"
 
 export const dynamic = "force-dynamic"
 
 export default async function OfflineLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vault?: string }> | { vault?: string }
+  searchParams: Promise<{ vault?: string; deposit?: string; frame?: string }> | { vault?: string; deposit?: string; frame?: string }
 }) {
   const params = await Promise.resolve(searchParams)
   return (
-    <>
-      <LinkPhone />
-      <OfflineLedgerView vaultQuery={params.vault ?? null} />
-    </>
+    <OfflineHome
+      vaultQuery={params.vault ?? null}
+      initialDeposit={params.deposit ?? null}
+      initialFrame={params.frame ?? null}
+    />
   )
 }
