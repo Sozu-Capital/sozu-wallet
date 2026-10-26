@@ -26,3 +26,11 @@ export function offlinePhoneLink(address: string, usdc: string): string | null {
   if (!offlineAmountFits(amount, null)) return null
   return `sozu://link?addr=${encodeURIComponent(account)}&usdc=${encodeURIComponent(amount)}`
 }
+
+/** Chrome on Android opens the installed app from this intent URL. */
+export function offlineAndroidIntent(address: string, usdc: string): string | null {
+  const link = offlinePhoneLink(address, usdc)
+  if (!link) return null
+  const body = link.slice("sozu://".length)
+  return `intent://${body}#Intent;scheme=sozu;package=capital.sozu.mesh;end`
+}

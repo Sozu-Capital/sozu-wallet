@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { OfflineLedger, OfflineLedgerTx } from "@/lib/offline/vault-ledger"
-import { offlineAmountFits, offlinePhoneLink, normalizeOfflineUsdc } from "@/lib/offline/offline-link"
+import { offlineAmountFits, offlineAndroidIntent, offlinePhoneLink, normalizeOfflineUsdc } from "@/lib/offline/offline-link"
 import { signOfflineSettle } from "@/lib/offline/sign-offline-settle"
 
 const REFRESH_MS = 15_000
@@ -38,10 +38,12 @@ export function OfflineHome({
   const [ledgerError, setLedgerError] = useState<string | null>(null)
   const [signing, setSigning] = useState(false)
   const [signNote, setSignNote] = useState<string | null>(null)
+  const [onAndroid, setOnAndroid] = useState(false)
   const frame = initialFrame?.trim().startsWith("SOZU1:") ? initialFrame.trim() : null
 
   useEffect(() => {
     setAddress(readWallet())
+    setOnAndroid(/Android/i.test(navigator.userAgent))
   }, [])
 
   useEffect(() => {
@@ -97,6 +99,12 @@ export function OfflineHome({
   const normalized = normalizeOfflineUsdc(amount)
   const overBalance = normalized != null && !offlineAmountFits(normalized, balanceState === "ready" ? balance : null)
   const href = address && normalized && !overBalance ? offlinePhoneLink(address, normalized) : null
+  const openHref =
+    address && normalized && !overBalance
+      ? onAndroid
+        ? offlineAndroidIntent(address, normalized)
+        : href
+      : null
 
   async function copy(value: string, kind: "account" | "link") {
     try {
@@ -112,9 +120,9 @@ export function OfflineHome({
       <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-5 pb-16 pt-8">
         <header>
           <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Sozu offline</p>
-          <h1 className="mt-2 text-[2rem] font-medium leading-none tracking-tight">Two accounts</h1>
+          <h1 className="mt-2 text-[2rem] font-medium leading-none tracking-tight">Your Sozu</h1>
           <p className="mt-3 text-sm leading-relaxed text-white/60">
-            This passkey wallet holds the USDC. The offline vault is a separate account. Deposit an amount from this wallet. That collateral is what the phone can spend while offline.
+            This wallet and the phone are the same Sozu. Choose how much of it the phone can spend offline.
           </p>
         </header>
 
@@ -152,7 +160,7 @@ export function OfflineHome({
 
         <section>
           <label htmlFor="offline-amount" className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-            Deposit into the offline vault
+            Available offline
           </label>
           <div className="mt-3 flex items-end gap-2 border-b border-white/15 pb-2">
             <input
@@ -193,19 +201,23 @@ export function OfflineHome({
           <p className="mt-3 text-sm leading-relaxed text-white/50">
             {overBalance
               ? "That is more than this wallet holds."
-              : "The phone stores this amount as the offline vault limit. USDC leaves this wallet only when the vault deposit is invoked. Settlement of a signed cheque is the contract call that exists today."}
+              : onAndroid
+                ? "This amount becomes the offline balance on the phone."
+                : "Open this page on the phone. This amount becomes the offline balance there."}
           </p>
-          {href ? (
+          {openHref ? (
             <div className="mt-5 flex flex-col gap-3">
               <a
-                href={href}
+                href={openHref}
                 className="flex h-14 items-center justify-center rounded-full bg-white text-base font-medium text-black"
               >
-                Deposit on the phone
+                Put this on my phone
               </a>
               <button
                 type="button"
-                onClick={() => void copy(href, "link")}
+                onClick={() => {
+                  if (href) void copy(href, "link")
+                }}
                 className="text-sm text-white/60 underline-offset-4 hover:underline"
               >
                 {copied === "link" ? "Link copied" : "Copy phone link"}
