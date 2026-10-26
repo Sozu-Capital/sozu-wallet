@@ -1035,7 +1035,7 @@ function AuthPageContent() {
           href="/offline"
           className="pointer-events-auto text-[10px] font-extralight tracking-[0.12em] text-white/55 underline-offset-4 hover:text-white hover:underline"
         >
-          Offline ledger
+          Audit offline payments
         </a>
 
         {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
