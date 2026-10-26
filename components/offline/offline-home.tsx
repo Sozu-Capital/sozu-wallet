@@ -44,6 +44,7 @@ export function OfflineHome({
   const [ledgerError, setLedgerError] = useState<string | null>(null)
   const [signing, setSigning] = useState(false)
   const [signNote, setSignNote] = useState<string | null>(null)
+  const [signedHash, setSignedHash] = useState<string | null>(null)
   const [onAndroid, setOnAndroid] = useState(false)
   const frame = initialFrame?.trim().startsWith("SOZU1:") ? initialFrame.trim() : null
 
@@ -104,6 +105,9 @@ export function OfflineHome({
 
   const normalized = normalizeOfflineUsdc(amount)
   const overBalance = normalized != null && !offlineAmountFits(normalized, balanceState === "ready" ? balance : null)
+  const signInHref = frame
+    ? `/auth?redirect=${encodeURIComponent(`/offline?frame=${encodeURIComponent(frame)}`)}`
+    : "/auth?redirect=/offline"
   const href = address && normalized && !overBalance ? offlinePhoneLink(address, normalized) : null
   const openHref =
     address && normalized && href && onAndroid ? offlineAndroidIntent(address, normalized) : href
@@ -124,9 +128,58 @@ export function OfflineHome({
           <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Sozu offline</p>
           <h1 className="mt-2 text-[2rem] font-medium leading-none tracking-tight">Your Sozu</h1>
           <p className="mt-3 text-sm leading-relaxed text-white/60">
-            This wallet and the phone are the same Sozu. Choose how much of it the phone can spend offline.
+            {frame
+              ? "This payment is on the phone. Your passkey sends it to testnet."
+              : "This wallet and the phone are the same Sozu. Choose how much of it the phone can spend offline."}
           </p>
         </header>
+
+        {frame ? (
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Upload</p>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              Sign once. The passkey authorizes the vault. The network fee is paid for you.
+            </p>
+            {address ? (
+              <button
+                type="button"
+                disabled={signing || signedHash != null}
+                onClick={() => {
+                  setSigning(true)
+                  setSignNote(null)
+                  void signOfflineSettle(frame, address)
+                    .then((hash) => {
+                      setSignedHash(hash)
+                      setSignNote("On testnet.")
+                    })
+                    .catch((error: unknown) => {
+                      setSignNote(error instanceof Error ? error.message : "The passkey did not sign.")
+                    })
+                    .finally(() => setSigning(false))
+                }}
+                className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-white text-base font-medium text-black disabled:opacity-40"
+              >
+                {signing ? "Waiting for the passkey…" : signedHash ? "Uploaded" : "Sign with passkey"}
+              </button>
+            ) : (
+              <a
+                href={signInHref}
+                className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-white text-base font-medium text-black"
+              >
+                Sign in to upload
+              </a>
+            )}
+            {signedHash ? (
+              <a
+                href={`https://stellar.expert/explorer/testnet/tx/${signedHash}`}
+                className="mt-4 block break-all font-mono text-sm text-white underline-offset-4 hover:underline"
+              >
+                {signedHash}
+              </a>
+            ) : null}
+            {signNote ? <p className="mt-3 text-sm text-white/70">{signNote}</p> : null}
+          </section>
+        ) : null}
 
         <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Passkey account</p>
@@ -151,11 +204,7 @@ export function OfflineHome({
                 Sign in with the passkey on this browser. That wallet is the source of the deposit.
               </p>
               <a
-                href={
-                  frame
-                    ? `/auth?redirect=${encodeURIComponent(`/offline?frame=${encodeURIComponent(frame)}`)}`
-                    : "/auth?redirect=/offline"
-                }
+                href={signInHref}
                 className="mt-4 inline-flex h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-black"
               >
                 Sign in
@@ -164,7 +213,7 @@ export function OfflineHome({
           )}
         </section>
 
-        <section>
+        {!frame ? <section>
           <label htmlFor="offline-amount" className="text-[11px] uppercase tracking-[0.18em] text-white/40">
             Available offline
           </label>
@@ -234,36 +283,7 @@ export function OfflineHome({
               {address ? "Enter an amount to open it on the phone." : "Sign in, then choose an amount."}
             </p>
           )}
-        </section>
-
-        {frame ? (
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Settlement</p>
-            <p className="mt-3 text-sm leading-relaxed text-white/70">
-              This cheque is ready. Your passkey signs the vault call. The fee payer only covers the network fee.
-            </p>
-            <button
-              type="button"
-              disabled={signing || !address}
-              onClick={() => {
-                if (!address) return
-                setSigning(true)
-                setSignNote(null)
-                void signOfflineSettle(frame, address)
-                  .then((hash) => setSignNote(`Signed. ${hash.slice(0, 8)}`))
-                  .catch((error: unknown) => {
-                    setSignNote(error instanceof Error ? error.message : "The passkey did not sign.")
-                  })
-                  .finally(() => setSigning(false))
-              }}
-              className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-white text-base font-medium text-black disabled:opacity-40"
-            >
-              {signing ? "Waiting for the passkey…" : "Sign with passkey"}
-            </button>
-            {signNote ? <p className="mt-3 text-sm text-white/70">{signNote}</p> : null}
-            {!address ? <p className="mt-3 text-sm text-white/40">Sign in first. The passkey account is the settler.</p> : null}
-          </section>
-        ) : null}
+        </section> : null}
 
         <section>
           <div className="flex items-baseline justify-between">
