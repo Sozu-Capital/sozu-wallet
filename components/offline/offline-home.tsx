@@ -151,7 +151,11 @@ export function OfflineHome({
                 Sign in with the passkey on this browser. That wallet is the source of the deposit.
               </p>
               <a
-                href="/auth?redirect=/offline"
+                href={
+                  frame
+                    ? `/auth?redirect=${encodeURIComponent(`/offline?frame=${encodeURIComponent(frame)}`)}`
+                    : "/auth?redirect=/offline"
+                }
                 className="mt-4 inline-flex h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-black"
               >
                 Sign in
