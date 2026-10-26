@@ -8,7 +8,13 @@ import { signOfflineSettle } from "@/lib/offline/sign-offline-settle"
 const REFRESH_MS = 15_000
 
 function readWallet(): string | null {
-  const stored = localStorage.getItem("stellar_public_key")?.trim().toUpperCase() ?? ""
+  const stored = (
+    localStorage.getItem("stellar_public_key") ??
+    sessionStorage.getItem("stellar_public_key") ??
+    ""
+  )
+    .trim()
+    .toUpperCase()
   return /^[CG][A-Z2-7]{55}$/.test(stored) ? stored : null
 }
 
@@ -100,11 +106,7 @@ export function OfflineHome({
   const overBalance = normalized != null && !offlineAmountFits(normalized, balanceState === "ready" ? balance : null)
   const href = address && normalized && !overBalance ? offlinePhoneLink(address, normalized) : null
   const openHref =
-    address && normalized && !overBalance
-      ? onAndroid
-        ? offlineAndroidIntent(address, normalized)
-        : href
-      : null
+    address && normalized && href && onAndroid ? offlineAndroidIntent(address, normalized) : href
 
   async function copy(value: string, kind: "account" | "link") {
     try {
@@ -116,7 +118,7 @@ export function OfflineHome({
   }
 
   return (
-    <main className="min-h-[100dvh] bg-black text-white">
+    <main className="relative z-10 min-h-[100dvh] bg-black text-white">
       <div className="mx-auto flex w-full max-w-md flex-col gap-8 px-5 pb-16 pt-8">
         <header>
           <p className="text-[11px] uppercase tracking-[0.22em] text-white/40">Sozu offline</p>
@@ -149,7 +151,7 @@ export function OfflineHome({
                 Sign in with the passkey on this browser. That wallet is the source of the deposit.
               </p>
               <a
-                href="/auth"
+                href="/auth?redirect=/offline"
                 className="mt-4 inline-flex h-11 items-center rounded-full bg-white px-4 text-sm font-medium text-black"
               >
                 Sign in
