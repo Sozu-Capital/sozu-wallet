@@ -205,12 +205,23 @@ async function loadContractEvents(vault: string, fetchImpl: typeof fetch): Promi
   const latest = (await rpcCall(fetchImpl, "getLatestLedger")) as { sequence?: unknown }
   const sequence = typeof latest?.sequence === "number" ? latest.sequence : 0
   const startLedger = Math.max(1, sequence - LEDGER_WINDOW)
-  const result = (await rpcCall(fetchImpl, "getEvents", {
-    startLedger,
-    filters: [{ type: "contract", contractIds: [vault] }],
-    pagination: { limit: 50 },
-  })) as { events?: unknown }
-  return mapRpcEvents(result?.events)
+  const collected: OfflineLedgerTx[] = []
+  let cursor = ""
+  for (let page = 0; page < 6; page++) {
+    const pagination: { limit: number; cursor?: string } = { limit: 100 }
+    if (cursor) pagination.cursor = cursor
+    const result = (await rpcCall(fetchImpl, "getEvents", {
+      startLedger,
+      filters: [{ type: "contract", contractIds: [vault] }],
+      pagination,
+    })) as { events?: unknown; cursor?: unknown }
+    const events = mapRpcEvents(result?.events)
+    collected.push(...events)
+    const next = typeof result?.cursor === "string" ? result.cursor : ""
+    if (!next || next === cursor || events.length === 0) break
+    cursor = next
+  }
+  return collected.slice(-40)
 }
 
 export async function loadOfflineLedger(
