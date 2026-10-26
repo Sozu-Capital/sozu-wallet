@@ -5,7 +5,10 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Browsing via http://0.0.0.0:PORT breaks WebAuthn (rpId invalid). Dev may bind 0.0.0.0 for Docker.
-  if (request.nextUrl.hostname === "0.0.0.0") {
+  // Use the Host header. nextUrl.hostname stays 0.0.0.0 for every request when the
+  // server is bound there, which would redirect localhost and LAN phones forever.
+  const requestedHost = request.headers.get("host")?.split(":")[0]
+  if (requestedHost === "0.0.0.0") {
     const url = request.nextUrl.clone()
     url.hostname = "localhost"
     return NextResponse.redirect(url, 307)
