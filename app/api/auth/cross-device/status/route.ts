@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { setSessionCookie } from "@/lib/auth/session"
-import { CROSS_DEVICE_BINDING_COOKIE } from "@/lib/auth/cross-device-binding"
+import { CROSS_DEVICE_BINDING_COOKIE, isCrossDeviceBindingValid } from "@/lib/auth/cross-device-binding"
 import { getSessionCookieOptions } from "@/lib/auth/session-cookie"
 
 function serviceClient() {
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (session.completed && session.user_id) {
-      if (request.cookies.get(CROSS_DEVICE_BINDING_COOKIE)?.value !== sessionId) {
+      if (!isCrossDeviceBindingValid(sessionId, request.cookies.get(CROSS_DEVICE_BINDING_COOKIE)?.value)) {
         return NextResponse.json({ completed: true, boundToOtherDevice: true })
       }
       const response = NextResponse.json({
