@@ -1,0 +1,52 @@
+{
+  "strictness": 2,
+  "commentTypes": ["logic", "syntax"],
+  "autoReview": ["open", "push"],
+  "triggerOnDrafts": false,
+  "statusCheck": true,
+  "ignorePatterns": "pnpm-lock.yaml\npackage-lock.json\nbun.lock\nskills-lock.json\n**/target/**\n.next/**\npublic/**\nvideo/**\n.cursor/**\n.windsurf/**\n.agents/**",
+  "rules": [
+    {
+      "id": "session-identity",
+      "rule": "API routes resolve the caller only from the signed session cookie (getSessionUserId / requireSession in lib/auth/session.ts). Never trust x-user-id, or a userId from the query string or body, for identity or authorization. Client code must not send x-user-id.",
+      "scope": ["app/api/**", "lib/**", "hooks/**", "components/**"],
+      "severity": "high"
+    },
+    {
+      "id": "public-routes-reviewed",
+      "rule": "A new API route that answers without a session must be added to test/api/public-routes.ts with a reason. Routes that read or change a user's data must return 401 without a session; test/api/forged-header.test.ts enforces this.",
+      "scope": ["app/api/**", "test/api/**"],
+      "severity": "high"
+    },
+    {
+      "id": "webauthn-verification",
+      "rule": "Passkey login and signing must verify the assertion signature against the stored public key, the server-issued challenge, the origin and rpId hash, and the user-presence/verification flags. Never accept a client-echoed challenge or skip signature verification.",
+      "scope": ["app/api/auth/**", "lib/webauthn/**", "lib/auth/**"],
+      "severity": "high"
+    },
+    {
+      "id": "pilot-mainnet-lockdown",
+      "rule": "Under PILOT_MAINNET=1 only the pilot flow (receive, pay, cash out) is reachable. New routes or pages for credit, vouching, Gmail ledger, PIZZA, DeFindex/Blend, backup PIN, or test/debug must live under a prefix in PILOT_BLOCKED_PREFIXES (lib/pilot/pilot-mainnet.ts), and their UI entry points must be hidden with isPilotMainnet().",
+      "scope": ["app/**", "components/**", "lib/pilot/**", "middleware.ts"],
+      "severity": "high"
+    },
+    {
+      "id": "cors-allowlist",
+      "rule": "Use corsHeaders from lib/cors.ts. Never set Access-Control-Allow-Origin to '*' or to a wildcard host, and never allow credentials for an origin outside the exact allowlist.",
+      "scope": ["app/api/**", "lib/cors.ts"],
+      "severity": "high"
+    },
+    {
+      "id": "money-flow-safety",
+      "rule": "Sends and withdrawals must be idempotent (a duplicate submit sends once), validate amounts as exact decimals, and never let the server sign on behalf of a user without that user's passkey authorization.",
+      "scope": ["app/api/wallet/**", "lib/stellar/**", "hooks/**"],
+      "severity": "high"
+    },
+    {
+      "id": "no-sensitive-logs",
+      "rule": "Do not log user IDs, session values, passkey credential IDs or public keys, key prefixes, or secrets in new console.log calls.",
+      "scope": ["app/**", "lib/**", "hooks/**", "components/**"],
+      "severity": "medium"
+    }
+  ]
+}
