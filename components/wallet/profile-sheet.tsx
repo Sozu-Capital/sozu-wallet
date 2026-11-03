@@ -16,6 +16,7 @@ import { copyToClipboard, getUserId } from "@/lib/wallet-utils"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
 import { getPublicKeyFromSession } from "@/lib/storage/key-utils"
 import { clearClientSession } from "@/lib/storage/clear-session"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 type Tab = "profile" | "cashout" | "defi" | "logout"
 
@@ -265,15 +266,17 @@ const ProfileTab = memo(function ProfileTab({
 
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-white/40 font-medium">Cashflow</p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onOpenLedger}
-          className="w-full bg-transparent border-white/20 text-white hover:bg-white/10 justify-start gap-2"
-        >
-          <Mail className="w-4 h-4 shrink-0" />
-          Libro por correo (Vaults)
-        </Button>
+        {!isPilotMainnet() && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onOpenLedger}
+            className="w-full bg-transparent border-white/20 text-white hover:bg-white/10 justify-start gap-2"
+          >
+            <Mail className="w-4 h-4 shrink-0" />
+            Libro por correo (Vaults)
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"

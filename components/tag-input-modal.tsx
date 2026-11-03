@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Check, Loader2, Fingerprint, Hash } from "lucide-react"
 import { useWalletLanguage } from "@/lib/wallet-language"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 export interface TagInputModalProps {
   isOpen: boolean
@@ -95,7 +96,7 @@ export function TagInputModal({
       } else {
         setAvailabilityStatus("taken")
         setAvailabilityMessage(typeof data.message === "string" ? data.message : "")
-        setPinEnabled(Boolean(data.pinEnabled))
+        setPinEnabled(!isPilotMainnet() && Boolean(data.pinEnabled))
       }
     } catch {
       setAvailabilityStatus("error")

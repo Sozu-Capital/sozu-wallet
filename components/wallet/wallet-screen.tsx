@@ -37,6 +37,7 @@ import { useSetOnboardingOverlayOpen } from "@/lib/onboarding-overlay-context"
 import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { BalanceDisplay } from "@/components/wallet/balance-display"
 import { PizzaBalanceRow } from "@/components/wallet/pizza-balance-row"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { TransactionHistory } from "@/components/wallet/transaction-history"
 import { BottomMenuBar } from "@/components/wallet/bottom-menu-bar"
 import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indicator"
@@ -127,6 +128,7 @@ export function WalletScreen({
   const [isBalanceVisible, setIsBalanceVisible] = useState(true)
   const [animatedBalance, setAnimatedBalance] = useState<number>(0)
   const [isTrustModalOpen, setIsTrustModalOpen] = useState(false)
+  const pilotMainnet = isPilotMainnet()
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
 
   // Send modal: controlled externally or internally
@@ -667,16 +669,18 @@ export function WalletScreen({
         walletNetwork={walletNetwork}
         onRefresh={handleEarnRefresh}
       />
-      <PizzaBalanceRow
-        tokenBalances={defindexBalance?.tokenBalances}
-        onSend={() => {
-          const row = defindexBalance?.tokenBalances?.find(
-            (r) => r.assetId === "pizza_token" || r.symbol?.toUpperCase() === "PIZZA",
-          )
-          setSendAssetContractId(row?.contractId ?? null)
-          setSendModalOpen(true)
-        }}
-      />
+      {!pilotMainnet && (
+        <PizzaBalanceRow
+          tokenBalances={defindexBalance?.tokenBalances}
+          onSend={() => {
+            const row = defindexBalance?.tokenBalances?.find(
+              (r) => r.assetId === "pizza_token" || r.symbol?.toUpperCase() === "PIZZA",
+            )
+            setSendAssetContractId(row?.contractId ?? null)
+            setSendModalOpen(true)
+          }}
+        />
+      )}
     </Suspense>
   )
 
@@ -741,9 +745,11 @@ export function WalletScreen({
         />
       </Suspense>
 
-      <Suspense fallback={null}>
-        <TrustPointsModal isOpen={isTrustModalOpen} onClose={() => setIsTrustModalOpen(false)} />
-      </Suspense>
+      {!pilotMainnet && (
+        <Suspense fallback={null}>
+          <TrustPointsModal isOpen={isTrustModalOpen} onClose={() => setIsTrustModalOpen(false)} />
+        </Suspense>
+      )}
 
       {shellLayout !== "landing" ? (
         <Suspense fallback={null}>
@@ -986,6 +992,7 @@ export function WalletScreen({
                       {t.testnetBadge}
                     </span>
                   )}
+{!pilotMainnet && (
                   <Link
                     href="/ledger"
                     className={`group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-2 py-1.5 text-sm text-white/85 transition-colors hover:border-white/30 hover:bg-white/[0.08] ${walletNetwork === "testnet" ? "lg:ml-auto" : ""}`}
@@ -996,6 +1003,7 @@ export function WalletScreen({
                       <FontAwesomeIcon icon={faCoins} style={{ color: "rgb(255, 255, 255)" }} />
                     </span>
                   </Link>
+                  )}
                 </div>
 
                 <div className={walletAddress ? "flex flex-col gap-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8 xl:gap-10" : "mx-auto flex max-w-lg flex-col"}>
