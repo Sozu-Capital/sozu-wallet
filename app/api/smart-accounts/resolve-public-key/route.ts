@@ -8,6 +8,7 @@ import {
   publicKeyToBase64Url,
 } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -16,7 +17,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const headers = corsHeaders(request)
 
-  const userId = request.headers.get("x-user-id")
+  const userId = getSessionUserId(request)
   const contractId = request.nextUrl.searchParams.get("contractId")?.trim() ?? ""
   const credentialId = request.nextUrl.searchParams.get("credentialId")?.trim() ?? ""
 

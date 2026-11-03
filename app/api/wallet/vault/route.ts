@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function GET(request: Request) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
       console.log("[Wallet API] Using Supabase auth, userId:", userId)
     } else {
       // In dev mode, check for userId in headers (from sessionStorage)
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       console.log("[Wallet API] Dev mode, userId from header:", userId)
       
       if (!userId) {

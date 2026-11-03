@@ -25,7 +25,6 @@ import { ExpenseBreakdownDonut, type DonutDatum } from "@/components/ledger/expe
 import { MonthlyObligationsPlanEditor } from "@/components/ledger/monthly-obligations-plan-editor"
 import type { InstitutionKind } from "@/lib/ledger/expense-institution"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import type { LedgerChartWindow } from "@/lib/ledger/ledger-chart-window"
 import { ledgerChartWindowLabel } from "@/lib/ledger/ledger-chart-window"
 import { walletBalancesFetchInit, walletBalancesUrl } from "@/lib/ledger/wallet-balances-url"
@@ -250,9 +249,7 @@ function previewTxToEditRow(p: PreviewTx): LedgerTransactionEditRow {
   }
 }
 
-const ledgerFetchInit = {
-  headers: ledgerUserHeaders(),
-  cache: "no-store" as RequestCache,
+const ledgerFetchInit = { cache: "no-store" as RequestCache,
 }
 
 export default function LedgerHomePage() {

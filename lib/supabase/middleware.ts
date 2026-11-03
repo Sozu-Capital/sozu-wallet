@@ -7,7 +7,7 @@ export async function updateSession(request: NextRequest) {
   // CRITICAL: Check for allowed routes at the VERY START - before creating NextResponse
   // This ensures these routes are allowed before any other processing
   const pathname = request.nextUrl.pathname
-  /** Ledger (cashflow) uses sessionStorage + x-user-id like /wallet; never require Supabase cookie. */
+  /** Ledger (cashflow) uses the wallet session cookie like /wallet; never require Supabase cookie. */
   const isLedgerRoute = pathname === "/ledger" || pathname.startsWith("/ledger/")
   const isCreditRoute = pathname === "/credit" || pathname.startsWith("/credit/")
 

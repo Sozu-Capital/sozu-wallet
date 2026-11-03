@@ -26,11 +26,7 @@ export function useNotifications() {
     if (!userId) return
 
     try {
-      const notificationsResponse = await fetch("/api/wallet/notifications", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const notificationsResponse = await fetch("/api/wallet/notifications")
 
       if (notificationsResponse.ok) {
         const notificationsData = await notificationsResponse.json()
@@ -67,7 +63,6 @@ export function useNotifications() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify({
           notificationId,

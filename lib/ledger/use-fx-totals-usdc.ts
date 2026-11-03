@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 
 /** Approximate multi-currency fiat totals in USDC via `/api/fx` (stable coins summed directly). */
 export function useFxTotalsUsdc(totals: readonly { currency: string; total: number }[]) {
@@ -46,7 +45,6 @@ export function useFxTotalsUsdc(totals: readonly { currency: string; total: numb
         for (const { currency: cur, total } of fxRows) {
           const fxRes = await fetch(`/api/fx?from=${encodeURIComponent(cur)}&to=USDC`, {
             cache: "no-store",
-            headers: ledgerUserHeaders(),
           })
           if (!fxRes.ok) {
             missing.push(cur)

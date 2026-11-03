@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 
 export type LedgerBurnRunwaySnapshot = {
   burnRateMonthlyPrimary: number
@@ -74,10 +73,9 @@ export function useCashflowSummary(enabled = true) {
     setLoading(true)
     setError(null)
     try {
-      const headers = ledgerUserHeaders()
       const [summaryRes, creditRes] = await Promise.all([
-        fetch("/api/ledger/summary", { headers, cache: "no-store" }),
-        fetch("/api/wallet/credit-eligibility", { headers, cache: "no-store" }).catch(() => null),
+        fetch("/api/ledger/summary", { cache: "no-store" }),
+        fetch("/api/wallet/credit-eligibility", { cache: "no-store" }).catch(() => null),
       ])
 
       if (!summaryRes.ok) {

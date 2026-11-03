@@ -15,7 +15,7 @@ function sumUsdcTrustlines(
 }
 
 /**
- * Structured on-chain balances (Horizon) + optional DeFindex USDC breakdown when `x-user-id` resolves.
+ * Structured on-chain balances (Horizon) + optional DeFindex USDC breakdown when the caller has a session.
  * Pass `publicKey` from the client session so it matches /wallet even if DB user id is a tag string.
  */
 export async function GET(request: Request) {

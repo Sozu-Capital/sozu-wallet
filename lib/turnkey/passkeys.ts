@@ -510,12 +510,6 @@ function base64URLToArrayBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer
 }
 
-const addPasskeyHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {}
-  const uid = sessionStorage.getItem("dev_username")
-  return uid ? { "x-user-id": uid } : {}
-}
-
 export async function fetchPasskeyStatus(): Promise<{
   count: number
   max: number
@@ -523,7 +517,7 @@ export async function fetchPasskeyStatus(): Promise<{
   username?: string
   pinSet?: boolean
 }> {
-  const res = await fetch("/api/auth/passkeys/status", { headers: addPasskeyHeaders() })
+  const res = await fetch("/api/auth/passkeys/status")
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     throw new Error(typeof data.error === "string" ? data.error : "Failed to load passkey status")
@@ -538,7 +532,6 @@ export async function initPasskeyPairing(): Promise<{
 }> {
   const res = await fetch("/api/auth/passkeys/pairing/init", {
     method: "POST",
-    headers: { ...addPasskeyHeaders() },
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -555,9 +548,6 @@ export async function generateAddPasskeyChallenge(options: {
   username?: string
 }): Promise<PasskeyChallenge> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (!options.pairingCode) {
-    Object.assign(headers, addPasskeyHeaders())
-  }
   const res = await fetch("/api/auth/passkeys/add/challenge", {
     method: "POST",
     headers,
@@ -587,9 +577,6 @@ export async function verifyAddPasskey(
   options: { pairingCode?: string; username?: string }
 ): Promise<{ success: boolean; credentialId?: string; walletSyncHint?: string }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (!options.pairingCode) {
-    Object.assign(headers, addPasskeyHeaders())
-  }
   let clientPublicKey65b: string | undefined
   try {
     const { extractPasskeyPublicKey65ForStorage } = await import(

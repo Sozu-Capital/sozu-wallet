@@ -19,7 +19,6 @@ export async function registerOzSmartAccount(params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-user-id": userId,
     },
     body: JSON.stringify({
       contractId: params.contractId,
@@ -43,9 +42,7 @@ export async function resolvePublicKeyFromServer(params: {
     contractId: params.contractId,
     credentialId: params.credentialId,
   })
-  const res = await fetch(`/api/smart-accounts/resolve-public-key?${q}`, {
-    headers: userId ? { "x-user-id": userId } : {},
-  })
+  const res = await fetch(`/api/smart-accounts/resolve-public-key?${q}`)
   const data = (await res.json().catch(() => ({}))) as { publicKey65b?: string; error?: string }
   if (!res.ok || !data.publicKey65b) {
     throw new Error(data.error ?? "Could not resolve passkey public key")

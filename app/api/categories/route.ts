@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { getSessionUserId } from "@/lib/auth/session"
 
 async function getUserId(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) return user.id
-  return request.headers.get("x-user-id")
+  return getSessionUserId(request)
 }
 
 export async function GET(request: Request) {

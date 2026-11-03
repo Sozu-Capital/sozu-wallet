@@ -5,6 +5,7 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { MAX_PASSKEYS_PER_USER } from "@/lib/auth/passkey-limits"
 import { challengeStore } from "@/lib/webauthn/config"
 import { getPairingEntry, revokePairingCode } from "@/lib/webauthn/device-pairing"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     const pairingCode =
       typeof body.pairingCode === "string" ? body.pairingCode.replace(/\s+/g, "").toUpperCase() : ""
     const usernameRaw = typeof body.username === "string" ? body.username.trim() : ""
-    const headerUserId = request.headers.get("x-user-id")?.trim() || ""
+    const headerUserId = (getSessionUserId(request) ?? "")
 
     if (!credential?.id) {
       return NextResponse.json({ error: "Invalid credential data" }, { status: 400, headers: corsHeaders(request) })
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       userId = pairing.userId
     } else {
       if (!headerUserId) {
-        return NextResponse.json({ error: "Missing x-user-id" }, { status: 401, headers: corsHeaders(request) })
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders(request) })
       }
       const { data: profile, error: profileError } = await serviceClient
         .from("profiles")

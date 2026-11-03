@@ -248,7 +248,7 @@ export async function createStellarWallet(
 
 /**
  * Get Stellar wallet for a user from database
- * Uses service client if no authenticated user (for dev mode with x-user-id)
+ * Uses service client if no authenticated Supabase user (wallet session cookie flow)
  */
 export async function getStellarWallet(userId: string, useServiceClient = false): Promise<StellarWallet | null> {
   let supabase = await createClient()
@@ -418,7 +418,7 @@ export async function getStellarWallet(userId: string, useServiceClient = false)
 
 /**
  * Store Stellar wallet in database
- * Uses service client if no authenticated user (for dev mode with x-user-id)
+ * Uses service client if no authenticated Supabase user (wallet session cookie flow)
  */
 export async function storeStellarWallet(
   userId: string,
@@ -543,7 +543,7 @@ export async function storeStellarWallet(
 
 /**
  * Delete Stellar wallet from database
- * Uses service client if no authenticated user (for dev mode with x-user-id)
+ * Uses service client if no authenticated Supabase user (wallet session cookie flow)
  */
 export async function deleteStellarWallet(userId: string, useServiceClient = false): Promise<void> {
   let supabase = await createClient()

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { depositsEnabled } from "@/lib/app-config";
-import { resolveUserId } from "@/lib/auth/resolve-user";
+import { requireSession } from "@/lib/auth/session";
 import { clpToUsdcMinor, getDepositFxRateAsync } from "@/lib/deposits/quote";
 import { getBankInstructions, generateBankReference } from "@/lib/deposits/bank-instructions";
 import {
@@ -28,12 +28,12 @@ async function resolveDestination(userId: string): Promise<string | null> {
 
 /** POST /api/deposits — create a new fiat deposit intent (bank transfer or card). */
 export async function POST(request: Request) {
+  const auth = requireSession(request);
+  if (auth.error) return auth.error;
+
   if (!depositsEnabled) {
     return NextResponse.json({ error: "Deposits not available on this deployment" }, { status: 403 });
   }
-
-  const auth = await resolveUserId(request);
-  if (auth.error) return auth.error;
   const { userId } = auth;
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
@@ -168,12 +168,12 @@ export async function POST(request: Request) {
 
 /** GET /api/deposits — list the authenticated user's deposit intents. */
 export async function GET(request: Request) {
+  const auth = requireSession(request);
+  if (auth.error) return auth.error;
+
   if (!depositsEnabled) {
     return NextResponse.json({ error: "Deposits not available on this deployment" }, { status: 403 });
   }
-
-  const auth = await resolveUserId(request);
-  if (auth.error) return auth.error;
   const { userId } = auth;
 
   const url = new URL(request.url);

@@ -36,11 +36,7 @@ export function useTrustPoints() {
     if (!userId) return
 
     try {
-      const trustResponse = await fetch("/api/wallet/trust-points", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const trustResponse = await fetch("/api/wallet/trust-points")
 
       if (trustResponse.ok) {
         const trustData = await trustResponse.json()
@@ -63,9 +59,6 @@ export function useTrustPoints() {
     try {
       const generateResponse = await fetch("/api/wallet/referral/generate", {
         method: "POST",
-        headers: {
-          "x-user-id": userId,
-        },
       })
       
       if (generateResponse.ok) {
@@ -98,7 +91,6 @@ export function useTrustPoints() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify({
           username: vouchUsername.trim(),

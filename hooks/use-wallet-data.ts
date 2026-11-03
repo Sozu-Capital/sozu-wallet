@@ -299,11 +299,7 @@ export function useWalletData() {
       const userId = getUserId()
       
       console.log("[Wallet] 🔍 Fetching transaction history for:", publicKey.substring(0, 10) + "...")
-      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`, {
-        headers: {
-          "x-user-id": userId || "",
-        },
-      })
+      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`)
       
       if (response.ok) {
         const data = await response.json()
@@ -344,11 +340,7 @@ export function useWalletData() {
         publicKey && /^(C|G)[A-Z0-9]{55}$/.test(publicKey)
           ? `?publicKey=${encodeURIComponent(publicKey)}`
           : ""
-      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`)
 
       if (defindexResponse.ok) {
         const defindexData = await defindexResponse.json()
@@ -394,11 +386,7 @@ export function useWalletData() {
   const fetchAPY = useCallback(async (userId: string) => {
     try {
       setApyLoading(true)
-      const apyResponse = await fetch("/api/wallet/defindex/apy", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const apyResponse = await fetch("/api/wallet/defindex/apy")
 
       if (apyResponse.ok) {
         const apyData = await apyResponse.json()
@@ -418,11 +406,7 @@ export function useWalletData() {
   const fetchAutoDepositStatus = useCallback(async (userId: string) => {
     try {
       console.log("[Wallet] Fetching auto-deposit status")
-      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit")
 
       if (autoDepositResponse.ok) {
         const autoDepositData = await autoDepositResponse.json()
@@ -451,11 +435,7 @@ export function useWalletData() {
     try {
       if (options?.gateBalance) setIsBalanceLoading(true)
       console.log("[Wallet] Fetching XLM balance for wallet:", publicKey)
-      const balanceResponse = await fetch("/api/wallet/stellar/balance", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const balanceResponse = await fetch("/api/wallet/stellar/balance")
 
       if (balanceResponse.ok) {
         const balanceData = await balanceResponse.json()
@@ -615,8 +595,8 @@ export function useWalletData() {
         }
         
         const [vaultResponse, trustResponse] = await Promise.all([
-          fetch("/api/wallet/vault", { headers: { "x-user-id": userId } }),
-          fetch("/api/wallet/trust-points", { headers: { "x-user-id": userId } }),
+          fetch("/api/wallet/vault"),
+          fetch("/api/wallet/trust-points"),
         ])
 
         if (!vaultResponse.ok) {

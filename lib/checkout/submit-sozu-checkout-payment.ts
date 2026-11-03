@@ -69,7 +69,6 @@ export async function submitSozuCheckoutPayment({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": userId,
       },
       body: JSON.stringify({
         destination: actualDestination,
@@ -166,7 +165,6 @@ export async function submitSozuCheckoutPayment({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": userId,
       },
       body: JSON.stringify({
         signedEnvelopeXdr,

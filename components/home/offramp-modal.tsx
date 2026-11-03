@@ -87,7 +87,6 @@ export function OfframpModal({ open, onClose }: OfframpModalProps) {
       }
       try {
         const res = await fetch("/api/ramp/onboarding", {
-          headers: { "x-user-id": userId },
           credentials: "include",
         })
         const data = (await res.json().catch(() => ({}))) as { status?: string }

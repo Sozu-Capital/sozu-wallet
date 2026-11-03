@@ -133,8 +133,7 @@ export async function alignWalletForSend(
         `/api/smart-accounts/resolve-key-data?${new URLSearchParams({
           contractId: derived,
           credentialId: credId,
-        })}`,
-        { headers: { "x-user-id": userId } },
+        })}`
       )
       if (probe.ok) onChainC = derived
     }
@@ -155,8 +154,7 @@ export async function alignWalletForSend(
       `/api/smart-accounts/resolve-key-data?${new URLSearchParams({
         contractId: onChainC,
         credentialId: credId,
-      })}`,
-      { headers: { "x-user-id": userId } },
+      })}`
     )
     if (!keyProbe.ok) {
       console.warn(
@@ -173,9 +171,7 @@ export async function alignWalletForSend(
       const { parsePasskeyPublicKey65 } = await import(
         "@/lib/stellar/smartAccounts/passkeyPublicKey"
       )
-      const primaryRes = await fetch("/api/auth/passkeys/primary", {
-        headers: { "x-user-id": userId },
-      })
+      const primaryRes = await fetch("/api/auth/passkeys/primary")
       const primary = (await primaryRes.json().catch(() => ({}))) as {
         publicKey65b?: string
       }

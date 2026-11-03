@@ -615,14 +615,14 @@ export function WalletScreen({
       try {
         await fetch("/api/wallet/stellar/create", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-user-id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ publicKey }),
         })
       } catch (e) {
         console.warn("[Wallet] Register wallet after create:", e)
       }
       try {
-        await fetch("/api/wallet/stellar/balance", { headers: { "x-user-id": userId } })
+        await fetch("/api/wallet/stellar/balance")
       } catch (error) {
         console.error("[Wallet] Error fetching balance after wallet creation:", error)
       }

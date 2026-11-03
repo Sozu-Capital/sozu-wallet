@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
       console.log("[Stellar Address API] Using Supabase auth, userId:", userId)
     } else {
       // In dev mode, check for userId in headers
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       console.log("[Stellar Address API] Dev mode, userId from header:", userId)
 
       if (!userId) {

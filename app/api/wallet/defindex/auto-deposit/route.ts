@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server"
 import { checkAndTriggerAutoDeposit, monitorBalanceAndAutoDeposit } from "@/lib/defindex/auto-deposit"
 import { getUSDCBalance, getStellarWallet, updatePreviousUsdcBalance, saveBalanceSnapshot } from "@/lib/turnkey/stellar-wallet"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const userId = user?.id ?? request.headers.get("x-user-id")
+    const userId = user?.id ?? getSessionUserId(request)
 
     if (!userId) {
       return NextResponse.json(

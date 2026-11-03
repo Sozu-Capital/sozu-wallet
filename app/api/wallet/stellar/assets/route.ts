@@ -7,7 +7,7 @@ import { isStellarHolderAddress } from "@/lib/stellar/stellar-holder"
 const corsHeaders = () => ({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 })
 
 export async function OPTIONS() {

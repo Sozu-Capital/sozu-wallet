@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function GET(request: Request) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
       console.log("[Notifications API] Using Supabase auth, userId:", userId)
     } else {
       // In dev mode, check for userId in headers (from sessionStorage)
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       console.log("[Notifications API] Dev mode, userId from header:", userId)
       
       if (!userId) {
@@ -91,7 +92,7 @@ export async function PUT(request: Request) {
     if (user) {
       userId = user.id
     } else {
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }

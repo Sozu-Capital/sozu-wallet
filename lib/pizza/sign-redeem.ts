@@ -31,7 +31,7 @@ async function signAndSubmitSep41Transfer(params: {
 }): Promise<{ txHash: string }> {
   const buildResponse = await fetch("/api/wallet/stellar/payment", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-user-id": params.userId },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       destination: params.destination,
       amount: params.amount,
@@ -123,7 +123,7 @@ async function signAndSubmitSep41Transfer(params: {
 
   const submitResponse = await fetch("/api/wallet/stellar/payment", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-user-id": params.userId },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ signedEnvelopeXdr }),
   })
   if (!submitResponse.ok) {
