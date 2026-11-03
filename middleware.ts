@@ -2,6 +2,8 @@ import { isPilotBlockedPath, isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { updateSession } from "@/lib/supabase/middleware"
 import { NextResponse, type NextRequest } from "next/server"
 
+const IMAGE_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp)$/i
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
@@ -11,6 +13,11 @@ export async function middleware(request: NextRequest) {
 
   // API routes enforce their own auth; the matcher includes them only for the pilot gate above.
   if (pathname.startsWith("/api/")) {
+    return NextResponse.next()
+  }
+
+  // Image files skip the session check. They are matched only so the pilot gate above sees them.
+  if (IMAGE_FILE.test(pathname)) {
     return NextResponse.next()
   }
 
@@ -46,8 +53,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - sw.js (service worker)
      * - manifest.json (PWA manifest)
-     * - public files (images, etc.)
+     * Image extensions stay matched so a disabled module can't be reached as /api/pizza/x.png.
      */
-    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|\\.well-known).*)",
   ],
 }

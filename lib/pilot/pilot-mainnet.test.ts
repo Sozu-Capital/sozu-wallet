@@ -8,7 +8,44 @@ vi.mock("@/lib/supabase/middleware", () => ({
   updateSession: vi.fn(async () => new Response(null, { status: 299 })),
 }))
 
-const { middleware } = await import("@/middleware")
+const { config, middleware } = await import("@/middleware")
+
+/**
+ * One real path per module that must stay unreachable on mainnet, kept apart from
+ * PILOT_BLOCKED_PREFIXES so dropping a prefix fails here instead of shrinking the test.
+ */
+const REQUIRED_DISABLED = [
+  // Backup PIN and address overwrite
+  "/api/auth/pin/login",
+  "/api/wallet/update-address",
+  // Test and debug
+  "/api/test/auto-deposit-e2e",
+  "/api/debug/passkeys",
+  "/test-keys",
+  "/dev/cleanup",
+  // Credit
+  "/api/wallet/credits",
+  "/api/wallet/credit-eligibility",
+  "/credit",
+  "/dashboard/business/new",
+  // Vouching and trust points
+  "/api/wallet/vouch/debug",
+  "/api/wallet/trust-points/initialize",
+  "/api/claim-daily-trust-points",
+  "/api/maxflow/ego/x/can-vouch",
+  // Gmail ledger
+  "/api/gmail/callback",
+  "/api/cron/gmail-sync",
+  "/api/ledger/categories",
+  "/ledger/goals",
+  // PIZZA
+  "/api/pizza/redeems/x",
+  "/checkout/pizza/x",
+  // DeFindex / Blend
+  "/api/wallet/defindex/apy",
+  "/api/wallet/vault",
+  "/defi-info",
+]
 
 const appDir = path.resolve(__dirname, "../../app")
 
@@ -96,6 +133,49 @@ describe("middleware under PILOT_MAINNET=1", () => {
   it("still runs the page session check for allowed pages", async () => {
     vi.stubEnv("PILOT_MAINNET", "1")
     expect(await statusFor("/home")).toBe(299)
+  })
+})
+
+describe("required disabled modules", () => {
+  it("each module has a real route or page", () => {
+    const missing = REQUIRED_DISABLED.filter((p) => !allPaths.includes(p))
+    expect(missing).toEqual([])
+  })
+
+  it("each module is blocked and returns 404 under PILOT_MAINNET=1", async () => {
+    vi.stubEnv("PILOT_MAINNET", "1")
+    for (const pathname of REQUIRED_DISABLED) {
+      expect(isPilotBlockedPath(pathname), pathname).toBe(true)
+      expect(await statusFor(pathname), pathname).toBe(404)
+    }
+  })
+})
+
+describe("middleware matcher", () => {
+  // The matcher is a single raw regex path, which Next anchors at both ends.
+  const matchers = config.matcher.map((pattern: string) => new RegExp(`^${pattern}$`))
+  const matches = (pathname: string) => matchers.some((re: RegExp) => re.test(pathname))
+
+  it("still skips Next internals", () => {
+    expect(matches("/_next/static/chunk.js")).toBe(false)
+    expect(matches("/favicon.ico")).toBe(false)
+  })
+
+  it("runs for disabled routes even with an image extension", async () => {
+    vi.stubEnv("PILOT_MAINNET", "1")
+    for (const pathname of ["/api/pizza/redeems/example.png", "/api/ledger/vaults/example.svg", "/checkout/pizza/x.jpg"]) {
+      expect(matches(pathname), pathname).toBe(true)
+      expect(await statusFor(pathname, "POST"), pathname).toBe(404)
+    }
+  })
+
+  it("runs for every blocked path", () => {
+    expect(blockedPaths.filter((pathname) => !matches(pathname))).toEqual([])
+  })
+
+  it("serves allowed image files without the session check", async () => {
+    vi.stubEnv("PILOT_MAINNET", "1")
+    expect(await statusFor("/icons/logo.png")).toBe(200)
   })
 })
 
