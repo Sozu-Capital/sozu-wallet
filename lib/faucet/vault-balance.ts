@@ -30,8 +30,29 @@ function getSorobanRpcUrl(): string {
   );
 }
 
-/** On-chain USDC balance held by the faucet vault contract (minor units). */
-export async function getFaucetVaultBalanceMinor(): Promise<bigint | null> {
+const BALANCE_CACHE_MS = 30_000;
+let balanceCache: { minor: bigint; at: number } | null = null;
+
+/**
+ * On-chain USDC balance held by the faucet vault contract (minor units).
+ * `cached: true` accepts a per-instance reading up to 30 s old (status); claims read fresh.
+ */
+export async function getFaucetVaultBalanceMinor(
+  opts: { cached?: boolean } = {},
+): Promise<bigint | null> {
+  if (
+    opts.cached &&
+    balanceCache &&
+    Date.now() - balanceCache.at < BALANCE_CACHE_MS
+  ) {
+    return balanceCache.minor;
+  }
+  const minor = await readFaucetVaultBalanceMinor();
+  if (minor !== null) balanceCache = { minor, at: Date.now() };
+  return minor;
+}
+
+async function readFaucetVaultBalanceMinor(): Promise<bigint | null> {
   const contractId = getFaucetContractId();
   const funderPk = getConfiguredFunderPublicKey();
   if (!contractId || !funderPk) return null;
@@ -62,8 +83,11 @@ export async function getFaucetVaultBalanceMinor(): Promise<bigint | null> {
 }
 
 /** True when the vault contract can cover a claim of `amountUsdc`. */
-export async function vaultCanCoverClaim(amountUsdc: number): Promise<boolean> {
-  const minor = await getFaucetVaultBalanceMinor();
+export async function vaultCanCoverClaim(
+  amountUsdc: number,
+  opts: { cached?: boolean } = {},
+): Promise<boolean> {
+  const minor = await getFaucetVaultBalanceMinor(opts);
   if (minor === null) return true; // no contract configured — skip on-chain check
   return minor >= usdcToMinor(amountUsdc);
 }
