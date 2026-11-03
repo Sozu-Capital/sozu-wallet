@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { corsHeaders } from "@/lib/cors"
 import { Horizon, TransactionBuilder, Networks, Transaction, FeeBumpTransaction } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
@@ -42,11 +43,6 @@ function getTransactionSource(tx: Transaction | FeeBumpTransaction): string {
   return (tx as any).innerTransaction?.source || ""
 }
 
-const corsHeaders = (request: NextRequest) => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-})
 
 export async function OPTIONS(request: NextRequest) {
   return NextResponse.json({}, { headers: corsHeaders(request) })

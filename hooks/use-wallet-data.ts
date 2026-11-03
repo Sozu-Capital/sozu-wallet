@@ -8,6 +8,7 @@ import { getUserId } from "@/lib/wallet-utils"
 import { parseApyFromApiResponse } from "@/lib/defindex/parse-apy-response"
 import { deferNonCritical } from "@/lib/defer-non-critical"
 import { isClientAuthed } from "@/lib/client-auth-gate"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 export interface Vault {
   id: string
@@ -334,6 +335,7 @@ export function useWalletData() {
 
   // Fetch DeFindex balance
   const fetchDefindexBalance = useCallback(async (userId: string, publicKey?: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching DeFindex balance")
       const qs =
@@ -384,6 +386,10 @@ export function useWalletData() {
 
   // Fetch APY
   const fetchAPY = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) {
+      setApyLoading(false)
+      return
+    }
     try {
       setApyLoading(true)
       const apyResponse = await fetch("/api/wallet/defindex/apy")
@@ -404,6 +410,7 @@ export function useWalletData() {
 
   // Fetch auto-deposit status
   const fetchAutoDepositStatus = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching auto-deposit status")
       const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit")
@@ -594,23 +601,27 @@ export function useWalletData() {
           return
         }
         
-        const [vaultResponse, trustResponse] = await Promise.all([
-          fetch("/api/wallet/vault"),
-          fetch("/api/wallet/trust-points"),
-        ])
-
-        if (!vaultResponse.ok) {
-          throw new Error("Failed to fetch vault data")
-        }
-
-        const vaultData = await vaultResponse.json()
-        setVault(vaultData.vault)
-
-        if (trustResponse.ok) {
-          const trustData = await trustResponse.json()
-          setTrustPoints(trustData.trustPoints)
-        } else {
+        if (isPilotMainnet()) {
           setTrustPoints({ balance: 0, last_daily_credit: null })
+        } else {
+          const [vaultResponse, trustResponse] = await Promise.all([
+            fetch("/api/wallet/vault"),
+            fetch("/api/wallet/trust-points"),
+          ])
+
+          if (!vaultResponse.ok) {
+            throw new Error("Failed to fetch vault data")
+          }
+
+          const vaultData = await vaultResponse.json()
+          setVault(vaultData.vault)
+
+          if (trustResponse.ok) {
+            const trustData = await trustResponse.json()
+            setTrustPoints(trustData.trustPoints)
+          } else {
+            setTrustPoints({ balance: 0, last_daily_credit: null })
+          }
         }
         
         // Get username

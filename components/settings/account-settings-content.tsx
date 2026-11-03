@@ -13,6 +13,7 @@ import {
   ChevronLeft,
 } from "lucide-react"
 import { getUserId } from "@/lib/wallet-utils"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
 import {
   createPasskey,
@@ -349,6 +350,7 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
           {passkeyError && <p className="text-sm text-amber-200">{passkeyError}</p>}
           {passkeyMessage && <p className="text-sm text-emerald-200/90">{passkeyMessage}</p>}
 
+          {!isPilotMainnet() && (
           <div className="border border-white/10 rounded-lg p-3 space-y-2 bg-white/[0.02]">
             <div className="flex items-center gap-2 text-white/80 text-sm">
               <Lock className="w-4 h-4" />
@@ -383,6 +385,7 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
               </>
             )}
           </div>
+          )}
 
           <div className="space-y-2">
             <Button

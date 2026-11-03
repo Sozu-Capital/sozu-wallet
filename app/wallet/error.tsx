@@ -45,11 +45,11 @@ export default function WalletError({
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => router.push('/dashboard')} 
+              onClick={() => router.push('/home')} 
               className="w-full border-gray-700 text-white hover:bg-gray-800"
             >
               <Wallet className="mr-2 h-4 w-4" />
-              Back to Dashboard
+              Back to Wallet
             </Button>
           </div>
         </CardContent>

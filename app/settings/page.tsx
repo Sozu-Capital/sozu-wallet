@@ -20,6 +20,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { AppLanguageSelector } from "@/components/app-language-selector"
 import { useWalletLanguage } from "@/lib/wallet-language"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
+
+const pilotMainnet = isPilotMainnet()
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -82,6 +85,7 @@ export default function SettingsPage() {
   }, [])
 
   useEffect(() => {
+    if (pilotMainnet) return
     loadGmail()
   }, [loadGmail])
 
@@ -103,6 +107,7 @@ export default function SettingsPage() {
       })
     }
     window.history.replaceState({}, "", "/settings")
+    if (pilotMainnet) return
     void loadGmail()
   }, [loadGmail])
 
@@ -268,6 +273,8 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {!pilotMainnet && (
+        <>
         {gmailFlash && (
           <Alert
             className={
@@ -394,6 +401,8 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
     </div>
   )

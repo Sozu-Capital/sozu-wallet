@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { corsHeaders } from "@/lib/cors"
 import { createClient } from "@supabase/supabase-js"
 import {
   isValidSozuTag,
@@ -13,11 +14,6 @@ import {
   normalizeStellarAddressInput,
 } from "@/lib/payment/stellar-address"
 
-const corsHeaders = (request: NextRequest) => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-})
 
 type ResolveCacheEntry = {
   expiresAt: number

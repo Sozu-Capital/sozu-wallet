@@ -1,33 +1,46 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-/**
- * CORS headers for API routes
- * Allows requests from the Vercel deployment domain and localhost
- */
-export function corsHeaders(request: NextRequest) {
-  const origin = request.headers.get("origin")
-  
-  // Allow requests from:
-  // - Same origin (no origin header)
-  // - Vercel deployments (*.vercel.app, *.vercel.app/*)
-  // - Localhost (development)
-  const allowedOrigins = [
-    /^https:\/\/.*\.vercel\.app$/,
-    /^http:\/\/localhost:\d+$/,
-    /^https:\/\/localhost:\d+$/,
-  ]
+const PRODUCTION_ORIGINS = ["https://app.sozu.capital", "https://dev.sozu.capital"]
 
-  const isAllowedOrigin = !origin || allowedOrigins.some((pattern) => pattern.test(origin))
-
-  return {
-    "Access-Control-Allow-Origin": isAllowedOrigin ? origin || "*" : "https://your-app.vercel.app",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers":
-      "Content-Type, Authorization",
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Max-Age": "86400",
+function configuredAppOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (!raw) return null
+  try {
+    return new URL(raw).origin
+  } catch {
+    return null
   }
+}
+
+/** Exact-match allowlist. Localhost is allowed only in development; no wildcard hosts. */
+export function isAllowedCorsOrigin(origin: string | null): origin is string {
+  if (!origin) return false
+  if (PRODUCTION_ORIGINS.includes(origin)) return true
+  if (origin === configuredAppOrigin()) return true
+  if (process.env.NODE_ENV === "development") {
+    return /^https?:\/\/localhost(:\d+)?$/.test(origin)
+  }
+  return false
+}
+
+/**
+ * CORS headers for API routes. Same-origin requests don't need them; a cross-origin caller gets
+ * Access-Control-Allow-Origin only when its origin is on the allowlist.
+ */
+export function corsHeaders(request: NextRequest): Record<string, string> {
+  const origin = request.headers.get("origin")
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  }
+  if (isAllowedCorsOrigin(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin
+    headers["Access-Control-Allow-Credentials"] = "true"
+  }
+  return headers
 }
 
 /**
@@ -40,4 +53,3 @@ export function handleOPTIONS(request: NextRequest) {
     headers,
   })
 }
-
