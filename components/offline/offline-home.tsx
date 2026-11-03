@@ -96,10 +96,17 @@ export function OfflineHome({
       }
     }
     void loadLedger()
-    const timer = window.setInterval(() => void loadLedger(), REFRESH_MS)
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadLedger()
+    }, REFRESH_MS)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void loadLedger()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [vaultQuery])
 

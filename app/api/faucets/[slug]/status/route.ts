@@ -38,7 +38,7 @@ export async function GET(
     });
 
     const claimAmount = resolveClaimAmount(faucet.claim_amount);
-    if (availability.available && !(await vaultCanCoverClaim(claimAmount))) {
+    if (availability.available && !(await vaultCanCoverClaim(claimAmount, { cached: true }))) {
       availability = {
         available: false,
         reason: "insufficient_vault",

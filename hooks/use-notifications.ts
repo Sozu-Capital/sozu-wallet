@@ -89,9 +89,30 @@ export function useNotifications() {
   useEffect(() => {
     fetchNotifications()
 
-    // Refresh notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
+    // Refresh every 60 seconds while visible; refetch when the tab comes back.
+    let interval: ReturnType<typeof setInterval> | null = null
+    const start = () => {
+      if (interval == null) interval = setInterval(fetchNotifications, 60000)
+    }
+    const stop = () => {
+      if (interval != null) clearInterval(interval)
+      interval = null
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications()
+        start()
+      } else {
+        stop()
+      }
+    }
+
+    if (document.visibilityState === "visible") start()
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility)
+      stop()
+    }
   }, [fetchNotifications])
 
   return {
