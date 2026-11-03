@@ -258,7 +258,7 @@ function AuthPageContent() {
       sessionStorage.removeItem("credential_id")
       persistAuthIdentitySession({ userId, credentialId: "", username })
       try {
-        const res = await fetch("/api/wallet/stellar/address", { headers: { "x-user-id": userId } })
+        const res = await fetch("/api/wallet/stellar/address")
         const data = (await res.json()) as { publicKey?: string | null }
         const pk = data.publicKey?.trim().toUpperCase()
         if (pk && (pk.startsWith("C") || pk.startsWith("G")) && pk.length === 56) {

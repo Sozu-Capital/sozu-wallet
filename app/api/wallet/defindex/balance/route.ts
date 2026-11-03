@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getVaultBalance, getStrategyInfo } from "@/lib/defindex/vault"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       console.log("[DeFindex Balance API] Using Supabase auth, userId:", userId)
     } else {
       // Fallback: check for userId in headers (for production when auth cookies might not work)
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       console.log("[DeFindex Balance API] Fallback mode, userId from header:", userId)
       
       if (!userId) {

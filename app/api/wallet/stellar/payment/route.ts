@@ -12,6 +12,7 @@ import {
 } from "@/lib/stellar/pick-send-token"
 import { contractIsFactoryForSigner } from "@/lib/stellar/factory-smart-account"
 import { contractSupportsOzKitSigning } from "@/lib/stellar/supports-oz-kit-contract"
+import { getSessionUserId } from "@/lib/auth/session"
 
 /**
  * Maps a raw Soroban submit error message to a structured code for client-side handling.
@@ -44,7 +45,7 @@ function getTransactionSource(tx: Transaction | FeeBumpTransaction): string {
 const corsHeaders = (request: NextRequest) => ({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 })
 
 export async function OPTIONS(request: NextRequest) {
@@ -54,7 +55,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const userId = request.headers.get("x-user-id")
+    const userId = getSessionUserId(request)
     const { destination, amount, sender, signer: signerFromBody, memo, contractId: contractIdFromBody } = body
 
     console.log("[Payment API] Request received:", {

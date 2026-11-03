@@ -267,9 +267,7 @@ async function loadPasskeyPublicKey65(params: {
   if (!userId) {
     throw new Error("Not signed in. Please log in again.")
   }
-  const res = await fetch("/api/auth/passkeys/primary", {
-    headers: { "x-user-id": userId },
-  })
+  const res = await fetch("/api/auth/passkeys/primary")
   const data = (await res.json().catch(() => ({}))) as {
     publicKey65b?: string
     error?: string

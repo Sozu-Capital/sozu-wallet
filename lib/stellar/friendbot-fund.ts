@@ -34,7 +34,6 @@ async function resolveFundableGAddress(
 
   try {
     const res = await fetch("/api/wallet/stellar/address", {
-      headers: { "x-user-id": userId },
       cache: "no-store",
     })
     if (res.ok) {

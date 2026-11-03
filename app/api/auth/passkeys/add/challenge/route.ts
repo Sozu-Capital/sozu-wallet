@@ -6,6 +6,7 @@ import { MAX_PASSKEYS_PER_USER } from "@/lib/auth/passkey-limits"
 import { challengeStore, cleanupChallenges, getRpID, rpName } from "@/lib/webauthn/config"
 import { generateChallenge } from "@/lib/webauthn/utils"
 import { getPairingEntry } from "@/lib/webauthn/device-pairing"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const pairingCode =
       typeof body.pairingCode === "string" ? body.pairingCode.replace(/\s+/g, "").toUpperCase() : ""
     const usernameRaw = typeof body.username === "string" ? body.username.trim() : ""
-    const headerUserId = request.headers.get("x-user-id")?.trim() || ""
+    const headerUserId = (getSessionUserId(request) ?? "")
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

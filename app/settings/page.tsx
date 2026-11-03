@@ -14,7 +14,6 @@ import {
 import { loadTreasuryPrefs, saveTreasuryPrefs } from "@/lib/treasury/prefs-storage"
 import type { TreasuryPrefs } from "@/lib/treasury/types"
 import { REFERENCE_FIAT_OPTIONS } from "@/lib/treasury/types"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -68,7 +67,7 @@ export default function SettingsPage() {
   const loadGmail = useCallback(async () => {
     setGmailLoading(true)
     try {
-      const res = await fetch("/api/gmail/status", { headers: ledgerUserHeaders() })
+      const res = await fetch("/api/gmail/status")
       const json = await res.json()
       if (!res.ok) {
         setGmailStatus({ connected: false, message: json.error ?? "Could not load Gmail status" })
@@ -113,7 +112,6 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/gmail/sync", {
         method: "POST",
-        headers: { ...ledgerUserHeaders() },
         signal: AbortSignal.timeout(280_000),
       })
       let json: Record<string, unknown> = {}
@@ -173,7 +171,6 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/gmail/disconnect", {
         method: "POST",
-        headers: { ...ledgerUserHeaders() },
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -193,7 +190,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/gmail/connect", {
         method: "POST",
-        headers: { ...ledgerUserHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       })
       const json = await res.json()

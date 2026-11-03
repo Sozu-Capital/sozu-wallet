@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
 import type { Transaction } from "@/hooks/use-wallet-data"
 
@@ -111,9 +110,7 @@ export function useWalletActivity(params: {
     setLedgerLoading(true)
     try {
       const qs = new URLSearchParams({ limit: "40", window: "month" })
-      const res = await fetch(`/api/ledger/transactions?${qs}`, {
-        headers: ledgerUserHeaders(),
-        cache: "no-store",
+      const res = await fetch(`/api/ledger/transactions?${qs}`, { cache: "no-store",
       })
       if (!res.ok) {
         setLedgerRows([])

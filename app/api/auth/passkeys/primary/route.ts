@@ -7,6 +7,7 @@ import {
   parsePasskeyPublicKey65,
   publicKeyToBase64Url,
 } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -14,7 +15,7 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const headers = corsHeaders(request)
-  const userId = request.headers.get("x-user-id")
+  const userId = getSessionUserId(request)
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers })
   }

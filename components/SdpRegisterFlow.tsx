@@ -306,7 +306,6 @@ export function SdpRegisterFlow() {
       const syncedSigner = await prepareSdpSigningMaterial(userId, credentialId);
 
       const authHeaders: HeadersInit = {
-        "x-user-id": userId,
         "x-sep10-signer": syncedSigner.publicKey,
         "x-stellar-public-key": aligned.publicKey,
       };

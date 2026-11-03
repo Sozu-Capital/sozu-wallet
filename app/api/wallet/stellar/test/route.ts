@@ -3,6 +3,7 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getTurnkeyClient, isTurnkeyConfigured } from "@/lib/turnkey/client"
 import { getTurnkeyConfig } from "@/lib/turnkey/config"
 import { createStellarWallet } from "@/lib/turnkey/stellar-wallet"
+import { requireSession } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -14,6 +15,9 @@ export async function OPTIONS(request: Request) {
  * POST /api/wallet/stellar/test - Test wallet creation (requires test userId)
  */
 export async function GET(request: Request) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   try {
     // Check if Turnkey is configured
     const isConfigured = isTurnkeyConfigured()
@@ -91,8 +95,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   try {
-    const { userId } = await request.json()
+    const userId = caller.userId
 
     if (!userId) {
       return NextResponse.json(

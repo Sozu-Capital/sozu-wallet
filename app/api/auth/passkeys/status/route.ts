@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { MAX_PASSKEYS_PER_USER } from "@/lib/auth/passkey-limits"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -10,9 +11,9 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get("x-user-id")?.trim()
+    const userId = getSessionUserId(request)
     if (!userId) {
-      return NextResponse.json({ error: "Missing x-user-id" }, { status: 401, headers: corsHeaders(request) })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders(request) })
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

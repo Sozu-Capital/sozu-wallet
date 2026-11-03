@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import type { CreditEligibilitySnapshot, CreditStatus, UserCreditRecord } from "@/lib/credit/types"
 import { getMicrocreditProgram } from "@/lib/credit/programs"
+import { getSessionUserId } from "@/lib/auth/session"
 
 function mapBusinessStatus(status: string): CreditStatus {
   switch (status) {
@@ -23,7 +24,7 @@ async function resolveUserId(request: Request): Promise<string | null> {
     data: { user },
   } = await supabase.auth.getUser()
   if (user?.id) return user.id
-  return request.headers.get("x-user-id")
+  return getSessionUserId(request)
 }
 
 async function fetchEligibility(userId: string): Promise<CreditEligibilitySnapshot> {

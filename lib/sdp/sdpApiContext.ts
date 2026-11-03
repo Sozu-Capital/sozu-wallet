@@ -2,6 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { WALLET_SESSION_COOKIE, parseSessionCookieValue } from "@/lib/auth/session-cookie";
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet";
 import {
   parseInviteCookie,
@@ -32,12 +33,10 @@ export async function getSdpApiContext(): Promise<SdpApiContext> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Fall back to x-user-id header for the passkey / sessionStorage flow
   let userId: string | null = user?.id ?? null;
   if (!userId) {
-    const { headers } = await import("next/headers");
-    const hdrs = await headers();
-    userId = hdrs.get("x-user-id");
+    const raw = (await cookies()).get(WALLET_SESSION_COOKIE)?.value;
+    userId = parseSessionCookieValue(raw)?.uid ?? null;
   }
 
   if (!userId) {

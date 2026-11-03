@@ -70,7 +70,7 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
   useEffect(() => {
     const userId = getUserId()
     if (!userId) return
-    fetch("/api/auth/passkeys/status", { headers: { "x-user-id": userId } })
+    fetch("/api/auth/passkeys/status")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.username) setSozuTag(data.username)
@@ -186,7 +186,7 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
     setPasskeyError(null)
     setPasskeyMessage(null)
     try {
-      const listRes = await fetch("/api/auth/passkeys/list", { headers: { "x-user-id": uid } })
+      const listRes = await fetch("/api/auth/passkeys/list")
       const listJson = (await listRes.json()) as { passkeys?: { credential_id: string }[]; error?: string }
       if (!listRes.ok) {
         throw new Error(listJson.error || "Could not verify passkeys")
@@ -231,7 +231,7 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
     try {
       const res = await fetch("/api/auth/pin/set", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": uid },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: digits }),
       })
       const j = (await res.json()) as { error?: string; message?: string }
@@ -268,7 +268,6 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
       })
 

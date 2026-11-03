@@ -279,7 +279,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
 
       const res = await fetch("/api/wallet/resolve-recipient", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipient: normalizedTag }),
       })
       if (res.ok) {

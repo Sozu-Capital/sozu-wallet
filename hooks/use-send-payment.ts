@@ -185,7 +185,7 @@ export function useSendPayment(
         const res = await fetch("/api/wallet/stellar/payment", {
           method: "POST",
           signal: ctrl.signal,
-          headers: { "Content-Type": "application/json", "x-user-id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             destination: resolvedRecipientAddress,
             amount: amount.toString(),
@@ -348,7 +348,6 @@ export function useSendPayment(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify({
           recipient: normalizeSozuTag(trimmed) || trimmed,
@@ -508,7 +507,7 @@ export function useSendPayment(
         } else {
           const buildResponse = await fetch("/api/wallet/stellar/payment", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-user-id": userId },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               destination: resolvedRecipientAddress,
               amount: amount.toString(),
@@ -633,7 +632,6 @@ export function useSendPayment(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify(submitBody),
       })

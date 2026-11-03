@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { allowCredentialTransportsForRequest } from "@/lib/webauthn/credential-transports"
-import { generateChallenge } from "@/lib/webauthn/utils"
-import { challengeStore, cleanupChallenges, getRpID, rpName } from "@/lib/webauthn/config"
+import { issueSignedChallenge } from "@/lib/webauthn/signed-challenge"
+import { getRpID, rpName } from "@/lib/webauthn/config"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
@@ -16,11 +16,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[Login Challenge] Request received - username:", username || "(empty/not provided)", "type:", typeof username)
 
-    // Clean up old challenges (but keep recent ones)
-    cleanupChallenges()
-
-    // Generate challenge
-    const challenge = generateChallenge()
+    const challenge = issueSignedChallenge()
     const rpID = getRpID(request)
     console.log("[Login Challenge] Generated challenge:", challenge.substring(0, 20) + "...", "rpId:", rpID)
 
@@ -42,13 +38,6 @@ export async function POST(request: NextRequest) {
         if (passkeys && passkeys.length > 0) {
           console.log("[Login Challenge] Found", passkeys.length, "passkey(s) for user:", username)
           
-          // Store challenge temporarily
-          challengeStore.set(username, {
-            challenge,
-            timestamp: Date.now(),
-          })
-          console.log("[Login Challenge] ✅ Stored challenge under username key:", username, "Store size:", challengeStore.size)
-
           // Return WebAuthn authentication options with CORS headers
           // Include all passkeys with their stored transport types
           // If no transports stored, allow all transports (browser will handle selection)
@@ -74,13 +63,6 @@ export async function POST(request: NextRequest) {
     // This enables passkey-based login without requiring username
     console.log("[Login Challenge] Username not provided or user not found, enabling passkey discovery")
     
-    // Store challenge with a special key for discovery mode
-    challengeStore.set("__discovery__", {
-      challenge,
-      timestamp: Date.now(),
-    })
-    console.log("[Login Challenge] ✅ Stored challenge under discovery key: __discovery__, Store size:", challengeStore.size, "Store keys:", [...challengeStore.keys()])
-
     // Return WebAuthn authentication options without allowCredentials
     // This allows the browser to discover and use any registered passkey
     return NextResponse.json(

@@ -8,6 +8,7 @@ import {
   isValidStellarReceiveAddress,
   normalizeStellarAddressInput,
 } from "@/lib/payment/stellar-address"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -23,8 +24,7 @@ export async function OPTIONS(request: NextRequest) {
  * Auth (first match wins):
  * 1) `Authorization: Bearer <Supabase access_token>` — JWT from the same Supabase Auth pool.
  * 2) Cookie session — same as Sozu Credit web (optional).
- * 3) Server-to-server: `X-Sozu-Internal-Secret` must equal env `SOZU_INTERNAL_API_SECRET`, and
- *    `X-User-Id` must be the target user's UUID (only use from your trusted backend).
+ * 3) Wallet session cookie (same origin).
  */
 export async function GET(request: NextRequest) {
   const headers = corsHeaders(request)
@@ -41,21 +41,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    let userId: string | null = null
-
-    const internalSecret = process.env.SOZU_INTERNAL_API_SECRET?.trim()
-    const headerSecret = request.headers.get("x-sozu-internal-secret")
-    const headerUserId = request.headers.get("x-user-id")
-
-    if (
-      internalSecret &&
-      internalSecret.length >= 16 &&
-      headerSecret &&
-      headerSecret === internalSecret &&
-      headerUserId
-    ) {
-      userId = headerUserId.trim()
-    }
+    let userId: string | null = getSessionUserId(request)
 
     if (!userId) {
       const authHeader = request.headers.get("authorization")

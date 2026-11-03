@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { createUSDCTrustlineServerSide, submitTrustlineTransaction } from "@/lib/stellar/trustline-server"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       console.log("[Trustline API] Using Supabase auth, userId:", userId)
     } else {
       // In dev mode, check for userId in headers
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       console.log("[Trustline API] Dev mode, userId from header:", userId)
 
       if (!userId) {

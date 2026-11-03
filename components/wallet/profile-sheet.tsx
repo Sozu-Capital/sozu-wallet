@@ -142,7 +142,6 @@ const ProfileTab = memo(function ProfileTab({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(userId ? { "x-user-id": userId } : {}),
         },
         body: JSON.stringify({ username: tag }),
       })
