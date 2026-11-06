@@ -1,6 +1,6 @@
 // Service Worker for SozuCredit PWA
-const CACHE_NAME = 'sozucredit-v6';
-const RUNTIME_CACHE = 'sozucredit-runtime-v6';
+const CACHE_NAME = 'sozucredit-v7';
+const RUNTIME_CACHE = 'sozucredit-runtime-v7';
 
 function isDevTunnelHost(hostname) {
   return (

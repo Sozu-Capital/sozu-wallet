@@ -41,6 +41,7 @@ Guides for developers and operators working in this repository. The root [README
 | Legacy two-domain deploy | [deployment-two-domains.md](./deployment-two-domains.md) |
 | Development (PWA, scripts, testing) | [development-guide.md](./development-guide.md) |
 | Project history (milestones) | [project-history.md](./project-history.md) |
+| November 2026 logo | [brand/november-2026-logo.md](./brand/november-2026-logo.md) |
 | **Ten-day dev log (May 23 – Jun 2, 2026)** | [development-log-2026-05-23-to-2026-06-02.md](./development-log-2026-05-23-to-2026-06-02.md) |
 | **Master changelog & 4-week report** | [PROJECT-CHANGELOG-MASTER-REPORT.md](./PROJECT-CHANGELOG-MASTER-REPORT.md) |
 | **Ten-day changelog (May 24 – Jun 3, 2026)** | [changelog-2026-05-24-to-2026-06-03.md](./changelog-2026-05-24-to-2026-06-03.md) |

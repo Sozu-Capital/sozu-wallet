@@ -844,7 +844,7 @@ export function WalletScreen({
                 aria-label="Cambiar billetera"
               >
                 <img
-                  src="/sozucapital_logo_tb.png"
+                  src="/brand/november-2026/mark.png"
                   alt="Sozu Wallet"
                   className="h-10 w-10 object-contain opacity-90 hover:opacity-100 transition-opacity"
                 />

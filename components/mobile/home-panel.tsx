@@ -128,7 +128,7 @@ export function HomePanel({ onPayClick }: HomePanelProps) {
     <div className="flex h-full w-full flex-col overflow-hidden">
       <header className="flex flex-col items-center gap-2 pt-[max(2rem,env(safe-area-inset-top))]">
         <img
-          src="/sozucapital_logo_tb.png"
+          src="/brand/november-2026/mark.png"
           alt="Sozu Wallet"
           className="h-11 w-11 object-contain opacity-90"
         />

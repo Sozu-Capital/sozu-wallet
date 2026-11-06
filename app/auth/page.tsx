@@ -970,7 +970,7 @@ function AuthPageContent() {
         }`}>
         <div className="flex flex-col items-center gap-4">
           <img
-            src="/sozucapital_logo_tb.png"
+            src="/brand/november-2026/mark.png"
             alt="Sozu Wallet Logo"
             className="w-32 h-32 md:w-36 md:h-36 object-contain"
           />
