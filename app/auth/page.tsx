@@ -958,26 +958,16 @@ function AuthPageContent() {
         )}
       </AnimatePresence>
 
-      {/* SOZU wordmark — top of screen, matches Passkey caption style */}
-      <p className="pointer-events-none absolute top-[max(1.1rem,env(safe-area-inset-top))] left-0 right-0 z-[3] text-center text-[10px] font-extralight tracking-[0.12em] text-white">
-        SOZU
-      </p>
-
-      {/* Logo and Version — centered on phone; upper area on tablet/desktop so orb stays at bottom */}
-      <div className={`absolute inset-0 z-[2] flex flex-col items-center justify-center pointer-events-none transition-opacity duration-700 md:justify-start md:pt-[clamp(5rem,18vh,10rem)] ${isAuthenticated
+      {/* Lock screen — November 2026 mark, centered. Enter stays at the bottom. */}
+      <div className={`absolute inset-0 z-[2] flex items-center justify-center pointer-events-none transition-opacity duration-700 ${isAuthenticated
         ? "opacity-0"
         : "opacity-100"
         }`}>
-        <div className="flex flex-col items-center gap-4">
-          <img
-            src="/brand/november-2026/mark.png"
-            alt="Sozu Wallet Logo"
-            className="w-32 h-32 md:w-36 md:h-36 object-contain"
-          />
-          <div className="text-white/60 text-sm font-medium">
-            v0.2
-          </div>
-        </div>
+        <img
+          src="/brand/november-2026/mark.png"
+          alt="Sozu Wallet"
+          className="h-36 w-36 object-contain"
+        />
       </div>
 
       {/* Post-auth skeleton — full viewport */}
