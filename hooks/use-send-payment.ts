@@ -118,6 +118,9 @@ export function useSendPayment(
     forContractId?: string
   } | null>(null)
 
+  /** One key per send attempt: a double tap or network retry of the same submit resolves to one payment. */
+  const idempotencyKeyRef = useRef<string | null>(null)
+
   const PAYMENT_ERROR_SHAKE_MS = 500
 
   const triggerPaymentErrorFeedback = useCallback(() => {
@@ -432,6 +435,8 @@ export function useSendPayment(
 
     // Show spinner immediately — before any async work.
     setIsSending(true)
+    const idempotencyKey = idempotencyKeyRef.current ?? crypto.randomUUID()
+    idempotencyKeyRef.current = idempotencyKey
 
     // Check whether the prefetched build is still valid for this send.
     const prefetch = prefetchedBuildRef.current
@@ -628,13 +633,21 @@ export function useSendPayment(
       const submitBody = await signAndSubmit()
       setSendPhase("submitting")
 
-    const submitResponse = await fetch("/api/wallet/stellar/payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(submitBody),
-      })
+      const postSubmit = () =>
+        fetch("/api/wallet/stellar/payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...submitBody, idempotencyKey }),
+        })
+      let submitResponse = await postSubmit()
+      for (let i = 0; submitResponse.status === 409 && i < 30; i++) {
+        const body = (await submitResponse.clone().json().catch(() => ({}))) as { code?: string }
+        if (body.code !== "IDEMPOTENCY_IN_PROGRESS") break
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        submitResponse = await postSubmit()
+      }
 
       if (!submitResponse.ok) {
         const submitErr = await submitResponse.json().catch(() => ({})) as { error?: string; code?: string }
@@ -701,6 +714,7 @@ export function useSendPayment(
       }
       alert(`❌ ${errorMessage}`)
     } finally {
+      idempotencyKeyRef.current = null
       setIsSending(false)
       setSendPhase(null)
     }
