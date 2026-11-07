@@ -18,6 +18,9 @@ export const PILOT_BLOCKED_PREFIXES: readonly string[] = [
   "/api/auth/pin",
   // Smart-account address is written only server-side at provisioning.
   "/api/wallet/update-address",
+  // Classic G-signer factory. New accounts are passkey signers; this route stays for old testnet rows only.
+  "/api/wallet/smart-account/provision",
+  "/api/wallet/stellar/sync-signer",
   // Test and debug surfaces.
   "/api/test",
   "/api/debug",

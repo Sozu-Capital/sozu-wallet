@@ -367,6 +367,10 @@ export type WalletTexts = {
   // Balance card
   hideBalance: string;
   showBalance: string;
+  arsQuoteLoading: string;
+  arsQuoteUnavailable: string;
+  arsQuoteRate: string;
+  arsQuoteAsOf: string;
   purchasingPowerSubline: string;
   apyBlendLabel: string;
   auditBreakdown: string;
@@ -883,6 +887,10 @@ export const walletTexts = {
     rampPixKeyTypeRandom: "Aleatoria",
     hideBalance: "Ocultar saldo",
     showBalance: "Mostrar saldo",
+    arsQuoteLoading: "Buscando cotización BCRA…",
+    arsQuoteUnavailable: "Cotización en pesos no disponible ahora",
+    arsQuoteRate: "Cotización BCRA: 1 USD = {rate}",
+    arsQuoteAsOf: "del {date} · consultada {time}",
     purchasingPowerSubline: "+{pct}% poder adquisitivo · {days}d",
     apyBlendLabel: "APY Blend",
     auditBreakdown: "Desglose y proyección",
@@ -1369,6 +1377,10 @@ export const walletTexts = {
     rampPixKeyTypeRandom: "Random",
     hideBalance: "Hide balance",
     showBalance: "Show balance",
+    arsQuoteLoading: "Loading BCRA rate…",
+    arsQuoteUnavailable: "Peso rate unavailable right now",
+    arsQuoteRate: "BCRA rate: 1 USD = {rate}",
+    arsQuoteAsOf: "as of {date} · checked {time}",
     purchasingPowerSubline: "+{pct}% purchasing power · {days}d",
     apyBlendLabel: "Blend APY",
     auditBreakdown: "Breakdown & projection",

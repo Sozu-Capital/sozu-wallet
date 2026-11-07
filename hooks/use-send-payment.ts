@@ -118,6 +118,9 @@ export function useSendPayment(
     forContractId?: string
   } | null>(null)
 
+  /** One key per send attempt: a double tap or network retry of the same submit resolves to one payment. */
+  const idempotencyKeyRef = useRef<string | null>(null)
+
   const PAYMENT_ERROR_SHAKE_MS = 500
 
   const triggerPaymentErrorFeedback = useCallback(() => {
@@ -432,6 +435,8 @@ export function useSendPayment(
 
     // Show spinner immediately — before any async work.
     setIsSending(true)
+    const idempotencyKey = idempotencyKeyRef.current ?? crypto.randomUUID()
+    idempotencyKeyRef.current = idempotencyKey
 
     // Check whether the prefetched build is still valid for this send.
     const prefetch = prefetchedBuildRef.current
@@ -470,16 +475,10 @@ export function useSendPayment(
           console.warn("[Send Payment] Wallet align skipped:", alignErr)
           try {
             const { getCurrentCredentialId } = await import("@/lib/storage/key-utils")
-            const { deriveAndStoreKey } = await import("@/lib/storage/browser-keys")
             const credId = await getCurrentCredentialId(undefined)
-            if (credId) {
-              sessionCredentialId = credId
-              const { publicKey } = await deriveAndStoreKey(credId, userId)
-              const g = publicKey.trim().toUpperCase()
-              if (g.startsWith("G") && g.length === 56) passkeySignerG = g
-            }
+            if (credId) sessionCredentialId = credId
           } catch {
-            /* server will supply signer_public_key */
+            /* session credential is enough for a passkey assertion */
           }
         }
       }
@@ -552,19 +551,13 @@ export function useSendPayment(
             ? (build.signerPublicKey as string)
             : passkeySignerG ?? null
 
-        if (!signerPublicKey) {
-          throw new Error(
-            "Smart wallet signer (G…) missing. Sign out, sign in with passkey again, then retry.",
-          )
-        }
-
         const { getCurrentCredentialId, storeCredentialIdInSession } = await import(
           "@/lib/storage/key-utils"
         )
         const credentialId =
           (typeof build.ozCredentialId === "string" ? build.ozCredentialId : null) ||
           sessionCredentialId ||
-          (await getCurrentCredentialId(signerPublicKey))
+          (await getCurrentCredentialId(signerPublicKey ?? undefined))
         if (!credentialId) {
           throw new Error("Credential ID not found. Please log in again.")
         }
@@ -610,17 +603,23 @@ export function useSendPayment(
           return { signedEnvelopeXdr }
         }
         if (signMethod === "smart_g_signer") {
-          const { signSorobanUsdcWithGSigner } = await import(
-            "@/lib/stellar/smartAccounts/signSorobanTransferG"
-          )
-          const signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
-            unsignedXdr,
-            signerPublicKey,
-            credentialId,
-            userId,
-            networkPassphrase,
-          })
-          return { signedEnvelopeXdr }
+          if (!signerPublicKey) {
+            throw new Error("Factory signer (G…) missing. Sign in on the device that created this wallet.")
+          }
+          if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+            const { signSorobanUsdcWithGSigner } = await import(
+              "@/lib/stellar/smartAccounts/signSorobanTransferG"
+            )
+            const signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
+              unsignedXdr,
+              signerPublicKey,
+              credentialId,
+              userId,
+              networkPassphrase,
+            })
+            return { signedEnvelopeXdr }
+          }
+          throw new Error("G-signer payments are not in the mainnet build.")
         }
         throw new Error(`Unsupported sign method: ${signMethod ?? "unknown"}`)
       }
@@ -628,13 +627,21 @@ export function useSendPayment(
       const submitBody = await signAndSubmit()
       setSendPhase("submitting")
 
-    const submitResponse = await fetch("/api/wallet/stellar/payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(submitBody),
-      })
+      const postSubmit = () =>
+        fetch("/api/wallet/stellar/payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...submitBody, idempotencyKey }),
+        })
+      let submitResponse = await postSubmit()
+      for (let i = 0; submitResponse.status === 409 && i < 30; i++) {
+        const body = (await submitResponse.clone().json().catch(() => ({}))) as { code?: string }
+        if (body.code !== "IDEMPOTENCY_IN_PROGRESS") break
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        submitResponse = await postSubmit()
+      }
 
       if (!submitResponse.ok) {
         const submitErr = await submitResponse.json().catch(() => ({})) as { error?: string; code?: string }
@@ -701,6 +708,7 @@ export function useSendPayment(
       }
       alert(`❌ ${errorMessage}`)
     } finally {
+      idempotencyKeyRef.current = null
       setIsSending(false)
       setSendPhase(null)
     }

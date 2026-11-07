@@ -4,6 +4,7 @@ import * as rpc from "@stellar/stellar-sdk/rpc"
 import { Keypair } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
+import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
 /** Classic G that pays Soroban fees (STELLAR_FUNDER_SECRET). */
@@ -81,43 +82,28 @@ export async function ensureTestnetAccountFunded(publicKey: string): Promise<voi
  * - Factory G-signer path: must use passkey G as source → fund on testnet if needed.
  */
 export async function resolveSorobanFeePayer(params: {
-  signerPublicKey: string
+  signerPublicKey?: string | null
   network: StellarNetwork
   requireSignerAsSource?: boolean
 }): Promise<{ feePayer: string; usedFunder: boolean }> {
-  const signer = params.signerPublicKey.trim().toUpperCase()
-  if (!signer.startsWith("G") || signer.length !== 56) {
-    throw new Error("Passkey signer (G…) is required for Soroban payments.")
+  const choice = selectSorobanFeePayer({
+    signerPublicKey: params.signerPublicKey,
+    funderPublicKey: getConfiguredFunderPublicKey(),
+    requireSignerAsSource: params.requireSignerAsSource,
+  })
+
+  if (!choice.usedFunder && params.network === "testnet") {
+    await ensureTestnetAccountFunded(choice.feePayer)
+    return choice
   }
 
-  if (params.requireSignerAsSource) {
-    if (params.network === "testnet") {
-      await ensureTestnetAccountFunded(signer)
-    } else if (!(await sorobanAccountExists(signer, params.network))) {
-      throw new Error(
-        `Signer account ${signer.slice(0, 8)}… is not on ${params.network}. Fund it with XLM first.`,
-      )
-    }
-    return { feePayer: signer, usedFunder: false }
-  }
-
-  const funder = getConfiguredFunderPublicKey()
-  if (funder) {
-    if (!(await sorobanAccountExists(funder, params.network))) {
-      throw new Error(
-        `STELLAR_FUNDER_SECRET account ${funder.slice(0, 8)}… is not on ${params.network}. Fund the funder or fix .env.local.`,
-      )
-    }
-    return { feePayer: funder, usedFunder: true }
-  }
-
-  if (params.network === "testnet") {
-    await ensureTestnetAccountFunded(signer)
-  } else if (!(await sorobanAccountExists(signer, params.network))) {
+  if (!(await sorobanAccountExists(choice.feePayer, params.network))) {
     throw new Error(
-      `No STELLAR_FUNDER_SECRET configured and signer ${signer.slice(0, 8)}… is not on mainnet.`,
+      choice.usedFunder
+        ? `STELLAR_FUNDER_SECRET account ${choice.feePayer.slice(0, 8)}… is not on ${params.network}. Fund the funder or fix .env.local.`
+        : `Signer account ${choice.feePayer.slice(0, 8)}… is not on ${params.network}. Fund it with XLM first.`,
     )
   }
 
-  return { feePayer: signer, usedFunder: false }
+  return choice
 }

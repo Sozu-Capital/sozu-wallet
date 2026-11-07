@@ -7,14 +7,19 @@
 
 "use client"
 
-import { Transaction, TransactionBuilder, Keypair, FeeBumpTransaction } from "@stellar/stellar-sdk"
-import {
-  retrieveKeypair,
-  getKeypairByPublicKey,
-  deriveAndStoreKey,
-} from "../storage/browser-keys"
+import { Transaction, TransactionBuilder, type Keypair, FeeBumpTransaction } from "@stellar/stellar-sdk"
 import { storeCredentialIdInSession } from "../storage/key-utils"
-import { resolveKeypairForSignerG } from "./ensure-passkey-signer"
+
+async function loadLegacyGSigning() {
+  if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+    const [keys, signer] = await Promise.all([
+      import("../storage/browser-keys"),
+      import("./ensure-passkey-signer"),
+    ])
+    return { keys, signer }
+  }
+  throw new Error("G-signer signing is not in the mainnet build.")
+}
 
 /** SEP-10 and Horizon txs sign with G…; session may only store the smart account C…. */
 function resolveTransactionSigningPublicKey(
@@ -133,8 +138,9 @@ export async function signTransactionWithPasskeyApproval(
 
   // Step 5: Sign with the credential that controls this G (may differ from WebAuthn assertion id).
   const txSigner = resolveTransactionSigningPublicKey(transaction, publicKey)
+  const legacy = await loadLegacyGSigning()
   const resolved = userId
-    ? await resolveKeypairForSignerG(txSigner, userId, assertedCredentialId)
+    ? await legacy.signer.resolveKeypairForSignerG(txSigner, userId, assertedCredentialId)
     : null
   const signingCredentialId = resolved?.credentialId ?? assertedCredentialId
 
@@ -182,9 +188,10 @@ export async function signTransactionClientSide(
 
   let keypair: Keypair | null = null
   const normalizedCredentialId = credentialId?.trim() || undefined
+  const legacy = await loadLegacyGSigning()
 
   if (userId) {
-    const resolved = await resolveKeypairForSignerG(
+    const resolved = await legacy.signer.resolveKeypairForSignerG(
       txPublicKey,
       userId,
       normalizedCredentialId
@@ -202,7 +209,7 @@ export async function signTransactionClientSide(
       "[Client Signing] Retrieving keypair by credential ID:",
       normalizedCredentialId.substring(0, 20) + "..."
     )
-    keypair = await retrieveKeypair(normalizedCredentialId, userId)
+    keypair = await legacy.keys.retrieveKeypair(normalizedCredentialId, userId)
     if (keypair && keypair.publicKey() !== txPublicKey) {
       keypair = null
     }
@@ -213,12 +220,12 @@ export async function signTransactionClientSide(
       "[Client Signing] Keypair not found by credential ID, trying public key lookup:",
       txPublicKey.substring(0, 10) + "..."
     )
-    keypair = await getKeypairByPublicKey(txPublicKey, normalizedCredentialId)
+    keypair = await legacy.keys.getKeypairByPublicKey(txPublicKey, normalizedCredentialId)
   }
 
   if (!keypair && normalizedCredentialId && userId) {
     console.log("[Client Signing] Deriving keypair from passkey credential…")
-    const derived = await deriveAndStoreKey(normalizedCredentialId, userId)
+    const derived = await legacy.keys.deriveAndStoreKey(normalizedCredentialId, userId)
     if (derived.publicKey === txPublicKey) {
       keypair = derived.keypair
     }
@@ -301,13 +308,14 @@ export async function hasKeypair(
   credentialId?: string,
   publicKey?: string
 ): Promise<boolean> {
+  const legacy = await loadLegacyGSigning()
   if (credentialId) {
-    const keypair = await retrieveKeypair(credentialId)
+    const keypair = await legacy.keys.retrieveKeypair(credentialId)
     return keypair !== null
   }
 
   if (publicKey) {
-    const keypair = await getKeypairByPublicKey(publicKey)
+    const keypair = await legacy.keys.getKeypairByPublicKey(publicKey)
     return keypair !== null
   }
 
@@ -321,6 +329,7 @@ export async function hasKeypair(
  * @returns Public key if found, null otherwise
  */
 export async function getPublicKey(credentialId: string): Promise<string | null> {
-  const keypair = await retrieveKeypair(credentialId)
+  const legacy = await loadLegacyGSigning()
+  const keypair = await legacy.keys.retrieveKeypair(credentialId)
   return keypair ? keypair.publicKey() : null
 }

@@ -91,12 +91,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "wallet_must_be_smart_account" }, { status: 422 })
     }
     const signerPk = wallet.signerPublicKey?.trim().toUpperCase()
-    if (!signerPk?.startsWith("G")) {
+    const signerG = signerPk?.startsWith("G") && signerPk.length === 56 ? signerPk : null
+    if (!signerG && wallet.walletType === "factory") {
       return NextResponse.json({ error: "smart_signer_required" }, { status: 422 })
     }
     const { resolveSorobanFeePayer } = await import("@/lib/stellar/soroban-fee-payer")
     const { feePayer } = await resolveSorobanFeePayer({
-      signerPublicKey: signerPk,
+      signerPublicKey: signerG,
       network: getStellarConfig().network,
       requireSignerAsSource: false,
     })
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
         sorobanDataXdr,
         signMethod: supportsOzKitApi ? "oz_passkey" : "oz_passkey_local",
         supportsOzKitApi,
-        signerPublicKey: signerPk,
+        signerPublicKey: signerG,
         walletAddress: senderC,
         ozCredentialId: wallet.ozCredentialId ?? null,
         feePayerPublicKey: feePayer,
