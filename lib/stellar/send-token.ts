@@ -18,6 +18,7 @@ import { getStellarConfig } from "@/lib/turnkey/config"
 import {
   getConfiguredFunderPublicKey,
   getFunderKeypair,
+  FEE_PAYER_SEQUENCE_ATTEMPTS,
   isBadSequenceResult,
   resequenceOnFeePayer,
   withFeePayerLock,
@@ -25,8 +26,6 @@ import {
 import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
 import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
 import { SorobanTransactionPendingError } from "@/lib/stellar/soroban-pending"
-
-const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
 
 function getNetworkPassphrase(network: StellarNetwork): string {
   return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET

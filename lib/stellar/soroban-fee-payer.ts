@@ -63,6 +63,9 @@ export function isBadSequenceResult(result: { status: string; errorResult?: xdr.
   }
 }
 
+/** Shared by transfers and sponsored deploys. A second instance can still collide; callers retry on txBadSeq. */
+export const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
+
 let feePayerQueue: Promise<unknown> = Promise.resolve()
 
 /**

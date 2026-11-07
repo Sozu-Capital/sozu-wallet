@@ -1,14 +1,49 @@
 import "server-only"
 
-import { Address, Networks, Transaction, TransactionBuilder, rpc, xdr } from "@stellar/stellar-sdk"
+import {
+  Address,
+  FeeBumpTransaction,
+  Keypair,
+  Networks,
+  Transaction,
+  TransactionBuilder,
+  rpc,
+  xdr,
+} from "@stellar/stellar-sdk"
+import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
-import { getFunderKeypair } from "@/lib/stellar/soroban-fee-payer"
+import {
+  FEE_PAYER_SEQUENCE_ATTEMPTS,
+  getFunderKeypair,
+  isBadSequenceResult,
+  resequenceOnFeePayer,
+  withFeePayerLock,
+} from "@/lib/stellar/soroban-fee-payer"
 import { ozKitDeployerKeypair } from "@/lib/stellar/smartAccounts/ozPin"
 import { contractIdForDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
 import { getOzSmartAccountConfig } from "@/lib/stellar/smartAccounts/ozConfig"
 
 /** Cap on what the funder will pay for one deploy, in stroops (0.05 XLM). */
 export const SPONSORED_DEPLOY_FEE = "500000"
+
+/**
+ * Fee-bump a deployer-signed inner deploy. The bump has no sequence of its own;
+ * the inner sequence is the kit deployer's, so the caller resequences that first.
+ */
+export function buildSignedSponsoredFeeBump(params: {
+  inner: Transaction
+  funder: Keypair
+  networkPassphrase: string
+}): FeeBumpTransaction {
+  const bump = TransactionBuilder.buildFeeBumpTransaction(
+    params.funder.publicKey(),
+    SPONSORED_DEPLOY_FEE,
+    params.inner,
+    params.networkPassphrase,
+  )
+  bump.sign(params.funder)
+  return bump
+}
 
 /** Same passphrase the kit receives from `/api/smart-accounts/config`. */
 export function sponsoredDeployNetworkPassphrase(): string {
@@ -137,14 +172,24 @@ export async function submitSponsoredDeploy(
   if (await contractAlreadyDeployed(rpcUrl, deploy.contractId, allowHttp)) {
     return { hash: null, feePayer: funder.publicKey(), alreadyDeployed: true, contractId: deploy.contractId }
   }
-  const bump = TransactionBuilder.buildFeeBumpTransaction(funder, SPONSORED_DEPLOY_FEE, parsed, passphrase)
-  bump.sign(funder)
   const server = new rpc.Server(rpcUrl, { allowHttp })
-  const result = await server.sendTransaction(bump)
+  const deployer = ozKitDeployerKeypair()
+  const result = await withFeePayerLock(async () => {
+    let sent: Awaited<ReturnType<rpc.Server["sendTransaction"]>> | null = null
+    for (let attempt = 0; attempt < FEE_PAYER_SEQUENCE_ATTEMPTS; attempt++) {
+      const fresh = await resequenceOnFeePayer(server, parsed, passphrase)
+      fresh.sign(deployer)
+      const bump = buildSignedSponsoredFeeBump({ inner: fresh, funder, networkPassphrase: passphrase })
+      sent = await server.sendTransaction(bump)
+      if (!isBadSequenceResult(sent)) break
+    }
+    return sent!
+  })
   if (result.status === "ERROR") {
     const detail = "errorResult" in result ? JSON.stringify(result.errorResult) : result.status
     throw new Error(`Deploy submit failed: ${detail}`)
   }
   if (!result.hash) throw new Error("No transaction hash from Soroban RPC")
+  scheduleFeePayerBalanceCheck()
   return { hash: result.hash, feePayer: funder.publicKey(), alreadyDeployed: false, contractId: deploy.contractId }
 }
