@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const quote = await getArsQuote()
     return NextResponse.json(quote, {
-      headers: { "Cache-Control": "public, max-age=300, s-maxage=600" },
+      headers: { "Cache-Control": "no-store, max-age=0" },
     })
   } catch (e) {
     console.error("[fx/ars]", e)

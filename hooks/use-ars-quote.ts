@@ -20,7 +20,7 @@ export function useArsQuote(enabled: boolean): ArsQuoteState {
 
     const load = async () => {
       try {
-        const res = await fetch("/api/fx/ars")
+        const res = await fetch("/api/fx/ars", { cache: "no-store" })
         const body: unknown = await res.json().catch(() => null)
         if (cancelled) return
         setState(res.ok && isArsQuoteDto(body) ? { status: "ok", quote: body } : { status: "unavailable" })
