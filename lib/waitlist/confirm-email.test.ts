@@ -12,10 +12,10 @@ describe("waitlist confirmation letter", () => {
     const letter = waitlistConfirmLetter("es", "ana@sozu.capital")
 
     expect(letter.subject).toBe("Estás en la primera lista")
-    expect(letter.text).toContain("experimento de finanzas descentralizadas en Chile")
+    expect(letter.text).toContain("el movimiento de las finanzas descentralizadas en Chile")
     expect(letter.text).toContain("primera lista del beta cerrado")
-    expect(letter.text).toContain("Los premios van en camino.")
-    expect(letter.text).toContain("honrarla durante toda nuestra relación comercial")
+    expect(letter.text).toContain("mayores rendimientos a lo largo del vuelo")
+    expect(letter.text).toContain("La honraremos durante toda la relación comercial.")
     expect(letter.html).toContain("color:#000000")
     expect(letter.html).toContain('src="https://app.sozu.capital/waitlist/knight.png"')
     expect(letter.html).toContain('align="right"')
@@ -25,7 +25,7 @@ describe("waitlist confirmation letter", () => {
   it("writes the English letter when the signup was in English", () => {
     const letter = waitlistConfirmLetter("en", "ada@sozu.capital")
     expect(letter.subject).toBe("You're on the first list")
-    expect(letter.text).toContain("decentralized-finance experiment in Chile")
+    expect(letter.text).toContain("the decentralized-finance movement in Chile")
     expect(letter.text).toContain("first closed-beta list")
     expect(letter.text).toContain("throughout our business relationship")
   })

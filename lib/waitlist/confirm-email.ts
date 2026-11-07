@@ -5,18 +5,18 @@ const COPY = {
     subject: "Estás en la primera lista",
     headline: "Estás dentro.",
     paragraphs: [
-      "Sozu es un experimento de finanzas descentralizadas en Chile. Tu correo quedó en la primera lista del beta cerrado.",
-      "Los premios van en camino.",
-      "Gracias por tu confianza. Nos comprometemos a honrarla durante toda nuestra relación comercial.",
+      "Sozu es el movimiento de las finanzas descentralizadas en Chile. Tu lugar está en la primera lista del beta cerrado.",
+      "Agradecemos tu confianza. Compensaremos los posibles roces de ser miembro desde el principio con mayores rendimientos a lo largo del vuelo.",
+      "La honraremos durante toda la relación comercial.",
     ],
   },
   en: {
     subject: "You're on the first list",
     headline: "You're in.",
     paragraphs: [
-      "Sozu is a decentralized-finance experiment in Chile. Your email is on the first closed-beta list.",
-      "Awards are on the way.",
-      "Thank you for your trust. We commit to honor it throughout our business relationship.",
+      "Sozu is the decentralized-finance movement in Chile. Your place is on the first closed-beta list.",
+      "We are grateful for your trust. We will compensate any friction from being a member from the start with higher yields throughout the flight.",
+      "It will be honored throughout our business relationship.",
     ],
   },
 } as const
