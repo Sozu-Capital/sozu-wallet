@@ -72,6 +72,12 @@ const CRISES = [
 
 const CRISIS_FRONT = Math.floor(CRISES.length / 2)
 
+/**
+ * The helix carries cards right to left as its progress rises. Feeding it oldest first and lowering
+ * progress on scroll makes the cards travel left to right while the captions still read newest first.
+ */
+const CRISES_OLDEST_FIRST = [...CRISES].reverse()
+
 /** Same key the wallet uses, so a visitor's language carries over once the app reopens. */
 const LANGUAGE_STORAGE_KEY = "sozu_app_language:v2"
 
@@ -83,11 +89,10 @@ const SPRING = { stiffness: 640, damping: 64, mass: 0.08, restDelta: 0.0004 }
 const COPY = {
   es: {
     statements: [
-      "Despierta...",
       "Dólares digitales en tu bolsillo.",
       "Paga a cualquiera con un toque.",
       "Tus llaves. Tu dinero.",
-      "Los primeros ganan.",
+      "Tu independencia financiera empieza hoy.",
     ],
     manifesto: [
       "Si otro tiene la llave, el dinero no es tuyo.",
@@ -96,6 +101,7 @@ const COPY = {
       "Así son las finanzas descentralizadas.",
       "Tus activos. Tus llaves.",
     ],
+    movement: "Únete al movimiento",
     placeholder: "tu@correo.com",
     submit: "Unirme",
     success: "Estás dentro.",
@@ -104,11 +110,10 @@ const COPY = {
   },
   en: {
     statements: [
-      "Wake up...",
       "Digital dollars in your pocket.",
       "Pay anyone with a tap.",
       "Your keys. Your money.",
-      "Early users get rewarded.",
+      "Your financial independence starts today.",
     ],
     manifesto: [
       "If someone else holds the key, the money isn't yours.",
@@ -117,6 +122,7 @@ const COPY = {
       "That is decentralized finance.",
       "Your assets. Your keys.",
     ],
+    movement: "Join the movement",
     placeholder: "you@email.com",
     submit: "Join",
     success: "You're in.",
@@ -257,7 +263,7 @@ export function WaitlistScreen() {
     offset: ["start start", "end end"],
   })
   const gallerySmooth = useSpring(galleryScroll, SPRING)
-  const galleryGoal = useTransform(gallerySmooth, [0, 1], [-CRISIS_FRONT, -CRISIS_FRONT + CRISES.length - 1])
+  const galleryGoal = useTransform(gallerySmooth, [0, 1], [CRISES.length - 1 - CRISIS_FRONT, -CRISIS_FRONT])
   const { scrollYProgress: closeScroll } = useScroll({
     target: closeRef,
     offset: ["start end", "start start"],
@@ -508,7 +514,7 @@ export function WaitlistScreen() {
             }}
           >
             <DitherHelixCarousel
-              items={CRISES.map((item) => ({ image: item.image, title: item[locale] }))}
+              items={CRISES_OLDEST_FIRST.map((item) => ({ image: item.image, title: item[locale] }))}
               scrollProgress={galleryGoal}
               entry={false}
               cardRatio={4 / 3}
@@ -538,7 +544,10 @@ export function WaitlistScreen() {
                   edgeBlur={closeBlur}
                 />
               </div>
-              <div className="mt-10 w-full">
+              <p className="mt-10 text-center text-[11px] font-light uppercase tracking-[0.3em] text-black/60">
+                {t.movement}
+              </p>
+              <div className="mt-4 w-full">
                 <WaitlistForm id="waitlist-email-ink" tone="light" {...formProps} />
               </div>
               <p className="mt-8 text-center text-[10px] font-extralight tracking-[0.3em] text-black/45">
