@@ -27,6 +27,13 @@ describe("waitlist mode", () => {
     expect(waitlistGate("/.well-known/stellar.toml", false)).toBe("pass")
     expect(waitlistGate("/brand/november-2026/mark.png", false)).toBe("pass")
     expect(waitlistGate("/fonts/SCHABO-XCondensed.woff2", false)).toBe("pass")
+    expect(waitlistGate("/robots.txt", false)).toBe("pass")
+  })
+
+  it("does not let dotted page URLs skip the gate", () => {
+    expect(waitlistGate("/city/spot/1.png", false)).toBe("redirect")
+    expect(waitlistGate("/faucet/orb.v2", false)).toBe("redirect")
+    expect(waitlistGate("/checkout/pizza/x.json", false)).toBe("redirect")
   })
 
   it("lets bypassed visitors use the app", () => {

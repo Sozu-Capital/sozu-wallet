@@ -10,7 +10,9 @@ export const WAITLIST_PATH = "/waitlist"
 export const WAITLIST_BYPASS_COOKIE = "sozu_waitlist_bypass"
 export const WAITLIST_BYPASS_QUERY = "access"
 
-const STATIC_FILE = /\/[^/]+\.[a-z0-9]+$/i
+/** Files directly under /public, like /robots.txt. Nested paths must sit in a known asset folder. */
+const ROOT_FILE = /^\/[^/]+\.[a-z0-9]+$/i
+const ASSET_FILE = /^\/(?:brand|icons|onboarding|sound|fonts)\/(?:[^/]+\/)*[^/]+\.[a-z0-9]+$/i
 
 export function isWaitlistMode(): boolean {
   return process.env.WAITLIST_MODE === "1"
@@ -30,7 +32,7 @@ export type WaitlistGateDecision = "pass" | "rewrite" | "redirect"
 
 export function waitlistGate(pathname: string, hasBypass: boolean): WaitlistGateDecision {
   if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return "pass"
-  if (STATIC_FILE.test(pathname)) return "pass"
+  if (ROOT_FILE.test(pathname) || ASSET_FILE.test(pathname)) return "pass"
   if (hasBypass) return "pass"
   if (pathname === "/") return "rewrite"
   return "redirect"

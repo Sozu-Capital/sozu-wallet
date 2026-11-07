@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { addWaitlistSignup } from "@/lib/db/waitlist"
+import { createRateLimiter } from "@/lib/waitlist/rate-limit"
 import { normalizeWaitlistEmail, normalizeWaitlistLocale } from "@/lib/waitlist/signup"
 
 export const dynamic = "force-dynamic"
+
+const allowSignup = createRateLimiter(5, 10 * 60_000)
 
 function referrerHost(request: NextRequest): string | null {
   const referrer = request.headers.get("referer")
@@ -14,10 +17,22 @@ function referrerHost(request: NextRequest): string | null {
   }
 }
 
+function clientIp(request: NextRequest): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+}
+
 export async function POST(request: NextRequest) {
+  if (!allowSignup(clientIp(request))) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 })
+  }
+
   let body: Record<string, unknown>
   try {
-    body = await request.json()
+    const parsed: unknown = await request.json()
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "invalid_body" }, { status: 400 })
+    }
+    body = parsed as Record<string, unknown>
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
