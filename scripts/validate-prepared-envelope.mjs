@@ -14,6 +14,7 @@
  *     7b9c6069-d7b5-45de-9eea-7776815aa8c8
  */
 
+import { createHmac } from "crypto"
 import { readFileSync } from "fs"
 import { Keypair, Transaction, TransactionBuilder, Networks, xdr } from "@stellar/stellar-sdk"
 
@@ -27,6 +28,15 @@ function loadEnv() {
   } catch { /* ignore */ }
 }
 loadEnv()
+
+/** Mint a local wallet session cookie (same format as lib/auth/session-cookie.ts). */
+function sessionCookieFor(uid) {
+  const secret = process.env.WALLET_SESSION_SECRET?.trim() || "sozu-wallet-dev-session-secret"
+  const iat = Math.floor(Date.now() / 1000)
+  const payload = Buffer.from(JSON.stringify({ uid, iat, exp: iat + 600 })).toString("base64url")
+  const sig = createHmac("sha256", secret).update(payload).digest("base64url")
+  return `sozu_wallet_session=${payload}.${sig}`
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3001"
 const NETWORK = process.env.STELLAR_NETWORK === "public" ? Networks.PUBLIC : Networks.TESTNET
@@ -74,7 +84,7 @@ async function main() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-user-id": userId,
+      Cookie: sessionCookieFor(userId),
     },
     body: JSON.stringify({
       sender,

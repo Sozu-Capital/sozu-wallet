@@ -1,32 +1,18 @@
-# PWA Icons
+# PWA icons
 
-This directory contains the PWA icons for SozuCredit.
+These icons are generated from the November 2026 logo (`public/brand/november-2026/logo.png`). See `docs/brand/november-2026-logo.md`.
 
-## Required Icons
+## Files
 
-The following icon sizes are required for the PWA:
+- `sozu_icon_72.png` through `sozu_icon_512.png` — manifest and Apple touch icons
+- `sozu_icon_180.png` — Apple touch icon
+- `sozu_icon.webp` — webp copy of the 512 master
+- `sozu_splash.png` — iOS startup image
 
-- 72x72.png
-- 96x96.png
-- 128x128.png
-- 144x144.png
-- 152x152.png (iOS)
-- 192x192.png
-- 384x384.png
-- 512x512.png
+## Regenerating
 
-## Generating Icons
-
-1. Create a 1024x1024 PNG icon and save it as `icon-base.png` in this directory
-2. Run the icon generation script:
+From the repo root, with Pillow installed:
 
 ```bash
-chmod +x scripts/generate-icons.sh
-./scripts/generate-icons.sh
+python3 scripts/generate-icons.py
 ```
-
-The script will generate all required icon sizes from the base icon.
-
-## Temporary Placeholder
-
-If you need to test the PWA immediately, you can use a temporary placeholder icon. The PWA will work, but the icons won't be branded.

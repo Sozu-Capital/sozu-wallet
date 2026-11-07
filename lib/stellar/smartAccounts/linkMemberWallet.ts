@@ -30,9 +30,7 @@ function isNotDeployedError(message: string): boolean {
 async function resolveLoginPasskeyPublicKey(credentialId: string): Promise<Uint8Array | null> {
   const userId = getUserId()
   if (!userId) return null
-  const res = await fetch("/api/auth/passkeys/primary", {
-    headers: { "x-user-id": userId },
-  })
+  const res = await fetch("/api/auth/passkeys/primary")
   const data = (await res.json().catch(() => ({}))) as {
     credentialId?: string
     publicKey65b?: string
@@ -98,9 +96,7 @@ async function resolveDeployPublicKey(
 
   const userId = getUserId()
   if (!userId) throw new Error("PASSKEY_PUBLIC_KEY_MISSING")
-  const res = await fetch("/api/auth/passkeys/primary", {
-    headers: { "x-user-id": userId },
-  })
+  const res = await fetch("/api/auth/passkeys/primary")
   const primary = (await res.json().catch(() => ({}))) as { publicKey65b?: string }
   if (!res.ok || !primary.publicKey65b) {
     throw new Error("PASSKEY_PUBLIC_KEY_MISSING")
@@ -249,9 +245,7 @@ async function verifyDeployedPubkey(
 ): Promise<void> {
   const userId = getUserId()
   const q = new URLSearchParams({ contractId, credentialId })
-  const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`, {
-    headers: userId ? { "x-user-id": userId } : {},
-  })
+  const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`)
   if (!res.ok) return
   const data = (await res.json().catch(() => ({}))) as { keyDataBase64?: string }
   if (!data.keyDataBase64) return

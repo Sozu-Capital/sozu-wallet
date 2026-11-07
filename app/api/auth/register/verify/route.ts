@@ -4,6 +4,7 @@ import { challengeStore } from "@/lib/webauthn/config"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { setSessionCookie } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -606,7 +607,7 @@ export async function POST(request: NextRequest) {
       .eq("id", authData.user.id)
       .single()
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { 
         success: true, 
         userId: authData.user.id,
@@ -614,6 +615,7 @@ export async function POST(request: NextRequest) {
       },
       { headers: corsHeaders(request) }
     )
+    return setSessionCookie(response, authData.user.id)
   } catch (error) {
     console.error("[Register] Registration verification error:", error)
     

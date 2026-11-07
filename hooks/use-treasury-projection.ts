@@ -60,7 +60,6 @@ export function useTreasuryProjection(balanceUsdc: number): UseTreasuryProjectio
         const res = await fetch(`/api/wallet/treasury/projection?${params}`, {
           cache: "no-store",
           signal: ctrl.signal,
-          headers: userId ? { "x-user-id": userId } : undefined,
         })
 
         if (!res.ok) {

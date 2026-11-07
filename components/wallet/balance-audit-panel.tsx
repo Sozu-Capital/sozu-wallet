@@ -20,6 +20,7 @@ import {
   getTreasuryModeLabel,
 } from "@/lib/wallet-texts"
 import { useEarnYield } from "@/hooks/use-earn-yield"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { useYieldPrefs } from "@/hooks/use-yield-prefs"
 
 export type BalanceAuditPanelProps = {
@@ -218,6 +219,7 @@ export const BalanceAuditPanel = memo(function BalanceAuditPanel({
       </div>
 
       {/* ── Earn CTAs ─────────────────────────────────────────────── */}
+      {!isPilotMainnet() && (
       <div className="space-y-2 border-t border-white/10 pt-4">
         <p className="text-[10px] uppercase tracking-widest text-white/40">Rendimiento DeFi</p>
 
@@ -312,6 +314,7 @@ export const BalanceAuditPanel = memo(function BalanceAuditPanel({
           </p>
         )}
       </div>
+      )}
 
       <div className="space-y-3 border-t border-white/10 pt-4">
         <p className="text-[10px] uppercase tracking-widest text-white/40">{t.projectionParams}</p>

@@ -37,6 +37,7 @@ import {
   parseFaucetHandoffAuthReturn,
 } from "@/lib/sozu-faucet/return-allowlist"
 import { toast } from "sonner"
+import { nfcUsdcDropReturnPath } from "@/lib/faucet/nfc-usdc-drop"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
@@ -131,7 +132,15 @@ function AuthPageContent() {
     return null
   })()
 
-  const finalPostAuthPath = checkoutRedirect ?? postAuthPath
+  const nfcUsdcRedirect = nfcUsdcDropReturnPath(searchParams.get("redirect"))
+
+  const offlineReturn = (() => {
+    const redirect = searchParams.get("redirect")?.trim() ?? ""
+    if (redirect === "/offline" || redirect.startsWith("/offline?")) return redirect
+    return null
+  })()
+
+  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? postAuthPath
   const pizzaAuth = resolvePizzaAuthSearch(searchParams)
   const stayOnAuthForPizza = pizzaAuth.kind !== "none"
   const pizzaHopReturnTo = pizzaAuth.kind === "hop" ? pizzaAuth.returnTo : null
@@ -249,7 +258,7 @@ function AuthPageContent() {
       sessionStorage.removeItem("credential_id")
       persistAuthIdentitySession({ userId, credentialId: "", username })
       try {
-        const res = await fetch("/api/wallet/stellar/address", { headers: { "x-user-id": userId } })
+        const res = await fetch("/api/wallet/stellar/address")
         const data = (await res.json()) as { publicKey?: string | null }
         const pk = data.publicKey?.trim().toUpperCase()
         if (pk && (pk.startsWith("C") || pk.startsWith("G")) && pk.length === 56) {
@@ -958,26 +967,16 @@ function AuthPageContent() {
         )}
       </AnimatePresence>
 
-      {/* SOZU wordmark — top of screen, matches Passkey caption style */}
-      <p className="pointer-events-none absolute top-[max(1.1rem,env(safe-area-inset-top))] left-0 right-0 z-[3] text-center text-[10px] font-extralight tracking-[0.12em] text-white">
-        SOZU
-      </p>
-
-      {/* Logo and Version — centered on phone; upper area on tablet/desktop so orb stays at bottom */}
-      <div className={`absolute inset-0 z-[2] flex flex-col items-center justify-center pointer-events-none transition-opacity duration-700 md:justify-start md:pt-[clamp(5rem,18vh,10rem)] ${isAuthenticated
+      {/* Lock screen — November 2026 mark, centered. Enter stays at the bottom. */}
+      <div className={`absolute inset-0 z-[2] flex items-center justify-center pointer-events-none transition-opacity duration-700 ${isAuthenticated
         ? "opacity-0"
         : "opacity-100"
         }`}>
-        <div className="flex flex-col items-center gap-4">
-          <img
-            src="/sozucapital_logo_tb.png"
-            alt="Sozu Wallet Logo"
-            className="w-32 h-32 md:w-36 md:h-36 object-contain"
-          />
-          <div className="text-white/60 text-sm font-medium">
-            v0.2
-          </div>
-        </div>
+        <img
+          src="/brand/november-2026/mark.png"
+          alt="Sozu Wallet"
+          className="h-36 w-36 object-contain"
+        />
       </div>
 
       {/* Post-auth skeleton — full viewport */}
@@ -1031,6 +1030,12 @@ function AuthPageContent() {
         <p className="max-w-sm px-2 text-center text-[10px] font-extralight tracking-[0.12em] text-white">
           {t.authPasskeyCaption}
         </p>
+        <a
+          href="/offline"
+          className="pointer-events-auto text-[10px] font-extralight tracking-[0.12em] text-white/55 underline-offset-4 hover:text-white hover:underline"
+        >
+          Audit offline payments
+        </a>
 
         {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
       </div>

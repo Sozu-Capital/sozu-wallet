@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -12,7 +13,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const headers = corsHeaders(request)
 
-  const userId = request.headers.get("x-user-id")
+  const userId = getSessionUserId(request)
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers })
   }

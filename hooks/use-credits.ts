@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { getUserId } from "@/lib/wallet-utils"
 import {
   createCreditApplication,
@@ -44,9 +43,7 @@ export function useCredits() {
 
     try {
       const localCredits = readUserCreditApplications(userId)
-      const res = await fetch("/api/wallet/credits", {
-        headers: ledgerUserHeaders(),
-        cache: "no-store",
+      const res = await fetch("/api/wallet/credits", { cache: "no-store",
       })
 
       if (res.ok) {

@@ -5,6 +5,7 @@ import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { getSorobanWalletTransactions } from "@/lib/stellar/soroban-transfer-history"
 import { createClient } from "@/lib/supabase/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
         userId = user.id
         console.log("[Transaction History API] Using Supabase auth, userId:", userId)
       } else {
-        userId = request.headers.get("x-user-id")
+        userId = getSessionUserId(request)
         console.log("[Transaction History API] Dev mode, userId from header:", userId)
 
         if (!userId) {

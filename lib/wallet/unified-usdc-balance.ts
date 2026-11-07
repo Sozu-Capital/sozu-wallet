@@ -65,7 +65,6 @@ export async function fetchUnifiedUsdcBalance(
       : ""
 
   const res = await fetch(`/api/wallet/stellar/balance${qs}`, {
-    headers: { "x-user-id": userId },
     cache: "no-store",
   })
   if (!res.ok) {

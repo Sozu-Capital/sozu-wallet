@@ -35,9 +35,7 @@ export async function loadCanonicalWallet(
       : null) ||
     undefined
 
-  const addrRes = await fetch("/api/wallet/stellar/address", {
-    headers: { "x-user-id": userId },
-  })
+  const addrRes = await fetch("/api/wallet/stellar/address")
 
   let dbPk: string | null = null
   let dbWalletType: string | null = null

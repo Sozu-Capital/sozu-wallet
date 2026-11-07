@@ -68,22 +68,9 @@ const BR_CORRIDOR = getCorridor("BR")
 const FIAT_SYMBOL = BR_CORRIDOR?.fiatSymbol ?? "R$"
 
 /**
- * Every `/api/ramp/*` call requires the `x-user-id` header (this product's
- * wallet session lives in local/session storage, not exclusively in a
- * Supabase cookie — same convention `fiat-deposit-flow.tsx` follows for
- * `/api/deposits`). Headers are only ever built for a confirmed, non-null id.
- */
-function authHeaders(userId: string, json = false): HeadersInit {
-  return {
-    ...(json ? { "Content-Type": "application/json" } : {}),
-    "x-user-id": userId,
-  }
-}
-
-/**
  * Resolves the wallet session id or reports the missing-wallet error and
  * returns null — callers must bail out immediately on a null return rather
- * than fire the request without the auth header.
+ * than fire a request for a wallet that does not exist yet.
  */
 function requireUserId(onMissing: (message: string) => void, missingMessage: string): string | null {
   const userId = getUserId()
@@ -218,7 +205,7 @@ export function BrazilOnrampFlow() {
 
   // Resolves the wallet session id for every /api/ramp/* call, or reports
   // rampNoWallet and returns null — every call site below must bail on null
-  // rather than fire the request without the x-user-id header.
+  // rather than fire a request for a wallet that does not exist yet.
   const requireUid = useCallback((): string | null => requireUserId(setApiError, t.rampNoWallet), [t.rampNoWallet])
 
   // Initial step derived from GET /api/ramp/onboarding.
@@ -232,7 +219,6 @@ export function BrazilOnrampFlow() {
       }
       try {
         const res = await fetch("/api/ramp/onboarding", {
-          headers: authHeaders(userId),
           credentials: "include",
         })
         const data = (await res.json().catch(() => ({}))) as {
@@ -279,7 +265,6 @@ export function BrazilOnrampFlow() {
         if (!userId) return
         try {
           const res = await fetch("/api/ramp/onboarding", {
-            headers: authHeaders(userId),
             credentials: "include",
           })
           if (!res.ok) return
@@ -313,7 +298,7 @@ export function BrazilOnrampFlow() {
       try {
         const res = await fetch("/api/ramp/onboarding/start", {
           method: "POST",
-          headers: authHeaders(userId, true),
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ displayName: trimmedName, email: trimmedEmail }),
         })
@@ -345,7 +330,6 @@ export function BrazilOnrampFlow() {
       try {
         const res = await fetch("/api/ramp/onboarding/kyc-launch", {
           method: "POST",
-          headers: authHeaders(userId),
           credentials: "include",
         })
         const data = (await res.json().catch(() => ({}))) as { launch?: KycLaunch }
@@ -380,7 +364,7 @@ export function BrazilOnrampFlow() {
     try {
       const res = await fetch("/api/ramp/onboarding/complete", {
         method: "POST",
-        headers: authHeaders(userId, true),
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           firstName: firstName.trim(),
@@ -419,7 +403,7 @@ export function BrazilOnrampFlow() {
         try {
           const res = await fetch("/api/ramp/quote", {
             method: "POST",
-            headers: authHeaders(userId, true),
+            headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({ direction: "on", amountMinor: parsedCents }),
             signal: controller.signal,
@@ -476,7 +460,7 @@ export function BrazilOnrampFlow() {
     try {
       const res = await fetch("/api/ramp/orders", {
         method: "POST",
-        headers: authHeaders(userId, true),
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           direction: "on",
@@ -525,7 +509,6 @@ export function BrazilOnrampFlow() {
     if (!userId) return
     try {
       const res = await fetch(`/api/ramp/orders/${orderId}`, {
-        headers: authHeaders(userId),
         credentials: "include",
       })
       if (!res.ok) return
@@ -558,7 +541,6 @@ export function BrazilOnrampFlow() {
     try {
       await fetch(`/api/ramp/orders/${orderId}/simulate`, {
         method: "POST",
-        headers: authHeaders(userId),
         credentials: "include",
       })
       await refreshOrder()

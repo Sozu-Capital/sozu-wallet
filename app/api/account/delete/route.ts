@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { deleteStellarWallet } from "@/lib/turnkey/stellar-wallet"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -14,14 +15,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * DELETE /api/account/delete
  * Permanently delete user account and free up the Sozu tag
  *
- * Auth: x-user-id header (UUID) — this app uses sessionStorage-based auth,
- * not Supabase session cookies, so we authenticate via the x-user-id header
+ * Auth: signed wallet session cookie
  * that every authenticated client request carries.
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // Authenticate via x-user-id header (same pattern as all other routes)
-    const userId = request.headers.get("x-user-id")?.trim()
+    const userId = getSessionUserId(request)
     if (!userId || !UUID_RE.test(userId)) {
       return NextResponse.json(
         { error: "Unauthorized" },

@@ -114,7 +114,7 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
 
   const fetchStatus = useCallback(async () => {
     const userId = getStoredUserId();
-    const headers: HeadersInit = userId ? { "x-user-id": userId } : {};
+    const headers: HeadersInit = {};
     const res = await fetch(`/api/faucets/${encodeURIComponent(slug)}/status`, {
       headers,
       cache: "no-store",
@@ -210,7 +210,6 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(userId ? { "x-user-id": userId } : {}),
         },
       });
       const data = (await res.json()) as FaucetClaimResponse;

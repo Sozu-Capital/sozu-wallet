@@ -7,12 +7,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { runSorobanIntegrationTests } from "@/lib/defindex/soroban-test"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { debugRoutesEnabled } from "@/lib/debug-routes"
+import { requireSession } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
 }
 
 export async function GET(request: NextRequest) {
+  const caller = requireSession(request)
+  if (caller.error) return caller.error
+
   try {
     if (!debugRoutesEnabled()) {
       return NextResponse.json(

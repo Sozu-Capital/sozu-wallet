@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { resolveUserId } from "@/lib/auth/resolve-user";
+import { requireSession } from "@/lib/auth/session";
 import {
   computeFaucetAvailability,
   createPendingClaim,
@@ -33,7 +33,7 @@ function clientIp(request: Request): string | null {
 
 /**
  * POST /api/faucets/[slug]/claim — claim testnet funds from a faucet.
- * Requires a logged-in wallet (Supabase cookie or x-user-id header).
+ * Requires a logged-in wallet (signed session cookie).
  *
  * V1 rules (enforced in computeFaucetAvailability):
  *   - faucet active
@@ -45,7 +45,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const auth = await resolveUserId(request);
+  const auth = requireSession(request);
   if (auth.error) return auth.error;
   const { userId } = auth;
 

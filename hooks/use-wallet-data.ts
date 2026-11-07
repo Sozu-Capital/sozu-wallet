@@ -8,6 +8,7 @@ import { getUserId } from "@/lib/wallet-utils"
 import { parseApyFromApiResponse } from "@/lib/defindex/parse-apy-response"
 import { deferNonCritical } from "@/lib/defer-non-critical"
 import { isClientAuthed } from "@/lib/client-auth-gate"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 export interface Vault {
   id: string
@@ -299,11 +300,7 @@ export function useWalletData() {
       const userId = getUserId()
       
       console.log("[Wallet] 🔍 Fetching transaction history for:", publicKey.substring(0, 10) + "...")
-      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`, {
-        headers: {
-          "x-user-id": userId || "",
-        },
-      })
+      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`)
       
       if (response.ok) {
         const data = await response.json()
@@ -338,17 +335,14 @@ export function useWalletData() {
 
   // Fetch DeFindex balance
   const fetchDefindexBalance = useCallback(async (userId: string, publicKey?: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching DeFindex balance")
       const qs =
         publicKey && /^(C|G)[A-Z0-9]{55}$/.test(publicKey)
           ? `?publicKey=${encodeURIComponent(publicKey)}`
           : ""
-      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`)
 
       if (defindexResponse.ok) {
         const defindexData = await defindexResponse.json()
@@ -392,13 +386,13 @@ export function useWalletData() {
 
   // Fetch APY
   const fetchAPY = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) {
+      setApyLoading(false)
+      return
+    }
     try {
       setApyLoading(true)
-      const apyResponse = await fetch("/api/wallet/defindex/apy", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const apyResponse = await fetch("/api/wallet/defindex/apy")
 
       if (apyResponse.ok) {
         const apyData = await apyResponse.json()
@@ -416,13 +410,10 @@ export function useWalletData() {
 
   // Fetch auto-deposit status
   const fetchAutoDepositStatus = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching auto-deposit status")
-      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit")
 
       if (autoDepositResponse.ok) {
         const autoDepositData = await autoDepositResponse.json()
@@ -451,11 +442,7 @@ export function useWalletData() {
     try {
       if (options?.gateBalance) setIsBalanceLoading(true)
       console.log("[Wallet] Fetching XLM balance for wallet:", publicKey)
-      const balanceResponse = await fetch("/api/wallet/stellar/balance", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const balanceResponse = await fetch("/api/wallet/stellar/balance")
 
       if (balanceResponse.ok) {
         const balanceData = await balanceResponse.json()
@@ -614,23 +601,27 @@ export function useWalletData() {
           return
         }
         
-        const [vaultResponse, trustResponse] = await Promise.all([
-          fetch("/api/wallet/vault", { headers: { "x-user-id": userId } }),
-          fetch("/api/wallet/trust-points", { headers: { "x-user-id": userId } }),
-        ])
-
-        if (!vaultResponse.ok) {
-          throw new Error("Failed to fetch vault data")
-        }
-
-        const vaultData = await vaultResponse.json()
-        setVault(vaultData.vault)
-
-        if (trustResponse.ok) {
-          const trustData = await trustResponse.json()
-          setTrustPoints(trustData.trustPoints)
-        } else {
+        if (isPilotMainnet()) {
           setTrustPoints({ balance: 0, last_daily_credit: null })
+        } else {
+          const [vaultResponse, trustResponse] = await Promise.all([
+            fetch("/api/wallet/vault"),
+            fetch("/api/wallet/trust-points"),
+          ])
+
+          if (!vaultResponse.ok) {
+            throw new Error("Failed to fetch vault data")
+          }
+
+          const vaultData = await vaultResponse.json()
+          setVault(vaultData.vault)
+
+          if (trustResponse.ok) {
+            const trustData = await trustResponse.json()
+            setTrustPoints(trustData.trustPoints)
+          } else {
+            setTrustPoints({ balance: 0, last_daily_credit: null })
+          }
         }
         
         // Get username

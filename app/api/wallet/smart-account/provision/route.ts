@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { provisionSmartWalletForSigner } from "@/lib/stellar/smart-account-provision"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
   const headers = corsHeaders(request)
 
   try {
-    const userId = request.headers.get("x-user-id")
+    const userId = getSessionUserId(request)
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers })
     }

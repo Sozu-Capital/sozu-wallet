@@ -140,7 +140,7 @@ export async function getUSDCBalanceClientSide(publicKey: string): Promise<numbe
     try {
       const { getUserId } = await import("@/lib/wallet-utils")
       const userId = getUserId()
-      const headers: HeadersInit = userId ? { "x-user-id": userId } : {}
+      const headers: HeadersInit = {}
       const res = await fetch(
         `/api/wallet/stellar/balance?publicKey=${encodeURIComponent(pk)}`,
         { headers },

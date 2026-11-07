@@ -1,5 +1,3 @@
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
-
 /** Same Stellar address as /wallet when stored after login. */
 export function walletBalancesUrl(): string {
   if (typeof window === "undefined") return "/api/wallet/balances"
@@ -9,5 +7,5 @@ export function walletBalancesUrl(): string {
 }
 
 export function walletBalancesFetchInit(): RequestInit {
-  return { headers: ledgerUserHeaders() }
+  return {}
 }

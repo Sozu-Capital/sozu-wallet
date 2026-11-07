@@ -12,8 +12,10 @@ Operator cutover from the legacy two-project setup: **[vercel-consolidation.md](
 | Production | `main` | `app.sozu.capital` | **Production** on `sozu-wallet` |
 | PR previews | feature PRs | `*.vercel.app` | Preview |
 
-**Vercel project:** rename `sozu-credit` → `sozu-wallet`  
-**GitHub repo:** rename `blessedux/SozuCredit` → `blessedux/sozu-wallet`
+**Vercel project:** `sozu-wallet`  
+**GitHub repo:** `Sozu-Capital/sozu-wallet`
+
+Feature PRs merge to `dev` (Staging). Only a `dev` → `main` PR updates Production.
 
 ```mermaid
 flowchart LR

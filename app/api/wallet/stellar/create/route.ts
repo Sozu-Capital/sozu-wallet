@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { getStellarConfig } from "@/lib/turnkey/config"
+import { getSessionUserId } from "@/lib/auth/session"
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
 }
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
       console.log("[Stellar Wallet API] Using Supabase auth, userId:", userId)
     } else {
       // Dev / passkey-only: userId from headers (sessionStorage auth)
-      userId = request.headers.get("x-user-id")
-      console.log("[Stellar Wallet API] Using x-user-id (dev/passkey):", userId ? "present" : "missing")
+      userId = getSessionUserId(request)
+      console.log("[Stellar Wallet API] Using wallet session:", userId ? "present" : "missing")
 
       if (!userId) {
         console.error("[Stellar Wallet API] No userId provided")

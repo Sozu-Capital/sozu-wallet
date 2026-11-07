@@ -1,4 +1,5 @@
 import { pizzaHopFlag } from "@/lib/stellar/pizza-token"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 export function getSozuPayOrigin(): string {
   return (
@@ -44,6 +45,7 @@ export type PizzaAuthContinuation =
 export function resolvePizzaAuthSearch(search: {
   get: (key: string) => string | null
 }): PizzaAuthContinuation {
+  if (isPilotMainnet()) return { kind: "none" }
   const intentId = search.get("intent")?.trim() ?? ""
   const returnToRaw = search.get("return_to")?.trim() ?? ""
   const returnTo = returnToRaw && isAllowedPayReturnTo(returnToRaw) ? returnToRaw : null

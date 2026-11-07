@@ -4,13 +4,14 @@ import { resolveClaimAmount } from "@/lib/faucet/claim-amount";
 import { vaultCanCoverClaim } from "@/lib/faucet/vault-balance";
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet";
 import type { FaucetStatusResponse } from "@/lib/faucet/types";
+import { getSessionUserId } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/faucets/[slug]/status — faucet info + availability.
  * Public: works without auth (NFC tap lands here before onboarding).
- * When an x-user-id header is present, user/wallet cooldown is included.
+ * When the caller has a session, user/wallet cooldown is included.
  */
 export async function GET(
   request: Request,
@@ -25,7 +26,7 @@ export async function GET(
     }
 
     // Optional user context for the user-cooldown rule.
-    const userId = request.headers.get("x-user-id")?.trim() || null;
+    const userId = getSessionUserId(request);
     let walletAddress: string | null = null;
     if (userId) {
       const wallet = await getStellarWallet(userId, true).catch(() => null);
@@ -38,7 +39,7 @@ export async function GET(
     });
 
     const claimAmount = resolveClaimAmount(faucet.claim_amount);
-    if (availability.available && !(await vaultCanCoverClaim(claimAmount))) {
+    if (availability.available && !(await vaultCanCoverClaim(claimAmount, { cached: true }))) {
       availability = {
         available: false,
         reason: "insufficient_vault",

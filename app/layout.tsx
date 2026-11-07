@@ -35,6 +35,7 @@ export const metadata: Metadata = {
       { url: "/icons/sozu_icon_192.png", sizes: "192x192", type: "image/png" },
     ],
     icon: [
+      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
       { url: "/icons/sozu_icon_192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/sozu_icon_512.png", sizes: "512x512", type: "image/png" },
     ],

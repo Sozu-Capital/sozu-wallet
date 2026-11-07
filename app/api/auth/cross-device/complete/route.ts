@@ -7,15 +7,19 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
+import { requireSession } from "@/lib/auth/session"
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = requireSession(request)
+    if (auth.error) return auth.error
+
     const body = await request.json()
     const sessionId =
       typeof body?.sessionId === "string" ? body.sessionId.trim() : ""
     const username =
       typeof body?.username === "string" ? body.username.trim() : ""
-    const userId = typeof body?.userId === "string" ? body.userId.trim() : ""
+    const userId = auth.userId
     const credentialId =
       typeof body?.credentialId === "string"
         ? body.credentialId.trim()
@@ -23,9 +27,9 @@ export async function POST(request: NextRequest) {
           ? body.credential.id.trim()
           : ""
 
-    if (!sessionId || !username || !userId) {
+    if (!sessionId || !username) {
       return NextResponse.json(
-        { error: "Missing required fields (sessionId, username, userId)" },
+        { error: "Missing required fields (sessionId, username)" },
         { status: 400 }
       )
     }
@@ -55,6 +59,15 @@ export async function POST(request: NextRequest) {
 
     if (new Date(session.expires_at) < new Date()) {
       return NextResponse.json({ error: "Session expired" }, { status: 400 })
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", userId)
+      .maybeSingle()
+    if (profile?.username !== session.username) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     if (session.completed) {
