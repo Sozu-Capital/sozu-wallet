@@ -667,6 +667,7 @@ export function WalletScreen({
         treasuryPrefs={treasuryData.prefs}
         onUpdateTreasuryPrefs={treasuryData.updatePrefs}
         walletNetwork={walletNetwork}
+        pilotMainnet={pilotMainnet}
         onRefresh={handleEarnRefresh}
       />
       {!pilotMainnet && (

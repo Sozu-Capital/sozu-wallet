@@ -24,6 +24,8 @@ import type { TreasuryProjection, TreasuryPrefs, ReferenceFiat } from "@/lib/tre
 import { cn } from "@/lib/utils"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import { formatWalletText } from "@/lib/wallet-texts"
+import { useArsQuote } from "@/hooks/use-ars-quote"
+import { PesoLabel } from "@/components/wallet/peso-label"
 
 const PurchasingPowerPnlChart = dynamic(
   () =>
@@ -66,6 +68,11 @@ interface BalanceDisplayProps {
   onUpdateTreasuryPrefs?: (next: Partial<TreasuryPrefs>) => void
   onAuditExpandedChange?: (expanded: boolean) => void
   walletNetwork?: "testnet" | "mainnet"
+  /**
+   * Mainnet pilot: USDC is the primary figure with the BCRA peso label under it; no APY or
+   * projection surfaces. ARS reference fiat uses the same layout outside the pilot.
+   */
+  pilotMainnet?: boolean
   /** Called after a successful earn deposit/withdraw to refresh balances. */
   onRefresh?: () => void
 }
@@ -89,8 +96,12 @@ export const BalanceDisplay = memo(function BalanceDisplay({
   onUpdateTreasuryPrefs,
   onAuditExpandedChange,
   walletNetwork = "testnet",
+  pilotMainnet = false,
   onRefresh,
 }: BalanceDisplayProps) {
+  const pesoMode = pilotMainnet || referenceFiat === "ARS"
+  const usdcOnly = usdcOnlySurface || pilotMainnet
+  const arsQuote = useArsQuote(pesoMode)
   const { t } = useWalletLanguage()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -176,7 +187,7 @@ export const BalanceDisplay = memo(function BalanceDisplay({
         : null
 
   const showMetricCarousel =
-    !usdcOnlySurface && !auditExpanded && (hasTreasury || yieldApy !== null)
+    !usdcOnly && !auditExpanded && (hasTreasury || yieldApy !== null)
 
   useEffect(() => {
     if (!showMetricCarousel) return
@@ -217,7 +228,7 @@ export const BalanceDisplay = memo(function BalanceDisplay({
     "max-w-full overflow-hidden text-[clamp(1.875rem,8vw,3rem)] font-bold leading-none tracking-tight tabular-nums text-white sm:text-5xl lg:text-[clamp(1.75rem,2.8vw,2.5rem)] xl:text-[clamp(1.875rem,2.5vw,2.75rem)]"
 
   const handleAuditToggle = useCallback(() => {
-    if (usdcOnlySurface) return
+    if (usdcOnly) return
     if (apyLoading && onFetchAPY) onFetchAPY()
     if (inlineAudit && treasuryPrefs && onUpdateTreasuryPrefs) {
       if (!auditExpanded) {
@@ -239,12 +250,12 @@ export const BalanceDisplay = memo(function BalanceDisplay({
     onUpdateTreasuryPrefs,
     setExpanded,
     treasuryPrefs,
-    usdcOnlySurface,
+    usdcOnly,
   ])
 
   const canInlineExpand =
-    !usdcOnlySurface && inlineAudit && !!treasuryPrefs && !!onUpdateTreasuryPrefs
-  const canOpenAudit = !usdcOnlySurface && (canInlineExpand || !!onOpenBalanceAudit)
+    !usdcOnly && inlineAudit && !!treasuryPrefs && !!onUpdateTreasuryPrefs
+  const canOpenAudit = !usdcOnly && (canInlineExpand || !!onOpenBalanceAudit)
   const inlineCardMaxHeight = auditExpanded
     ? Math.max(expandedHeight, collapsedHeightRef.current)
     : collapsedHeightRef.current
@@ -262,7 +273,7 @@ export const BalanceDisplay = memo(function BalanceDisplay({
   }, [])
 
   const handleCardClick = useCallback(() => {
-    if (usdcOnlySurface || auditExpanded || !canOpenAudit) return
+    if (usdcOnly || auditExpanded || !canOpenAudit) return
     if (inlineAudit && canInlineExpand) {
       handleAuditToggle()
       return
@@ -275,7 +286,7 @@ export const BalanceDisplay = memo(function BalanceDisplay({
     handleAuditToggle,
     inlineAudit,
     onOpenBalanceAudit,
-    usdcOnlySurface,
+    usdcOnly,
   ])
 
   const handleCardKeyDown = useCallback(
@@ -329,17 +340,19 @@ export const BalanceDisplay = memo(function BalanceDisplay({
               )}
             >
               <div className={balanceSizeClass}>
-                {isBalanceVisible ? (
+                {pesoMode ? (
+                  <span className="tabular-nums">{isBalanceVisible ? usdcBalance : maskedUsdc}</span>
+                ) : isBalanceVisible ? (
                   <SlidingNumber
                     value={referenceValue}
-                    groupThousands={referenceFiat === "CLP" || referenceFiat === "ARS"}
+                    groupThousands={referenceFiat === "CLP"}
                   />
                 ) : (
                   <span className="tabular-nums">{maskedReference}</span>
                 )}
               </div>
               <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/40">
-                {referenceFiat}
+                {pesoMode ? "USDC" : referenceFiat}
               </span>
               {!auditExpanded ? (
                 <button
@@ -360,14 +373,23 @@ export const BalanceDisplay = memo(function BalanceDisplay({
               ) : null}
             </div>
 
-            <p
-              className={cn(
-                "mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm",
-                auditExpanded && "text-center lg:text-left",
-              )}
-            >
-              {isBalanceVisible ? `${usdcBalance} USDC` : `${maskedUsdc} USDC`}
-            </p>
+            {pesoMode ? (
+              <PesoLabel
+                balanceUsdc={animatedBalance}
+                quoteState={arsQuote}
+                isBalanceVisible={isBalanceVisible}
+                className={cn(auditExpanded && "text-center lg:text-left")}
+              />
+            ) : (
+              <p
+                className={cn(
+                  "mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm",
+                  auditExpanded && "text-center lg:text-left",
+                )}
+              >
+                {isBalanceVisible ? `${usdcBalance} USDC` : `${maskedUsdc} USDC`}
+              </p>
+            )}
           </div>
 
           {showMetricCarousel ? (

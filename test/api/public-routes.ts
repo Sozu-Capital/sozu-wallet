@@ -25,6 +25,7 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   // Public data, no user identity.
   "/api/health": { reason: "health check" },
   "/api/fx": { reason: "FX rates" },
+  "/api/fx/ars": { reason: "BCRA USD/ARS reference rate" },
   "/api/deposits/fx": { reason: "FX quote for deposits" },
   "/api/faucets": { reason: "public faucet list" },
   "/api/faucets/[slug]/status": { reason: "public faucet status; per-user cooldown only with a session" },
