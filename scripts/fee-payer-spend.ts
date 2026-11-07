@@ -22,7 +22,13 @@ async function main() {
     network === "public" ? "https://horizon.stellar.org" : "https://horizon-testnet.stellar.org",
   )
 
-  let page = await horizon.transactions().forAccount(account).order("asc").limit(200).call()
+  let page = await horizon
+    .transactions()
+    .forAccount(account)
+    .includeFailed(true)
+    .order("asc")
+    .limit(200)
+    .call()
   let count = 0
   let stroops = BigInt(0)
   while (page.records.length) {
