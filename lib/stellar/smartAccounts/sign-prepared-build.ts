@@ -6,6 +6,8 @@ export type PreparedPasskeyBuild = {
   supportsOzKitApi: boolean
   walletAddress: string
   ozCredentialId: string | null
+  /** Classic G signer. Required when `signMethod` is `smart_g_signer`. */
+  signerPublicKey?: string | null
 }
 
 /** Signs a prepared build with the user's passkey — same path as the `oz_passkey` branch of use-send-payment. */

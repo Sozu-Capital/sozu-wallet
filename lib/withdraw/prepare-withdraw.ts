@@ -1,9 +1,12 @@
 import "server-only"
 
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
+import { contractIsFactoryForSigner } from "@/lib/stellar/factory-smart-account"
+import { contractSupportsOzKitSigning } from "@/lib/stellar/supports-oz-kit-contract"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { minorToDecimalString } from "@/lib/withdraw/amount"
+import { withdrawSignMethod, type WithdrawSignMethod } from "@/lib/withdraw/sign-method"
 import { parseWithdrawDestination, type WithdrawDestination } from "@/lib/withdraw/destination"
 import { evaluateClassicDestination, fetchHorizonAccount } from "@/lib/withdraw/destination-check"
 import { contractInstanceExists, readExactTokenBalance } from "@/lib/withdraw/exact-transfer"
@@ -22,6 +25,8 @@ export type PreparedWithdraw = {
   asset: WithdrawUsdcAsset
   feePayer: string
   balanceMinor: bigint
+  signMethod: WithdrawSignMethod
+  supportsOzKitApi: boolean
 }
 
 export type WithdrawFailure = { ok: false; status: number; code: string; detail?: string }
@@ -65,11 +70,14 @@ export async function prepareWithdrawAll(params: {
   if (destination.baseAddress === sender.senderC) return { ok: false, status: 400, code: "self_destination" }
 
   const asset = getWithdrawUsdcAsset(network)
+  const supportsOzKitApi = await contractSupportsOzKitSigning(sender.senderC)
+  const isFactoryOnChain = await contractIsFactoryForSigner(sender.senderC, sender.signerPk)
+  const signMethod = withdrawSignMethod(supportsOzKitApi, isFactoryOnChain)
   const { resolveSorobanFeePayer } = await import("@/lib/stellar/soroban-fee-payer")
   const { feePayer } = await resolveSorobanFeePayer({
     signerPublicKey: sender.signerPk,
     network,
-    requireSignerAsSource: false,
+    requireSignerAsSource: signMethod === "smart_g_signer",
   })
 
   const balanceMinor = await readExactTokenBalance({
@@ -99,7 +107,7 @@ export async function prepareWithdrawAll(params: {
     }
   }
 
-  return { ok: true, network, sender, destination, asset, feePayer, balanceMinor }
+  return { ok: true, network, sender, destination, asset, feePayer, balanceMinor, signMethod, supportsOzKitApi }
 }
 
 export function withdrawSummary(p: PreparedWithdraw) {

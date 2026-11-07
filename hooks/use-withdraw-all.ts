@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useRef, useState } from "react"
-import { formatAddress } from "@/lib/wallet-utils"
+import { formatAddress, getUserId } from "@/lib/wallet-utils"
 import { getSenderDisplayLabel, type PaymentReceipt } from "@/lib/payment/payment-receipt"
 import type { PreparedPasskeyBuild } from "@/lib/stellar/smartAccounts/sign-prepared-build"
 
@@ -106,7 +106,7 @@ export function useWithdrawAll(onSuccess?: (receipt: PaymentReceipt) => void) {
     setErrorCode(null)
 
     const fail = (code: string) => {
-      idempotencyKeyRef.current = null
+      if (code !== "submit_pending") idempotencyKeyRef.current = null
       setErrorCode(code)
       setPhase("error")
     }
@@ -131,8 +131,27 @@ export function useWithdrawAll(onSuccess?: (receipt: PaymentReceipt) => void) {
       setPhase("signing")
       let signedEnvelopeXdr: string
       try {
-        const { signPreparedBuildWithPasskey } = await import("@/lib/stellar/smartAccounts/sign-prepared-build")
-        signedEnvelopeXdr = await signPreparedBuildWithPasskey(build)
+        if (build.signMethod === "smart_g_signer") {
+          const { signSorobanUsdcWithGSigner } = await import("@/lib/stellar/smartAccounts/signSorobanTransferG")
+          const { getStellarConfig } = await import("@/lib/turnkey/config")
+          const { Networks } = await import("@stellar/stellar-sdk")
+          const { getCurrentCredentialId } = await import("@/lib/storage/key-utils")
+          const userId = getUserId()
+          const credentialId = build.ozCredentialId ?? (await getCurrentCredentialId())
+          const signerPublicKey = build.signerPublicKey
+          if (!userId || !credentialId || !signerPublicKey) return fail("sign_failed")
+          const network = getStellarConfig().network
+          signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
+            unsignedXdr: build.unsignedXdr,
+            signerPublicKey,
+            credentialId,
+            userId,
+            networkPassphrase: network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
+          })
+        } else {
+          const { signPreparedBuildWithPasskey } = await import("@/lib/stellar/smartAccounts/sign-prepared-build")
+          signedEnvelopeXdr = await signPreparedBuildWithPasskey(build)
+        }
       } catch (err) {
         console.warn("[withdraw-all] passkey signing failed:", err)
         return fail("sign_failed")
@@ -141,7 +160,9 @@ export function useWithdrawAll(onSuccess?: (receipt: PaymentReceipt) => void) {
       setPhase("submitting")
       const submitBody = { signedEnvelopeXdr, idempotencyKey, address, memo, amountMinor: preview.amountMinor }
       let submitted = await postJson("/api/wallet/withdraw/submit", submitBody)
-      for (let i = 0; submitted.status === 409 && submitted.data.code === "IDEMPOTENCY_IN_PROGRESS" && i < IN_PROGRESS_MAX_POLLS; i++) {
+      const stillRunning = (status: number, code: unknown) =>
+        (status === 409 && code === "IDEMPOTENCY_IN_PROGRESS") || (status === 502 && code === "submit_pending")
+      for (let i = 0; stillRunning(submitted.status, submitted.data.code) && i < IN_PROGRESS_MAX_POLLS; i++) {
         await new Promise((r) => setTimeout(r, IN_PROGRESS_POLL_MS))
         submitted = await postJson("/api/wallet/withdraw/submit", submitBody)
       }

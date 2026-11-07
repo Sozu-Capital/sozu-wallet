@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSession } from "@/lib/auth/session"
-import { contractSupportsOzKitSigning } from "@/lib/stellar/supports-oz-kit-contract"
 import { parseMinorAmount } from "@/lib/withdraw/amount"
 import { buildExactTokenTransfer } from "@/lib/withdraw/exact-transfer"
 import { prepareWithdrawAll, withdrawSummary } from "@/lib/withdraw/prepare-withdraw"
@@ -39,15 +38,13 @@ export async function POST(request: NextRequest) {
       feePayer: prepared.feePayer,
       network: prepared.network,
     })
-    const supportsOzKitApi = await contractSupportsOzKitSigning(prepared.sender.senderC)
-
     return NextResponse.json({
       ...withdrawSummary(prepared),
       build: {
         unsignedXdr,
         sorobanDataXdr,
-        signMethod: supportsOzKitApi ? "oz_passkey" : "oz_passkey_local",
-        supportsOzKitApi,
+        signMethod: prepared.signMethod,
+        supportsOzKitApi: prepared.supportsOzKitApi,
         signerPublicKey: prepared.sender.signerPk,
         walletAddress: prepared.sender.senderC,
         ozCredentialId: prepared.sender.ozCredentialId,
