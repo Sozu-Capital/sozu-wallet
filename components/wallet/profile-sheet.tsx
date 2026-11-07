@@ -467,12 +467,13 @@ export const ProfileSheet = memo(function ProfileSheet({
     }
   }, [t])
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const allTabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "profile", label: "Profile", icon: <User className="w-3.5 h-3.5" /> },
     { id: "cashout", label: "Cash out", icon: <Banknote className="w-3.5 h-3.5" /> },
     { id: "defi", label: "DeFi", icon: <TrendingUp className="w-3.5 h-3.5" /> },
     { id: "logout", label: "Log out", icon: <LogOut className="w-3.5 h-3.5" /> },
   ]
+  const tabs = allTabs.filter((tab) => !(tab.id === "defi" && isPilotMainnet()))
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
