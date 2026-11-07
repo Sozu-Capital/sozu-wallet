@@ -67,6 +67,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Help pages (withdraw runbook) are static copy and must work when sign-in is the problem.
+  if (pathname.startsWith("/ayuda")) {
+    return NextResponse.next()
+  }
+
   // Checkout pages are public (payer links from merchants)
   if (pathname.startsWith("/checkout")) {
     return NextResponse.next()
