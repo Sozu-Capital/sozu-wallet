@@ -37,6 +37,17 @@ describe("evaluateClassicDestination", () => {
     expect(evaluateClassicDestination(nearlyFull, G, asset, AMOUNT)).toEqual({ ok: false, code: "destination_trustline_full" })
   })
 
+  it("counts open buy offers against the trustline room", () => {
+    const reserved = {
+      balances: [usdcLine({ balance: "0.0000000", limit: "100.0000000", buying_liabilities: "90.0000000" })],
+    }
+    expect(evaluateClassicDestination(reserved, G, asset, AMOUNT)).toEqual({ ok: false, code: "destination_trustline_full" })
+    const stillRoom = {
+      balances: [usdcLine({ balance: "0.0000000", limit: "100.0000000", buying_liabilities: "10.0000000" })],
+    }
+    expect(evaluateClassicDestination(stillRoom, G, asset, AMOUNT)).toEqual({ ok: true })
+  })
+
   it("passes with an authorized trustline that has room", () => {
     expect(evaluateClassicDestination({ balances: [usdcLine()] }, G, asset, AMOUNT)).toEqual({ ok: true })
     const exactRoom = { balances: [usdcLine({ balance: "87.6543211", limit: "100.0000000" })] }

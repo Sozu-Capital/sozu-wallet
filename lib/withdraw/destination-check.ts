@@ -23,6 +23,7 @@ export type HorizonBalance = {
   asset_issuer?: string
   balance: string
   limit?: string
+  buying_liabilities?: string
   is_authorized?: boolean
 }
 
@@ -44,7 +45,12 @@ export function evaluateClassicDestination(
 
   const balance = decimalStringToMinor(line.balance, asset.decimals)
   const limit = line.limit ? decimalStringToMinor(line.limit, asset.decimals) : null
-  if (balance != null && limit != null && limit - balance < amountMinor) {
+  const buying =
+    line.buying_liabilities == null || line.buying_liabilities === ""
+      ? BigInt(0)
+      : decimalStringToMinor(line.buying_liabilities, asset.decimals)
+  if (buying == null) return { ok: false, code: "destination_trustline_full" }
+  if (balance != null && limit != null && limit - balance - buying < amountMinor) {
     return { ok: false, code: "destination_trustline_full" }
   }
   return { ok: true }
