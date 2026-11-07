@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { getUserId } from "@/lib/wallet-utils"
 import { parseApyFromApiResponse } from "@/lib/defindex/parse-apy-response"
 import { deferNonCritical } from "@/lib/defer-non-critical"
+import { recoverStaleWalletSession } from "@/lib/auth/wallet-session-client"
 import { isClientAuthed } from "@/lib/client-auth-gate"
 import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
@@ -608,6 +609,11 @@ export function useWalletData() {
             fetch("/api/wallet/vault"),
             fetch("/api/wallet/trust-points"),
           ])
+
+          if (vaultResponse.status === 401) {
+            recoverStaleWalletSession()
+            return
+          }
 
           if (!vaultResponse.ok) {
             throw new Error("Failed to fetch vault data")
