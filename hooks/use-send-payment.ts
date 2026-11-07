@@ -475,16 +475,10 @@ export function useSendPayment(
           console.warn("[Send Payment] Wallet align skipped:", alignErr)
           try {
             const { getCurrentCredentialId } = await import("@/lib/storage/key-utils")
-            const { deriveAndStoreKey } = await import("@/lib/storage/browser-keys")
             const credId = await getCurrentCredentialId(undefined)
-            if (credId) {
-              sessionCredentialId = credId
-              const { publicKey } = await deriveAndStoreKey(credId, userId)
-              const g = publicKey.trim().toUpperCase()
-              if (g.startsWith("G") && g.length === 56) passkeySignerG = g
-            }
+            if (credId) sessionCredentialId = credId
           } catch {
-            /* server will supply signer_public_key */
+            /* session credential is enough for a passkey assertion */
           }
         }
       }
@@ -557,19 +551,13 @@ export function useSendPayment(
             ? (build.signerPublicKey as string)
             : passkeySignerG ?? null
 
-        if (!signerPublicKey) {
-          throw new Error(
-            "Smart wallet signer (G…) missing. Sign out, sign in with passkey again, then retry.",
-          )
-        }
-
         const { getCurrentCredentialId, storeCredentialIdInSession } = await import(
           "@/lib/storage/key-utils"
         )
         const credentialId =
           (typeof build.ozCredentialId === "string" ? build.ozCredentialId : null) ||
           sessionCredentialId ||
-          (await getCurrentCredentialId(signerPublicKey))
+          (await getCurrentCredentialId(signerPublicKey ?? undefined))
         if (!credentialId) {
           throw new Error("Credential ID not found. Please log in again.")
         }
@@ -615,17 +603,23 @@ export function useSendPayment(
           return { signedEnvelopeXdr }
         }
         if (signMethod === "smart_g_signer") {
-          const { signSorobanUsdcWithGSigner } = await import(
-            "@/lib/stellar/smartAccounts/signSorobanTransferG"
-          )
-          const signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
-            unsignedXdr,
-            signerPublicKey,
-            credentialId,
-            userId,
-            networkPassphrase,
-          })
-          return { signedEnvelopeXdr }
+          if (!signerPublicKey) {
+            throw new Error("Factory signer (G…) missing. Sign in on the device that created this wallet.")
+          }
+          if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+            const { signSorobanUsdcWithGSigner } = await import(
+              "@/lib/stellar/smartAccounts/signSorobanTransferG"
+            )
+            const signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
+              unsignedXdr,
+              signerPublicKey,
+              credentialId,
+              userId,
+              networkPassphrase,
+            })
+            return { signedEnvelopeXdr }
+          }
+          throw new Error("G-signer payments are not in the mainnet build.")
         }
         throw new Error(`Unsupported sign method: ${signMethod ?? "unknown"}`)
       }

@@ -41,8 +41,11 @@ export async function resolveWithdrawSender(
   const senderC = wallet.publicKey.trim().toUpperCase()
   if (!senderC.startsWith("C")) return { ok: false, status: 422, code: "wallet_must_be_smart_account" }
   if (wallet.network && wallet.network !== network) return { ok: false, status: 409, code: "network_mismatch" }
-  const signerPk = wallet.signerPublicKey?.trim().toUpperCase()
-  if (!signerPk?.startsWith("G")) return { ok: false, status: 422, code: "smart_signer_required" }
+  const signerRaw = wallet.signerPublicKey?.trim().toUpperCase() ?? ""
+  const signerPk = signerRaw.startsWith("G") && signerRaw.length === 56 ? signerRaw : ""
+  if (!signerPk && wallet.walletType === "factory") {
+    return { ok: false, status: 422, code: "smart_signer_required" }
+  }
   return { ok: true, sender: { senderC, signerPk, ozCredentialId: wallet.ozCredentialId?.trim() || null } }
 }
 
@@ -71,7 +74,9 @@ export async function prepareWithdrawAll(params: {
 
   const asset = getWithdrawUsdcAsset(network)
   const supportsOzKitApi = await contractSupportsOzKitSigning(sender.senderC)
-  const isFactoryOnChain = await contractIsFactoryForSigner(sender.senderC, sender.signerPk)
+  const isFactoryOnChain = sender.signerPk.startsWith("G")
+    ? await contractIsFactoryForSigner(sender.senderC, sender.signerPk)
+    : false
   const signMethod = withdrawSignMethod(supportsOzKitApi, isFactoryOnChain)
   const { resolveSorobanFeePayer } = await import("@/lib/stellar/soroban-fee-payer")
   const { feePayer } = await resolveSorobanFeePayer({

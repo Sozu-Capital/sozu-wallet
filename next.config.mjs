@@ -1,4 +1,16 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
+
 const pilotMainnet = process.env.PILOT_MAINNET === '1'
+const removedSigner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib/stellar/mainnet-removed-signer.ts')
+const pilotSignerAlias = pilotMainnet
+  ? {
+      '@/lib/webauthn/key-derivation': removedSigner,
+      '@/lib/stellar/ensure-passkey-signer': removedSigner,
+      '@/lib/stellar/smart-account-provision': removedSigner,
+      '@/lib/stellar/migrate-legacy-wallet': removedSigner,
+    }
+  : null
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -26,6 +38,13 @@ const nextConfig = {
   // Fix workspace root warning - set turbopack root to current directory
   turbopack: {
     root: process.cwd(),
+    ...(pilotSignerAlias ? { resolveAlias: pilotSignerAlias } : {}),
+  },
+  webpack: (config) => {
+    if (pilotSignerAlias) {
+      config.resolve.alias = { ...config.resolve.alias, ...pilotSignerAlias }
+    }
+    return config
   },
 }
 

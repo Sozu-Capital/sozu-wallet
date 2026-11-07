@@ -125,6 +125,27 @@ async function readContextRuleById(
   return findKeyDataInContextRule(rule, credentialId)
 }
 
+export async function readDefaultContextRule(contractId: string): Promise<unknown | null> {
+  const id = contractId.trim().toUpperCase()
+  if (!id.startsWith("C") || id.length !== 56) return null
+  const rpcUrl = getRpcUrl()
+  try {
+    const client = new SmartAccountClient({
+      contractId: id,
+      networkPassphrase: getNetworkPassphrase(),
+      rpcUrl,
+      allowHttp: rpcUrl.startsWith("http://"),
+    })
+    const tx = await client.get_context_rule({ context_rule_id: 0 })
+    const assembled = await tx.simulate()
+    const sim = assembled.simulation
+    if (!simulationSucceeded(sim) || !sim.result?.retval) return null
+    return scValToNative(sim.result.retval)
+  } catch {
+    return null
+  }
+}
+
 /** True when get_context_rule(0) simulates (legacy OZ wallets without get_context_rules). */
 export async function contractCanReadOnChainSignerKeyData(contractId: string): Promise<boolean> {
   const id = contractId.trim().toUpperCase()

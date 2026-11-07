@@ -3,11 +3,13 @@
 import { getSmartAccountKit } from "@/lib/stellar/smartAccounts/client"
 import { registerOzSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient"
 import { discoverFirstContractIdSafe } from "@/lib/stellar/smartAccounts/discover-contracts"
-import { deriveAndStoreKey } from "@/lib/storage/browser-keys"
 import { getCurrentCredentialId, storeCredentialIdInSession } from "@/lib/storage/key-utils"
 import { persistCanonicalWalletSession } from "@/lib/wallet/persist-wallet-session"
 
 type AlignResult = { contractId: string; signerG: string; credentialId: string; realigned: boolean }
+
+/** Passkey accounts have no classic signer. The field stays empty so callers skip G signing. */
+const NO_G_SIGNER = ""
 
 const ALIGN_CACHE_KEY = "sozu_wallet_align_v1"
 const ALIGN_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
@@ -102,11 +104,6 @@ export async function alignWalletForSend(
   }
 
   storeCredentialIdInSession(credId)
-  const { publicKey: signerG } = await deriveAndStoreKey(credId, userId)
-  const g = signerG.trim().toUpperCase()
-  if (!g.startsWith("G") || g.length !== 56) {
-    throw new Error("Invalid passkey signer (G…). Sign in again.")
-  }
 
   const sessionNorm = sessionC.trim().toUpperCase()
   let onChainC: string | null = null
@@ -182,16 +179,15 @@ export async function alignWalletForSend(
         contractId: onChainC,
         credentialId: credId,
         publicKey: parsePasskeyPublicKey65(primary.publicKey65b),
-        signerPublicKey: g,
       })
       persistCanonicalWalletSession(onChainC, "oz", credId)
-      return { contractId: onChainC, signerG: g, credentialId: credId, realigned: true }
+      return { contractId: onChainC, signerG: NO_G_SIGNER, credentialId: credId, realigned: true }
     }
-    return { contractId: onChainC, signerG: g, credentialId: credId, realigned: false }
+    return { contractId: onChainC, signerG: NO_G_SIGNER, credentialId: credId, realigned: false }
   }
 
   if (sessionNorm.startsWith("C") && sessionNorm.length === 56) {
-    return { contractId: sessionNorm, signerG: g, credentialId: credId, realigned: false }
+    return { contractId: sessionNorm, signerG: NO_G_SIGNER, credentialId: credId, realigned: false }
   }
 
   throw new Error(

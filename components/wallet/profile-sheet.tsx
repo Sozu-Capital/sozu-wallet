@@ -176,6 +176,9 @@ const ProfileTab = memo(function ProfileTab({
 
   const handleRevealKey = useCallback(async () => {
     try {
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET === "1" || process.env.PILOT_MAINNET === "1") {
+        return
+      }
       const { retrieveKeypair } = await import("@/lib/storage/browser-keys")
       const { getCredentialIdFromSession } = await import("@/lib/storage/key-utils")
       const { Keypair } = await import("@stellar/stellar-sdk")
@@ -321,8 +324,8 @@ const ProfileTab = memo(function ProfileTab({
         )}
       </div>
 
-      {/* Private Key */}
-      {walletAddress && (
+      {/* Private Key — derived G keys are not part of the mainnet passkey signer. */}
+      {walletAddress && !isPilotMainnet() && (
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-white/40 font-medium flex items-center gap-1.5">
             <Key className="w-3 h-3" /> Private Key

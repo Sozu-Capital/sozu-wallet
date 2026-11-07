@@ -156,6 +156,15 @@ export async function POST(request: Request) {
           )
         }
         try {
+          if (process.env.PILOT_MAINNET === "1" || process.env.NEXT_PUBLIC_PILOT_MAINNET === "1") {
+            return NextResponse.json(
+              {
+                error: "G-signer provisioning is not in the mainnet build.",
+                code: "SMART_ACCOUNT_REQUIRED",
+              },
+              { status: 422, headers: corsHeaders(request as any) },
+            )
+          }
           const { provisionSmartWalletForSigner } = await import(
             "@/lib/stellar/smart-account-provision"
           )
@@ -256,7 +265,11 @@ export async function POST(request: Request) {
       let signer = existingWallet.signerPublicKey?.trim().toUpperCase() ?? null
       let walletType = existingWallet.walletType ?? null
 
-      if (pk.startsWith("G")) {
+      if (
+        pk.startsWith("G") &&
+        process.env.PILOT_MAINNET !== "1" &&
+        process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1"
+      ) {
         const { ensureFactorySmartWalletForUser } = await import(
           "@/lib/stellar/migrate-legacy-wallet"
         )
