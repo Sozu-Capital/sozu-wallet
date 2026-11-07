@@ -1,7 +1,7 @@
 import "server-only"
 
 import * as rpc from "@stellar/stellar-sdk/rpc"
-import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
+import { Keypair, Transaction, xdr } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
@@ -41,17 +41,17 @@ export async function resequenceOnFeePayer(
   networkPassphrase: string,
 ): Promise<Transaction> {
   const account = await server.getAccount(tx.source)
-  const body = tx.toEnvelope().v1().tx()
-  const ext = body.ext()
-  const builder = new TransactionBuilder(account, {
-    fee: tx.fee,
+  // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
+  // adds the Soroban resource fee a second time on the SDK that CI installs.
+  const body = xdr.Transaction.fromXDR(tx.toEnvelope().v1().tx().toXDR())
+  const next = (BigInt(account.sequenceNumber()) + 1n).toString()
+  body.seqNum(xdr.Int64.fromString(next))
+  return new Transaction(
+    new xdr.TransactionEnvelope.envelopeTypeTx(
+      new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
+    ),
     networkPassphrase,
-    memo: tx.memo,
-    timebounds: tx.timeBounds,
-    ...(ext.switch() === 1 ? { sorobanData: ext.sorobanData() } : {}),
-  })
-  for (const op of body.operations()) builder.addOperation(op)
-  return builder.build()
+  )
 }
 
 export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
