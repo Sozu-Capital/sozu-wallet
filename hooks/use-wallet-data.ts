@@ -10,6 +10,11 @@ import { deferNonCritical } from "@/lib/defer-non-critical"
 import { recoverStaleWalletSession } from "@/lib/auth/wallet-session-client"
 import { isClientAuthed } from "@/lib/client-auth-gate"
 import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
+import {
+  readCachedUsdcBalance,
+  writeCachedUsdcBalance,
+  type CachedUsdcBalance,
+} from "@/lib/wallet/cached-usdc-balance"
 
 export interface Vault {
   id: string
@@ -102,6 +107,9 @@ export function useWalletData() {
   const [addressToTagMap, setAddressToTagMap] = useState<Record<string, string>>({})
   /** One-shot client bootstrap: avoids Strict Mode double-fetch and dependency churn loops. */
   const walletBootstrapDoneRef = useRef(false)
+  /** True once a balance is on screen, so a refresh must not put the skeleton back. */
+  const paintedBalanceRef = useRef(false)
+  const balanceInflightRef = useRef<{ pk: string; promise: Promise<void> } | null>(null)
   const [setupIncomplete, setSetupIncomplete] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(() => {
     if (typeof window === "undefined") return null
@@ -134,18 +142,27 @@ export function useWalletData() {
 
   /** Single balance source: C-wallet spendable USDC + DeFindex strategy (no G+C double count). */
   const refreshUnifiedBalance = useCallback(async (userId: string, publicKey?: string) => {
+    const pk =
+      publicKey?.trim().toUpperCase() ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("stellar_public_key") ??
+          sessionStorage.getItem("stellar_public_key") ??
+          ""
+        : "")
+    const flightKey = pk || userId
+    const inflight = balanceInflightRef.current
+    if (inflight?.pk === flightKey) return inflight.promise
+
+    const run = async () => {
     try {
       const { fetchUnifiedUsdcBalance } = await import("@/lib/wallet/unified-usdc-balance")
-      const pk =
-        publicKey?.trim().toUpperCase() ||
-        (typeof window !== "undefined"
-          ? localStorage.getItem("stellar_public_key") ??
-            sessionStorage.getItem("stellar_public_key") ??
-            ""
-          : "")
 
       const requestedPk = publicKey?.trim().toUpperCase()
       const unified = await fetchUnifiedUsdcBalance(userId, pk || undefined)
+      const remember = (address: string, balance: CachedUsdcBalance) => {
+        writeCachedUsdcBalance(address, balance)
+        paintedBalanceRef.current = true
+      }
       if (!unified) {
         console.warn("[Wallet] Unified balance fetch failed for", pk?.slice(0, 12) || userId)
         setIsBalanceLoading(false)
@@ -175,7 +192,7 @@ export function useWalletData() {
         )
         const retry = await fetchUnifiedUsdcBalance(userId, sessionPk)
         if (retry && retry.displayBalance > 0) {
-          setDefindexBalance((prev) => ({
+          const next = {
             walletBalance: retry.walletBalance,
             sorobanSacBalance: retry.sorobanSacBalance,
             spendableOnC: retry.spendableOnC,
@@ -184,17 +201,21 @@ export function useWalletData() {
             displayBalance: retry.displayBalance,
             classicOnSigner: retry.classicOnSigner,
             legacyUsdcOnSigner: retry.legacyUsdcOnSigner,
+          }
+          setDefindexBalance((prev) => ({
+            ...next,
             strategyShares: prev?.strategyShares ?? 0,
             apy: prev?.apy ?? 15.5,
             tokenBalances: retry.tokenBalances,
             contractIds: retry.contractIds,
           }))
+          remember(sessionPk, next)
           setWalletAddress(sessionPk)
           return
         }
       }
 
-      setDefindexBalance((prev) => ({
+      const next = {
         walletBalance: unified.walletBalance,
         sorobanSacBalance: unified.sorobanSacBalance,
         spendableOnC: unified.spendableOnC,
@@ -203,6 +224,9 @@ export function useWalletData() {
         displayBalance: unified.displayBalance,
         classicOnSigner: unified.classicOnSigner,
         legacyUsdcOnSigner: unified.legacyUsdcOnSigner,
+      }
+      setDefindexBalance((prev) => ({
+        ...next,
         strategyShares: prev?.strategyShares ?? 0,
         apy: prev?.apy ?? 15.5,
         tokenBalances: unified.tokenBalances,
@@ -229,10 +253,20 @@ export function useWalletData() {
           sessionStorage.setItem("stellar_public_key", addressToPersist)
         }
       }
+      remember(addressToPersist || unified.walletAddress, next)
     } catch (error) {
       console.error("[Wallet] ❌ Error fetching unified balance:", error)
     } finally {
       setIsBalanceLoading(false)
+    }
+    }
+
+    const promise = run()
+    balanceInflightRef.current = { pk: flightKey, promise }
+    try {
+      await promise
+    } finally {
+      if (balanceInflightRef.current?.promise === promise) balanceInflightRef.current = null
     }
   }, [])
 
@@ -441,7 +475,7 @@ export function useWalletData() {
     options?: { gateBalance?: boolean },
   ) => {
     try {
-      if (options?.gateBalance) setIsBalanceLoading(true)
+      if (options?.gateBalance && !paintedBalanceRef.current) setIsBalanceLoading(true)
       console.log("[Wallet] Fetching XLM balance for wallet:", publicKey)
       const balanceResponse = await fetch("/api/wallet/stellar/balance")
 
@@ -466,7 +500,7 @@ export function useWalletData() {
       const pk = publicKey.trim().toUpperCase()
       if (!pk.startsWith("C") && !pk.startsWith("G")) return
 
-      setIsBalanceLoading(true)
+      if (!paintedBalanceRef.current) setIsBalanceLoading(true)
       // Unified USDC must finish before DeFindex — otherwise defindex sets displayBalance: 0 and the card sticks at $0.
       await refreshUnifiedBalance(userId, pk)
       deferNonCritical(() => {
@@ -582,6 +616,20 @@ export function useWalletData() {
       localStorage.getItem("stellar_public_key") ?? sessionStorage.getItem("stellar_public_key")
     if (sessionPublicKey?.startsWith("C") && !walletAddress) {
       setWalletAddress(sessionPublicKey)
+    }
+    if (sessionPublicKey?.startsWith("C") && sessionPublicKey.length === 56) {
+      const cached = readCachedUsdcBalance(sessionPublicKey)
+      if (cached) {
+        paintedBalanceRef.current = true
+        setDefindexBalance((prev) =>
+          prev ?? {
+            ...cached,
+            strategyShares: 0,
+            apy: 15.5,
+          },
+        )
+        setIsBalanceLoading(false)
+      }
     }
 
     const checkAuth = () => {
