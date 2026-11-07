@@ -44,6 +44,13 @@ export async function readExactTokenBalance(params: {
   return value
 }
 
+/**
+ * Valid window of the built tx: covers the passkey prompt plus the server re-prepare/simulate before
+ * submit (30s was observed to expire on testnet). The "may still be pending" copy tells her to wait
+ * this long before retrying.
+ */
+export const WITHDRAW_TX_TIMEOUT_SECONDS = 120
+
 /** Builds and prepares `transfer(from, to, amountMinor)`; `to` may be G…, M… or C…. */
 export async function buildExactTokenTransfer(params: {
   contractId: string
@@ -66,7 +73,7 @@ export async function buildExactTokenTransfer(params: {
         minorToI128ScVal(params.amountMinor),
       ),
     )
-    .setTimeout(30)
+    .setTimeout(WITHDRAW_TX_TIMEOUT_SECONDS)
     .build()
   const prepared = await server.prepareTransaction(rawTx)
   const unsignedXdr = prepared.toEnvelope().toXDR("base64")

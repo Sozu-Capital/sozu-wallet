@@ -40,7 +40,7 @@ Tu billetera Sozu es una **billetera inteligente**. Por cómo funciona la red St
 - **"Ese memo tiene letras o empieza con 0"**: mirá la sección del memo de arriba.
 - **"Tu saldo cambió"**: entró o salió dinero mientras revisabas. Mirá el nuevo monto y confirmá de nuevo.
 - **"No se pudo confirmar con la passkey"**: no se envió nada. Cerrá otras ventanas de passkey y probá otra vez.
-- **"El envío puede seguir en camino"**: **no lo repitas**. Esperá un minuto y mirá tu saldo. Si bajó a cero, el envío salió.
+- **"El envío puede seguir en camino"**: **no lo repitas**. Esperá dos minutos y mirá tu saldo. Si bajó a cero, el envío salió.
 - **Tocaste confirmar dos veces**: tranquila, Sozu manda el dinero **una sola vez**.
 - **El envío salió pero el exchange no lo muestra**: buscá el hash del comprobante en [stellar.expert](https://stellar.expert) para ver que llegó a la dirección correcta y mandale ese hash al soporte del exchange.
 

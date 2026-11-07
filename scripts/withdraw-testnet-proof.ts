@@ -120,6 +120,7 @@ async function withdrawAll(label: string, holder: Keypair, address: string, memo
     balanceMinor: balance.toString(),
     balanceDisplay: minorToDecimalString(balance, 7),
     firstStatus: first.status,
+    firstError: first.status === 200 ? undefined : first.body,
     transactionHash: (first.body as { transactionHash?: string }).transactionHash,
     replayStatus: replay.status,
     replayed: replay.replayed,

@@ -54,7 +54,7 @@ const es = {
     balance_changed: "Tu saldo cambió. Revisá el nuevo monto y confirmá otra vez.",
     wallet: "No pudimos cargar tu billetera. Cerrá sesión, volvé a entrar y probá de nuevo.",
     sign_failed: "No se pudo confirmar con la passkey. No se envió nada. Probá de nuevo.",
-    submit_pending: "El envío puede seguir en camino. No lo repitas: revisá tu saldo en un minuto.",
+    submit_pending: "El envío puede seguir en camino. No lo repitas: revisá tu saldo en dos minutos.",
     submit_auth_rejected:
       "Tu passkey no fue aceptada. No se envió nada. Cerrá sesión, volvé a entrar y probá de nuevo.",
     submit_failed: "El envío falló y no se movió tu dinero. Probá de nuevo.",
@@ -113,7 +113,7 @@ const en: WithdrawTexts = {
     balance_changed: "Your balance changed. Check the new amount and confirm again.",
     wallet: "We couldn't load your wallet. Sign out, sign in again and retry.",
     sign_failed: "Passkey confirmation failed. Nothing was sent. Try again.",
-    submit_pending: "The transfer may still be on its way. Don't repeat it: check your balance in a minute.",
+    submit_pending: "The transfer may still be on its way. Don't repeat it: check your balance in two minutes.",
     submit_auth_rejected: "Your passkey was not accepted. Nothing was sent. Sign out, sign in again and retry.",
     submit_failed: "The transfer failed and your money did not move. Try again.",
     unknown: "Something went wrong. Check your balance before trying again.",
