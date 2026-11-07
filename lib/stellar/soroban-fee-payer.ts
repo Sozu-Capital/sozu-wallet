@@ -1,7 +1,7 @@
 import "server-only"
 
 import * as rpc from "@stellar/stellar-sdk/rpc"
-import { Keypair } from "@stellar/stellar-sdk"
+import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
@@ -26,6 +26,52 @@ export function getFunderKeypair(): Keypair | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Rebuild a fee-payer-sourced envelope on the fee payer's current sequence number.
+ * The envelope was built when the order/payment was created; any other fee-payer tx that
+ * landed since (another user's send) makes that sequence stale. Soroban auth entries are
+ * copied as signed: they bind to their own nonce and expiry ledger, not the tx sequence.
+ */
+export async function resequenceOnFeePayer(
+  server: Pick<rpc.Server, "getAccount">,
+  tx: Transaction,
+  networkPassphrase: string,
+): Promise<Transaction> {
+  const account = await server.getAccount(tx.source)
+  const body = tx.toEnvelope().v1().tx()
+  const ext = body.ext()
+  const builder = new TransactionBuilder(account, {
+    fee: tx.fee,
+    networkPassphrase,
+    memo: tx.memo,
+    timebounds: tx.timeBounds,
+    ...(ext.switch() === 1 ? { sorobanData: ext.sorobanData() } : {}),
+  })
+  for (const op of body.operations()) builder.addOperation(op)
+  return builder.build()
+}
+
+export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
+  if (result.status !== "ERROR" || !result.errorResult) return false
+  try {
+    return result.errorResult.result().switch().name === "txBadSeq"
+  } catch {
+    return false
+  }
+}
+
+let feePayerQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Serialize fee-payer submits inside one server instance so two requests never read the same
+ * sequence number. Other instances can still collide; callers retry on txBadSeq.
+ */
+export function withFeePayerLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = feePayerQueue.then(fn, fn)
+  feePayerQueue = run.catch(() => undefined)
+  return run
 }
 
 async function sorobanAccountExists(publicKey: string, network: StellarNetwork): Promise<boolean> {

@@ -18,8 +18,14 @@ import { getStellarConfig } from "@/lib/turnkey/config"
 import {
   getConfiguredFunderPublicKey,
   getFunderKeypair,
+  isBadSequenceResult,
+  resequenceOnFeePayer,
+  withFeePayerLock,
 } from "@/lib/stellar/soroban-fee-payer"
+import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
 import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
+
+const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
 
 function getNetworkPassphrase(network: StellarNetwork): string {
   return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
@@ -194,45 +200,61 @@ export async function submitSignedSorobanEnvelope(
 
   // Re-prepare Soroban resources server-side (avoids client-side assembleTransaction()).
   // This also handles the case where the client built with stale sorobanData.
-  let preparedTx: Transaction | FeeBumpTransaction = tx
-  try {
-    if (tx instanceof Transaction) {
-      preparedTx = await server.prepareTransaction(tx)
-    }
-  } catch (e) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[submitSignedSorobanEnvelope] prepareTransaction skipped:", e)
+  async function prepare(t: Transaction | FeeBumpTransaction): Promise<Transaction | FeeBumpTransaction> {
+    if (!(t instanceof Transaction)) return t
+    try {
+      return await server.prepareTransaction(t)
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[submitSignedSorobanEnvelope] prepareTransaction skipped:", e)
+      }
+      return t
     }
   }
 
   const funderPk = getConfiguredFunderPublicKey()
   const funderKp = getFunderKeypair()
-  const txSource =
-    preparedTx instanceof FeeBumpTransaction
-      ? (preparedTx as any).innerTransaction?.source ?? ""
-      : preparedTx.source
-  if (funderKp && funderPk && txSource === funderPk && preparedTx instanceof Transaction) {
-    preparedTx.sign(funderKp)
-  } else if (funderPk && txSource === funderPk && !funderKp) {
+  const txSource = tx instanceof FeeBumpTransaction ? tx.innerTransaction.source : tx.source
+  const paidByFunder = Boolean(funderPk) && txSource === funderPk
+  if (paidByFunder && !funderKp) {
     throw new Error(
       "Fee payer signature missing and STELLAR_FUNDER_SECRET is not configured on the server.",
     )
   }
 
-  await simulateBeforeSubmit(server, preparedTx)
+  let result: rpc.Api.SendTransactionResponse
+  if (paidByFunder && funderKp && tx instanceof Transaction) {
+    result = await withFeePayerLock(async () => {
+      let sent: rpc.Api.SendTransactionResponse | null = null
+      for (let attempt = 0; attempt < FEE_PAYER_SEQUENCE_ATTEMPTS; attempt++) {
+        const fresh = await resequenceOnFeePayer(server, tx, networkPassphrase)
+        const preparedTx = await prepare(fresh)
+        if (preparedTx instanceof Transaction) preparedTx.sign(funderKp)
+        await simulateBeforeSubmit(server, preparedTx)
+        sent = await server.sendTransaction(preparedTx)
+        if (!isBadSequenceResult(sent)) break
+      }
+      return sent!
+    })
+  } else {
+    const preparedTx = await prepare(tx)
+    await simulateBeforeSubmit(server, preparedTx)
+    result = await server.sendTransaction(preparedTx)
+  }
 
-  const result = await server.sendTransaction(preparedTx)
   if (result.status === "ERROR") {
     throw new Error(`Soroban submit failed: ${formatSorobanSubmitError(result)}`)
   }
   if (!result.hash) throw new Error("No transaction hash from Soroban RPC")
+  if (paidByFunder) scheduleFeePayerBalanceCheck()
 
   const ledger = await waitForSorobanTransactionResult(server, result.hash)
   if (ledger.status === "FAILED") {
     const detail = ledger.detail
+    const explorer = network === "mainnet" ? "public" : "testnet"
     throw new Error(
       `Transaction was included on-chain but failed (${detail}). ` +
-        `Your USDC balance was not reduced. View: https://stellar.expert/explorer/testnet/tx/${result.hash}`,
+        `Your USDC balance was not reduced. View: https://stellar.expert/explorer/${explorer}/tx/${result.hash}`,
     )
   }
   if (ledger.status !== "SUCCESS") {
