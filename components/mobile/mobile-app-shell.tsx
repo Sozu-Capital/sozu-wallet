@@ -101,10 +101,6 @@ function MobileAppShellPanels() {
     disabled: isSendModalOpen || isDepositModalOpen || isOnboardingOverlayOpen,
   })
 
-  const handlePayClick = useCallback(() => {
-    setIsSendModalOpen(true)
-  }, [])
-
   const translateX = -((100 / PANEL_COUNT) * activePanel)
 
   return (
@@ -151,7 +147,6 @@ function MobileAppShellPanels() {
             onSendModalOpenChange={setIsSendModalOpen}
             isDepositModalOpen={isDepositModalOpen}
             onDepositModalOpenChange={setIsDepositModalOpen}
-            onPayClick={handlePayClick}
             hideBottomBar
           />
         </div>
