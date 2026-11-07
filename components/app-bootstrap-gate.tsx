@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
+import { hasServerWalletSession, recoverStaleWalletSession } from "@/lib/auth/wallet-session-client"
 import { isClientAuthed, requiresClientAuth } from "@/lib/client-auth-gate"
 import { signalBootstrapReady } from "@/lib/app-ready"
 
@@ -29,7 +30,20 @@ export function AppBootstrapGate({ children }: AppBootstrapGateProps) {
       return
     }
 
-    setCanRender(true)
+    let cancelled = false
+    void (async () => {
+      const serverSession = await hasServerWalletSession()
+      if (cancelled) return
+      if (serverSession === false) {
+        recoverStaleWalletSession()
+        return
+      }
+      setCanRender(true)
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [needsAuth, pathname])
 
   useLayoutEffect(() => {
