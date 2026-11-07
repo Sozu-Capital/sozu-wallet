@@ -46,6 +46,7 @@ export function waitlistConfirmLetter(locale: WaitlistLocale | null, email: stri
 
   const html = `<!DOCTYPE html>
 <html lang="${locale === "en" ? "en" : "es"}">
+<head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#ffffff;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(copy.paragraphs[0])}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
