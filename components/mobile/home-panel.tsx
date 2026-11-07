@@ -7,14 +7,10 @@ import { UniversalCommandBar } from "@/components/home/universal-command-bar"
 import { DepositModal } from "@/components/home/deposit-modal"
 import { createClient } from "@/lib/supabase/client"
 
-type HomePanelProps = {
-  onPayClick: () => void
-}
-
 const SWIPE_Y_THRESHOLD = 22   // px vertical to commit gesture
 const AXIS_RATIO       = 1.2   // vertical must dominate horizontal by this ratio
 
-export function HomePanel({ onPayClick }: HomePanelProps) {
+export function HomePanel() {
   const [isDepositOpen, setIsDepositOpen]     = useState(false)
   const [signOutRevealed, setSignOutRevealed] = useState(false)
   const [isSigningOut, setIsSigningOut]       = useState(false)
@@ -149,7 +145,7 @@ export function HomePanel({ onPayClick }: HomePanelProps) {
         {/* Card — all gesture handlers live here */}
         <div
           ref={cardRef}
-          className="relative w-full max-w-[17rem] overflow-hidden rounded-[2rem] border border-white/10 bg-black/20 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md select-none"
+          className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-black/20 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md select-none"
           style={{ minHeight: "9rem" }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
@@ -161,19 +157,14 @@ export function HomePanel({ onPayClick }: HomePanelProps) {
         >
           {/* ── Commands ─────────────────────────────────────────── */}
           <div
-            className="p-3 transition-all duration-300"
+            className="px-1 py-4 transition-all duration-300"
             style={{
               opacity: signOutRevealed ? 0 : 1,
               transform: signOutRevealed ? "translateY(8px) scale(0.95)" : "translateY(0) scale(1)",
               pointerEvents: signOutRevealed ? "none" : "auto",
             }}
           >
-            <div className="mb-2 text-center text-[8px] font-light uppercase tracking-[0.28em] text-white/40">
-              Command
-            </div>
             <UniversalCommandBar
-              bare
-              onPayClick={onPayClick}
               onDepositClick={() => setIsDepositOpen(true)}
             />
           </div>

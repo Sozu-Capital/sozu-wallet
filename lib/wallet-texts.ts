@@ -204,6 +204,8 @@ export type WalletTexts = {
   cmdBatch: string;
   cmdOfframp: string;
   cmdDeposit: string;
+  cmdWithdraw: string;
+  cmdBusiness: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -726,6 +728,8 @@ export const walletTexts = {
     cmdBatch: "Lote",
     cmdOfframp: "Retiro",
     cmdDeposit: "Depositar",
+    cmdWithdraw: "Retirar",
+    cmdBusiness: "Negocio",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -1214,6 +1218,8 @@ export const walletTexts = {
     cmdBatch: "Batch",
     cmdOfframp: "Offramp",
     cmdDeposit: "Deposit",
+    cmdWithdraw: "Withdraw",
+    cmdBusiness: "Business",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",

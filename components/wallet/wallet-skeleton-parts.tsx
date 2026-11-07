@@ -22,18 +22,13 @@ export function BalanceCardSkeleton({ className, compact = false }: { className?
 
 export function CommandBarSkeleton({ className }: { className?: string }) {
   return (
-    <div
-      className={cn(
-        "mx-auto w-full max-w-[17rem] rounded-[2rem] border border-white/10 bg-black/20 p-3 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md",
-        className,
-      )}
-    >
-      <Skeleton className="mx-auto mb-3 h-2 w-16 rounded bg-white/10" />
-      <div className="grid grid-cols-3 gap-2">
-        <Skeleton className="h-11 rounded-xl bg-white/10" />
-        <Skeleton className="h-11 rounded-xl bg-white/10" />
-        <Skeleton className="h-11 rounded-xl bg-white/10" />
-      </div>
+    <div className={cn("grid w-full grid-cols-4", className)}>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="flex flex-col items-center gap-2.5">
+          <Skeleton className="h-16 w-16 rounded-[1.35rem] bg-white/10" />
+          <Skeleton className="h-2.5 w-12 rounded bg-white/10" />
+        </div>
+      ))}
     </div>
   )
 }
