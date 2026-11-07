@@ -10,17 +10,16 @@ function getServiceClient() {
   return createServiceClient(url, key, { auth: { persistSession: false } })
 }
 
-/** Idempotent: a repeat email is a no-op, so callers can't tell who already signed up. */
+/** True when this email was new. A repeat signup returns false and does not throw. */
 export async function addWaitlistSignup(params: {
   email: string
   locale: WaitlistLocale | null
   source: string | null
-}): Promise<void> {
+}): Promise<boolean> {
   const { error } = await getServiceClient()
     .from("waitlist_signups")
-    .upsert(
-      { email: params.email, locale: params.locale, source: params.source },
-      { onConflict: "email", ignoreDuplicates: true },
-    )
-  if (error) throw new Error(`waitlist insert failed: ${error.message}`)
+    .insert({ email: params.email, locale: params.locale, source: params.source })
+  if (!error) return true
+  if (error.code === "23505" || /duplicate key/i.test(error.message)) return false
+  throw new Error(`waitlist insert failed: ${error.message}`)
 }

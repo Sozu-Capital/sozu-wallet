@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { addWaitlistSignup } from "@/lib/db/waitlist"
+import { sendWaitlistConfirmation } from "@/lib/waitlist/confirm-email"
 import { createRateLimiter } from "@/lib/waitlist/rate-limit"
 import { normalizeWaitlistEmail, normalizeWaitlistLocale } from "@/lib/waitlist/signup"
 
@@ -47,15 +48,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 })
   }
 
+  const locale = normalizeWaitlistLocale(body.locale)
+  let created = false
   try {
-    await addWaitlistSignup({
+    created = await addWaitlistSignup({
       email,
-      locale: normalizeWaitlistLocale(body.locale),
+      locale,
       source: referrerHost(request),
     })
   } catch (error) {
     console.error("[waitlist]", error instanceof Error ? error.message : error)
     return NextResponse.json({ error: "unavailable" }, { status: 503 })
+  }
+
+  if (created) {
+    const confirmation = await sendWaitlistConfirmation({ email, locale })
+    if (!confirmation.sent) {
+      console.error("[waitlist] confirm email", confirmation.error ?? "skipped")
+    }
   }
 
   return NextResponse.json({ ok: true })
