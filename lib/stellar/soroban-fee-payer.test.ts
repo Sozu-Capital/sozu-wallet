@@ -11,7 +11,7 @@ import {
   nativeToScVal,
   xdr,
 } from "@stellar/stellar-sdk"
-import { isBadSequenceResult, resequenceOnFeePayer, withFeePayerLock } from "./soroban-fee-payer"
+import { isBadSequenceResult, resequenceOnFeePayer, waitForSourceSequence, withFeePayerLock } from "./soroban-fee-payer"
 
 const funder = Keypair.random()
 const usdc = new Asset("USDC", Keypair.random().publicKey()).contractId(Networks.TESTNET)
@@ -79,6 +79,24 @@ describe("isBadSequenceResult", () => {
     expect(isBadSequenceResult({ status: "ERROR", errorResult: result("txBadSeq") })).toBe(true)
     expect(isBadSequenceResult({ status: "ERROR", errorResult: result("txBadAuth") })).toBe(false)
     expect(isBadSequenceResult({ status: "PENDING" })).toBe(false)
+  })
+})
+
+describe("waitForSourceSequence", () => {
+  it("waits until the source sequence catches the submitted transaction", async () => {
+    let reads = 0
+    const server = {
+      getAccount: async (id: string) => {
+        reads++
+        return new Account(id, reads < 3 ? "40" : "41")
+      },
+    }
+    const caught = await waitForSourceSequence(server as never, funder.publicKey(), "41", {
+      attempts: 4,
+      delayMs: 0,
+    })
+    expect(caught).toBe(true)
+    expect(reads).toBe(3)
   })
 })
 

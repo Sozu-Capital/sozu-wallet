@@ -72,6 +72,33 @@ let feePayerQueue: Promise<unknown> = Promise.resolve()
  * Serialize fee-payer submits inside one server instance so two requests never read the same
  * sequence number. Other instances can still collide; callers retry on txBadSeq.
  */
+/**
+ * Block the next fee-payer submit until this source's sequence has caught the tx we just sent.
+ * `sendTransaction` returns while the tx is still pending, and `getAccount` keeps the old sequence
+ * until a ledger includes it. Releasing the lock before that lets the next submit reuse it.
+ */
+export async function waitForSourceSequence(
+  server: Pick<rpc.Server, "getAccount">,
+  source: string,
+  minimumSequence: string,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<boolean> {
+  const attempts = opts.attempts ?? 12
+  const delayMs = opts.delayMs ?? 1000
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const account = await server.getAccount(source)
+      if (BigInt(account.sequenceNumber()) >= BigInt(minimumSequence)) return true
+    } catch {
+      /* account not visible yet */
+    }
+    if (i < attempts - 1 && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  return false
+}
+
 export function withFeePayerLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = feePayerQueue.then(fn, fn)
   feePayerQueue = run.catch(() => undefined)

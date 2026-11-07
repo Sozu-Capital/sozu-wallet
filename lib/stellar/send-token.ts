@@ -21,6 +21,7 @@ import {
   FEE_PAYER_SEQUENCE_ATTEMPTS,
   isBadSequenceResult,
   resequenceOnFeePayer,
+  waitForSourceSequence,
   withFeePayerLock,
 } from "@/lib/stellar/soroban-fee-payer"
 import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
@@ -232,7 +233,12 @@ export async function submitSignedSorobanEnvelope(
         if (preparedTx instanceof Transaction) preparedTx.sign(funderKp)
         await simulateBeforeSubmit(server, preparedTx)
         sent = await server.sendTransaction(preparedTx)
-        if (!isBadSequenceResult(sent)) break
+        if (!isBadSequenceResult(sent)) {
+          if (sent.status !== "ERROR" && preparedTx instanceof Transaction) {
+            await waitForSourceSequence(server, preparedTx.source, preparedTx.sequence)
+          }
+          break
+        }
       }
       return sent!
     })

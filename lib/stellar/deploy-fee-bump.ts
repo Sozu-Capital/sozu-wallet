@@ -17,6 +17,7 @@ import {
   getFunderKeypair,
   isBadSequenceResult,
   resequenceOnFeePayer,
+  waitForSourceSequence,
   withFeePayerLock,
 } from "@/lib/stellar/soroban-fee-payer"
 import { ozKitDeployerKeypair } from "@/lib/stellar/smartAccounts/ozPin"
@@ -181,7 +182,12 @@ export async function submitSponsoredDeploy(
       fresh.sign(deployer)
       const bump = buildSignedSponsoredFeeBump({ inner: fresh, funder, networkPassphrase: passphrase })
       sent = await server.sendTransaction(bump)
-      if (!isBadSequenceResult(sent)) break
+      if (!isBadSequenceResult(sent)) {
+        if (sent.status !== "ERROR") {
+          await waitForSourceSequence(server, fresh.source, fresh.sequence)
+        }
+        break
+      }
     }
     return sent!
   })
