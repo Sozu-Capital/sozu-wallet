@@ -41,6 +41,7 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   "/api/wallet/sozu-tag": { methods: ["POST"], reason: "first-claim tag registration for offline phones" },
   "/api/organization/treasury-address": { reason: "public org treasury address" },
   "/api/pizza/sku": { reason: "public product catalog" },
+  "/api/waitlist": { methods: ["POST"], reason: "write-only email signup; never reads or returns rows" },
 
   // Pass-through to SozuPay or on-chain artifacts that carry their own authorization.
   "/api/checkout/proxy": { reason: "reads a public SozuPay checkout session" },
