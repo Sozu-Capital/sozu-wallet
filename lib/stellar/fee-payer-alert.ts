@@ -3,12 +3,31 @@ import "server-only"
 import { Horizon } from "@stellar/stellar-sdk"
 import { after } from "next/server"
 import { getConfiguredFunderPublicKey } from "@/lib/stellar/soroban-fee-payer"
-import { getStellarConfig } from "@/lib/turnkey/config"
+
+const PUBLIC_HORIZON = "https://horizon.stellar.org"
+const TESTNET_HORIZON = "https://horizon-testnet.stellar.org"
+
+/** Sponsored deploys treat STELLAR_NETWORK=public as mainnet. The alert must use that same horizon. */
+export function feePayerHorizon(
+  env: { network?: string; horizonUrl?: string } = {
+    network: process.env.STELLAR_NETWORK,
+    horizonUrl: process.env.STELLAR_HORIZON_URL,
+  },
+): { network: string; horizonUrl: string } {
+  const explicit = env.horizonUrl?.trim()
+  const raw = env.network?.trim()
+  const mainnet = raw === "mainnet" || raw === "public"
+  return {
+    network: mainnet ? "mainnet" : raw || "testnet",
+    horizonUrl: explicit || (mainnet ? PUBLIC_HORIZON : TESTNET_HORIZON),
+  }
+}
 
 const DEFAULT_THRESHOLD_XLM = 25
 const ALERT_COOLDOWN_MS = 15 * 60 * 1000
 
 let lastAlertAt = 0
+let alertInFlight = false
 
 export type FeePayerBalanceReport = {
   publicKey: string
@@ -54,7 +73,7 @@ async function postAlert(message: string): Promise<boolean> {
 export async function checkFeePayerBalance(opts: { force?: boolean } = {}): Promise<FeePayerBalanceReport | null> {
   const publicKey = getConfiguredFunderPublicKey()
   if (!publicKey) return null
-  const cfg = getStellarConfig()
+  const cfg = feePayerHorizon()
   const horizon = new Horizon.Server(cfg.horizonUrl)
   const account = await horizon.loadAccount(publicKey)
   const native = account.balances.find((b) => b.asset_type === "native")
@@ -62,11 +81,16 @@ export async function checkFeePayerBalance(opts: { force?: boolean } = {}): Prom
   const thresholdXlm = feePayerThresholdXlm()
   const now = Date.now()
   let alerted = false
-  if (shouldAlert({ xlm, thresholdXlm, lastAlertAt, now, force: opts.force })) {
-    lastAlertAt = now
-    alerted = await postAlert(
-      `Sozu Wallet fee payer ${publicKey} on ${cfg.network} holds ${xlm} XLM, below the ${thresholdXlm} XLM alert line. Top it up before smart-account deploys and sends start failing.`,
-    )
+  if (shouldAlert({ xlm, thresholdXlm, lastAlertAt, now, force: opts.force }) && !alertInFlight) {
+    alertInFlight = true
+    try {
+      alerted = await postAlert(
+        `Sozu Wallet fee payer ${publicKey} on ${cfg.network} holds ${xlm} XLM, below the ${thresholdXlm} XLM alert line. Top it up before smart-account deploys and sends start failing.`,
+      )
+      if (alerted) lastAlertAt = now
+    } finally {
+      alertInFlight = false
+    }
   }
   return { publicKey, network: cfg.network, xlm, thresholdXlm, low: xlm < thresholdXlm, alerted }
 }

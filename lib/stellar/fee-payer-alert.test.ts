@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { feePayerThresholdXlm, shouldAlert } from "./fee-payer-alert"
+import { feePayerHorizon, feePayerThresholdXlm, shouldAlert } from "./fee-payer-alert"
 
 describe("feePayerThresholdXlm", () => {
   it("reads the env value and falls back to 25", () => {
@@ -9,6 +9,20 @@ describe("feePayerThresholdXlm", () => {
     expect(feePayerThresholdXlm("")).toBe(25)
     expect(feePayerThresholdXlm("lots")).toBe(25)
     expect(feePayerThresholdXlm("-1")).toBe(25)
+  })
+})
+
+describe("feePayerHorizon", () => {
+  it("uses the public horizon when the network is public or mainnet", () => {
+    expect(feePayerHorizon({ network: "public" })).toEqual({
+      network: "mainnet",
+      horizonUrl: "https://horizon.stellar.org",
+    })
+    expect(feePayerHorizon({ network: "mainnet" }).horizonUrl).toBe("https://horizon.stellar.org")
+    expect(feePayerHorizon({ network: "testnet" }).horizonUrl).toBe("https://horizon-testnet.stellar.org")
+    expect(feePayerHorizon({ network: "public", horizonUrl: "https://horizon.example" }).horizonUrl).toBe(
+      "https://horizon.example",
+    )
   })
 })
 
