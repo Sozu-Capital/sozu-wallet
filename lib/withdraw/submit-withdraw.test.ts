@@ -4,6 +4,7 @@ import { createMemoryIdempotencyStore, IdempotencyStoreUnavailableError } from "
 import { parseSacTransferEnvelope } from "@/lib/stellar/parse-sac-transfer-envelope"
 import { minorToI128ScVal } from "./amount"
 import { parseWithdrawDestination } from "./destination"
+import { SorobanTransactionPendingError } from "@/lib/stellar/soroban-pending"
 import { classifyWithdrawSubmitError, submitWithdraw } from "./submit-withdraw"
 import { getWithdrawUsdcAsset } from "./usdc-asset"
 
@@ -110,6 +111,31 @@ describe("submitWithdraw", () => {
     const r = await submitWithdraw(p)
     expect(r.status).toBe(503)
     expect(p.submitEnvelope).not.toHaveBeenCalled()
+  })
+
+  it("keeps the full hash of a late withdrawal and resolves it without sending again", async () => {
+    const hash = "b".repeat(64)
+    const lookupLedger = vi
+      .fn<(_hash: string) => Promise<"SUCCESS" | "FAILED" | "PENDING">>()
+      .mockResolvedValueOnce("PENDING")
+      .mockResolvedValueOnce("PENDING")
+      .mockResolvedValueOnce("SUCCESS")
+    const p = base({
+      submitEnvelope: vi.fn(async () => {
+        throw new SorobanTransactionPendingError(hash)
+      }),
+      lookupLedger,
+    })
+    const first = await submitWithdraw(p)
+    expect(first.status).toBe(502)
+    expect(first.body).toMatchObject({ code: "submit_pending", transactionHash: hash })
+    const still = await submitWithdraw(p)
+    expect(still.status).toBe(502)
+    expect(still.replayed).toBe(true)
+    const landed = await submitWithdraw(p)
+    expect(landed.status).toBe(200)
+    expect(landed.body).toMatchObject({ success: true, transactionHash: hash, transferTo: dest.transferTo })
+    expect(p.submitEnvelope).toHaveBeenCalledTimes(1)
   })
 
   it("maps submit errors to codes and stores them for the key", async () => {

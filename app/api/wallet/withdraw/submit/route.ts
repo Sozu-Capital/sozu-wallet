@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSession } from "@/lib/auth/session"
 import { supabaseIdempotencyStore } from "@/lib/db/idempotency"
-import { submitSignedSorobanEnvelope } from "@/lib/stellar/send-token"
+import { lookupSorobanLedger, submitSignedSorobanEnvelope } from "@/lib/stellar/send-token"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { parseMinorAmount } from "@/lib/withdraw/amount"
 import { parseWithdrawDestination } from "@/lib/withdraw/destination"
@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       networkPassphrase: networkPassphraseFor(network),
       store: supabaseIdempotencyStore,
       submitEnvelope: submitSignedSorobanEnvelope,
+      lookupLedger: lookupSorobanLedger,
     })
     return NextResponse.json(result.body, {
       status: result.status,

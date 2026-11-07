@@ -5,6 +5,7 @@ import {
   type IdempotencyStore,
 } from "@/lib/idempotency/idempotency"
 import { parseSacTransferEnvelope, sacTransferIntentKey } from "@/lib/stellar/parse-sac-transfer-envelope"
+import { SorobanTransactionPendingError } from "@/lib/stellar/soroban-pending"
 
 export const WITHDRAW_IDEMPOTENCY_SCOPE = "withdraw_all"
 
@@ -16,6 +17,17 @@ export type ExpectedWithdrawTransfer = {
 }
 
 export type SubmitWithdrawResult = { status: number; body: Record<string, unknown> | unknown; replayed?: boolean }
+
+export type LedgerLookup = (hash: string) => Promise<"SUCCESS" | "FAILED" | "PENDING">
+
+function pendingHash(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null
+  const record = body as { code?: unknown; transactionHash?: unknown }
+  if (record.code !== "submit_pending") return null
+  return typeof record.transactionHash === "string" && /^[a-fA-F0-9]{64}$/.test(record.transactionHash)
+    ? record.transactionHash
+    : null
+}
 
 /** Maps a `submitSignedSorobanEnvelope` error to a client code. Pending means "may still land — don't resend yet". */
 export function classifyWithdrawSubmitError(message: string): { status: number; code: string } {
@@ -36,6 +48,8 @@ export async function submitWithdraw(params: {
   networkPassphrase: string
   store: IdempotencyStore
   submitEnvelope: (xdr: string) => Promise<string>
+  /** When a stored submit is still pending, read the ledger instead of sending again. */
+  lookupLedger?: LedgerLookup
 }): Promise<SubmitWithdrawResult> {
   if (!isValidIdempotencyKey(params.idempotencyKey)) {
     return { status: 400, body: { success: false, code: "invalid_idempotency_key" } }
@@ -62,7 +76,7 @@ export async function submitWithdraw(params: {
   if (mismatch) return { status: 422, body: { success: false, code: "envelope_mismatch", reason: mismatch } }
 
   try {
-    return await runIdempotent(
+    const result = await runIdempotent(
       params.store,
       {
         userId: params.userId,
@@ -83,12 +97,26 @@ export async function submitWithdraw(params: {
             },
           }
         } catch (err) {
+          if (err instanceof SorobanTransactionPendingError) {
+            return {
+              status: 502,
+              body: { success: false, code: "submit_pending", transactionHash: err.hash },
+            }
+          }
           const message = err instanceof Error ? err.message : String(err)
           const { status, code } = classifyWithdrawSubmitError(message)
           return { status, body: { success: false, code, detail: message.slice(0, 300) } }
         }
       },
     )
+    return await settlePendingWithdraw(result, {
+      userId: params.userId,
+      idempotencyKey: params.idempotencyKey,
+      amountMinor: intent.amountMinor,
+      transferTo: intent.to,
+      store: params.store,
+      lookupLedger: params.lookupLedger,
+    })
   } catch (err) {
     if (err instanceof IdempotencyStoreUnavailableError) {
       console.error("[withdraw/submit] idempotency store unavailable:", err.message)
@@ -96,4 +124,50 @@ export async function submitWithdraw(params: {
     }
     throw err
   }
+}
+
+/** A pending idempotency record is not final: the same key resolves to the receipt once the tx lands. */
+export async function settlePendingWithdraw(
+  result: SubmitWithdrawResult,
+  params: {
+    userId: string
+    idempotencyKey: string
+    amountMinor: bigint
+    transferTo: string
+    store: IdempotencyStore
+    lookupLedger?: LedgerLookup
+  },
+): Promise<SubmitWithdrawResult> {
+  const hash = pendingHash(result.body)
+  if (!hash || !params.lookupLedger) return result
+  let outcome: "SUCCESS" | "FAILED" | "PENDING"
+  try {
+    outcome = await params.lookupLedger(hash)
+  } catch {
+    return result
+  }
+  if (outcome === "PENDING") return result
+  const settled: SubmitWithdrawResult =
+    outcome === "SUCCESS"
+      ? {
+          status: 200,
+          body: {
+            success: true,
+            transactionHash: hash,
+            amountMinor: params.amountMinor.toString(),
+            transferTo: params.transferTo,
+          },
+        }
+      : { status: 400, body: { success: false, code: "submit_failed", transactionHash: hash } }
+  try {
+    await params.store.complete({
+      userId: params.userId,
+      key: params.idempotencyKey,
+      responseStatus: settled.status,
+      responseBody: settled.body,
+    })
+  } catch (err) {
+    console.error("[withdraw/submit] could not store settled pending result:", err)
+  }
+  return { ...settled, replayed: result.replayed }
 }
