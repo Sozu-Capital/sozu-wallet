@@ -8,7 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCoins } from "@fortawesome/free-solid-svg-icons"
 import { Button } from "@/components/ui/button"
 import { WalletLazySectionSkeleton, WalletSkeleton } from "@/components/ui/wallet-skeleton"
-import { BalanceCardSkeleton } from "@/components/wallet/wallet-skeleton-parts"
+import { BalanceCardSkeleton, CommandBarSkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { WalletErrorBoundary } from "@/components/wallet/wallet-error-boundary"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import { getWithdrawTexts } from "@/lib/withdraw/withdraw-texts"
@@ -74,7 +74,6 @@ export type WalletScreenProps = {
   hideBottomBar?: boolean
   /** Mobile shell panel layout — landing merges balance + commands; history is tx list only. */
   shellLayout?: WalletShellLayout
-  onPayClick?: () => void
 }
 
 export function WalletScreen({
@@ -84,7 +83,6 @@ export function WalletScreen({
   onDepositModalOpenChange,
   hideBottomBar = false,
   shellLayout,
-  onPayClick,
 }: WalletScreenProps) {
   const searchParams = useSearchParams()
   const { t, language } = useWalletLanguage()
@@ -125,7 +123,6 @@ export function WalletScreen({
   const [isWalletSwitcherOpen, setIsWalletSwitcherOpen] = useState(false)
   const swipeUpStartY = useRef<number | null>(null)
   const swipeUpStartX = useRef<number | null>(null)
-  const [openPayScannerOnMount, setOpenPayScannerOnMount] = useState(false)
   const [sendAssetContractId, setSendAssetContractId] = useState<string | null>(null)
   const [isBalanceVisible, setIsBalanceVisible] = useState(true)
   const [animatedBalance, setAnimatedBalance] = useState<number>(0)
@@ -351,8 +348,6 @@ export function WalletScreen({
       shellLayout !== "landing" ||
       isDepositOpen,
   })
-
-  const handlePay = onPayClick ?? (() => setSendModalOpen(true))
 
   const landingRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -711,8 +706,6 @@ export function WalletScreen({
           referenceFiat={treasuryData.prefs.referenceFiat}
           onSuccess={handleSendSuccess}
           onRefresh={handleSendModalRefresh}
-          openScannerOnMount={openPayScannerOnMount}
-          onScannerOpenConsumed={() => setOpenPayScannerOnMount(false)}
           initialAssetContractId={sendAssetContractId}
         />
       </Suspense>
@@ -856,7 +849,6 @@ export function WalletScreen({
               if (dy > 32 && startY < 140) {
                 setIsWalletSwitcherOpen(true)
               } else if (dy > 48 && startY >= 140) {
-                setOpenPayScannerOnMount(true)
                 setSendModalOpen(true)
               }
             }}
@@ -910,52 +902,29 @@ export function WalletScreen({
                 </div>
 
                 <div
-                  className="flex min-h-0 flex-1 flex-col px-4 transition-transform duration-150 ease-out"
+                  className="flex min-h-0 flex-1 flex-col px-6 transition-transform duration-150 ease-out"
                   style={{ transform: pull > 0 ? `translateY(${pull * 0.35}px)` : undefined }}
                 >
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-start pt-2">
-                    <div className="flex min-h-0 w-full max-w-md flex-1 flex-col">
-                      <div className="flex min-h-0 w-full flex-col">
-                        {isBalanceLoading ? (
-                          <BalanceCardSkeleton compact />
-                        ) : (
-                          balanceBlock
-                        )}
-                      </div>
+                  <div className="flex min-h-0 flex-1 flex-col items-center pt-4">
+                    <div className="flex w-full max-w-md flex-col">
+                      {isBalanceLoading ? (
+                        <BalanceCardSkeleton compact className="mb-8" />
+                      ) : (
+                        balanceBlock
+                      )}
 
-                      <div
-                        className={cn(
-                          "overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-                          isBalanceLoading ? "max-h-0 opacity-0" : "max-h-32 opacity-100",
-                        )}
-                        aria-hidden={isBalanceLoading}
-                      >
-                        {activationMessage ? (
-                          <p className="mt-4 text-center text-xs text-red-300/90">{activationMessage}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 pb-[calc(env(safe-area-inset-bottom)+2.75rem)] pt-2">
-                    <div className="mx-auto w-full max-w-[17rem] rounded-[2rem] border border-white/10 bg-black/20 p-3 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md">
-                      <div className="mb-2 text-center text-[8px] font-light uppercase tracking-[0.28em] text-white/40">
-                        {t.commandTitle}
-                      </div>
-                      <UniversalCommandBar
-                        bare
-                        onPayClick={handlePay}
-                        onDepositClick={handleDeposit}
-                      />
-                      {rampEnabled ? (
-                        <button
-                          type="button"
-                          onClick={handleOfframp}
-                          className="mt-2 flex h-12 w-full flex-col items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04] text-[9px] font-medium uppercase tracking-[0.16em] text-white/90 transition-colors hover:bg-white/[0.08] active:scale-[0.97] active:bg-white/12"
-                        >
-                          {t.cmdOfframp}
-                        </button>
+                      {activationMessage && !isBalanceLoading ? (
+                        <p className="mt-4 text-center text-xs text-red-300/90">{activationMessage}</p>
                       ) : null}
+                      {isBalanceLoading ? (
+                        <CommandBarSkeleton className="mt-2" />
+                      ) : (
+                        <UniversalCommandBar
+                          className="mt-2"
+                          onDepositClick={handleDeposit}
+                          onWithdrawClick={handleOfframp}
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => setIsWithdrawAllOpen(true)}

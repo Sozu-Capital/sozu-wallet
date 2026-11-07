@@ -1,51 +1,56 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { ArrowDownToLine, ArrowUpFromLine, Briefcase, Landmark } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWalletLanguage } from "@/lib/wallet-language"
 
-const commandButtonClass = cn(
-  "flex h-12 flex-col items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04]",
-  "text-[9px] font-medium uppercase tracking-[0.16em] text-white/90",
-  "transition-colors hover:bg-white/[0.08] active:scale-[0.97] active:bg-white/12",
+const actionIconClass = cn(
+  "flex h-16 w-16 items-center justify-center rounded-[1.35rem]",
+  "border border-white/15 bg-white/[0.08] text-white",
+  "shadow-[0_10px_28px_rgba(0,0,0,0.28)]",
+  "transition-colors group-hover:bg-white/[0.14] group-active:scale-95",
 )
 
 export function UniversalCommandBar({
   className,
-  onPayClick,
   onDepositClick,
-  bare = false,
+  onWithdrawClick,
 }: {
   className?: string
-  onPayClick?: () => void
   onDepositClick?: () => void
-  bare?: boolean
+  onWithdrawClick?: () => void
 }) {
+  const router = useRouter()
   const { t } = useWalletLanguage()
 
-  const grid = (
-    <div className="grid grid-cols-2 gap-2">
-      <button type="button" className={commandButtonClass} onClick={onPayClick}>
-        {t.cmdPay}
-      </button>
-      <button type="button" className={commandButtonClass} onClick={onDepositClick}>
-        {t.cmdDeposit}
-      </button>
-    </div>
-  )
-
-  if (bare) return <div className={cn("w-full", className)}>{grid}</div>
+  const actions = [
+    { key: "deposit", label: t.cmdDeposit, icon: ArrowDownToLine, onClick: onDepositClick },
+    { key: "withdraw", label: t.cmdWithdraw, icon: ArrowUpFromLine, onClick: onWithdrawClick },
+    { key: "credit", label: t.cmdCredit, icon: Landmark, onClick: () => router.push("/credit") },
+    { key: "business", label: t.cmdBusiness, icon: Briefcase, onClick: () => router.push("/dashboard/business") },
+  ] as const
 
   return (
-    <div
-      className={cn(
-        "mx-auto w-full max-w-[17rem] rounded-[2rem] border border-white/10 bg-black/20 p-3 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md",
-        className,
-      )}
-    >
-      <div className="mb-2 text-center text-[8px] font-light uppercase tracking-[0.28em] text-white/40">
-        {t.commandTitle}
-      </div>
-      {grid}
+    <div className={cn("grid w-full grid-cols-4", className)}>
+      {actions.map((action) => {
+        const Icon = action.icon
+        return (
+          <button
+            key={action.key}
+            type="button"
+            onClick={action.onClick}
+            className="group flex min-w-0 flex-col items-center gap-2.5"
+          >
+            <span className={actionIconClass}>
+              <Icon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+            </span>
+            <span className="max-w-full text-center text-[12px] font-medium leading-tight text-white/85">
+              {action.label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
