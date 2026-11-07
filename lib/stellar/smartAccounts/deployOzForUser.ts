@@ -1,11 +1,13 @@
 "use client"
 
 import type { SmartAccountKit } from "smart-account-kit"
-import { Address, hash, rpc, StrKey, xdr } from "@stellar/stellar-sdk"
-import base64url from "base64url"
+import { Address, rpc, xdr } from "@stellar/stellar-sdk"
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
 import { resolveCredentialIdBytes } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
 import { passkeyNativeDeploySigners } from "@/lib/stellar/smartAccounts/passkeyNativeSigner"
+import { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
+
+export { deriveOzContractIdForUser, ozDeploySalt }
 
 /** Kit fields used for deploy — avoid intersecting SmartAccountKit (private fields break types). */
 type KitDeployInternals = {
@@ -26,33 +28,6 @@ function asDeployKit(kit: SmartAccountKit): KitDeployInternals {
 
 function sorobanServer(rpcUrl: string): rpc.Server {
   return new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
-}
-
-/** Per-user deploy salt so a new account does not reuse another user's C for the same passkey. */
-export function ozDeploySalt(credentialId: string, userId: string): Buffer {
-  const credBuf = base64url.toBuffer(credentialId)
-  return hash(Buffer.concat([credBuf, Buffer.from(userId.trim(), "utf8")]))
-}
-
-export function deriveOzContractIdForUser(params: {
-  credentialId: string
-  userId: string
-  networkPassphrase: string
-  deployerPublicKey: string
-}): string {
-  const salt = ozDeploySalt(params.credentialId, params.userId)
-  const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
-    new xdr.HashIdPreimageContractId({
-      networkId: hash(Buffer.from(params.networkPassphrase)),
-      contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-        new xdr.ContractIdPreimageFromAddress({
-          address: Address.fromString(params.deployerPublicKey).toScAddress(),
-          salt,
-        }),
-      ),
-    }),
-  )
-  return StrKey.encodeContract(hash(preimage.toXDR()))
 }
 
 export async function isOzContractDeployedOnChain(
