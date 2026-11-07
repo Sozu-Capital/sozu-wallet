@@ -1,7 +1,7 @@
 import "server-only"
 
 import * as rpc from "@stellar/stellar-sdk/rpc"
-import { Keypair, Transaction, xdr } from "@stellar/stellar-sdk"
+import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
@@ -44,14 +44,16 @@ export async function resequenceOnFeePayer(
   // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
   // adds the Soroban resource fee a second time on the SDK that CI installs.
   const body = xdr.Transaction.fromXDR(tx.toEnvelope().v1().tx().toXDR())
-  const next = (BigInt(account.sequenceNumber()) + 1n).toString()
+  const next = (BigInt(account.sequenceNumber()) + BigInt(1)).toString()
   body.seqNum(xdr.Int64.fromString(next))
-  return new Transaction(
-    new xdr.TransactionEnvelope.envelopeTypeTx(
-      new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
-    ),
-    networkPassphrase,
+  const envelope = xdr.TransactionEnvelope.envelopeTypeTx(
+    new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
   )
+  const rebuilt = TransactionBuilder.fromXDR(envelope.toXDR("base64"), networkPassphrase)
+  if (!(rebuilt instanceof Transaction)) {
+    throw new Error("Resequenced fee-payer envelope was not an inner transaction.")
+  }
+  return rebuilt
 }
 
 export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
