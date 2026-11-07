@@ -1,6 +1,6 @@
 /**
  * Testnet Friendbot funding (Horizon). Friendbot only funds classic G accounts.
- * For smart accounts (C…), fund the passkey-derived signer G.
+ * Smart accounts (C…) are not funded. Only an already-registered classic G is.
  */
 
 "use client"
@@ -20,17 +20,6 @@ async function resolveFundableGAddress(
 
   const userId = getUserId()
   if (!userId) return null
-
-  const credId =
-    sessionStorage.getItem("credential_id") ?? localStorage.getItem("credential_id") ?? null
-
-  try {
-    const { derivePrimaryPasskeySignerG } = await import("@/lib/stellar/ensure-passkey-signer")
-    const derived = await derivePrimaryPasskeySignerG(userId, credId)
-    if (derived?.publicKey.startsWith("G")) return derived.publicKey
-  } catch {
-    /* fall through */
-  }
 
   try {
     const res = await fetch("/api/wallet/stellar/address", {

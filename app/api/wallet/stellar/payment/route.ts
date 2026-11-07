@@ -712,17 +712,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400, headers: corsHeaders(request) })
     }
 
-    if (!signerPk || !signerPk.startsWith("G")) {
-      return NextResponse.json(
-        {
-          error:
-            "Passkey signer (G…) missing in our records. Sign out, sign in with passkey again. USDC sends from your C smart account; a server funder or your G pays Soroban fees.",
-          code: "SMART_SIGNER_REQUIRED",
-        },
-        { status: 422, headers: corsHeaders(request) }
-      )
-    }
-
     const { contractCanReadOnChainSignerKeyData } = await import(
       "@/lib/stellar/smartAccounts/resolveOnChainPublicKey"
     )
@@ -731,7 +720,9 @@ export async function POST(request: NextRequest) {
     )
     const supportsOzKitApi = await contractSupportsOzKitSigning(senderPk)
     const canReadOnChainKeyData = await contractCanReadOnChainSignerKeyData(senderPk)
-    const isFactoryOnChain = await contractIsFactoryForSigner(senderPk, signerPk)
+    const isFactoryOnChain = signerPk?.startsWith("G")
+      ? await contractIsFactoryForSigner(senderPk, signerPk)
+      : false
     const useFactoryGSigner = !supportsOzKitApi && isFactoryOnChain
 
     const ozCred = wallet.ozCredentialId?.trim() ?? ""
@@ -778,7 +769,7 @@ export async function POST(request: NextRequest) {
     console.log("[Payment API] Soroban fee payer:", {
       feePayer: feePayer.slice(0, 8) + "…",
       usedFunder,
-      signer: signerPk.slice(0, 8) + "…",
+      signer: signerPk ? signerPk.slice(0, 8) + "…" : "passkey",
       from: senderPk.slice(0, 8) + "…",
     })
 
@@ -809,7 +800,7 @@ export async function POST(request: NextRequest) {
         passkeyRegisteredOnContract,
         feePayerPublicKey: feePayer,
         usedFunderRelayer: usedFunder,
-        signerPublicKey: signerPk,
+        signerPublicKey: useFactoryGSigner ? signerPk : null,
         walletAddress: senderPk,
         ozCredentialId: wallet.ozCredentialId ?? null,
         contractId: tokenContractId,

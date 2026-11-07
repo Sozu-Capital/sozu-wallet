@@ -21,9 +21,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : ""
   const credentialIdRaw = typeof body.credentialId === "string" ? body.credentialId.trim() : ""
-  const signerRaw =
-    typeof body.signerPublicKey === "string" ? body.signerPublicKey.trim().toUpperCase() : ""
-  const signerPublicKey = signerRaw.startsWith("G") && signerRaw.length === 56 ? signerRaw : null
 
   if (!contractId.startsWith("C") || !credentialIdRaw) {
     return NextResponse.json(
@@ -42,12 +39,32 @@ export async function POST(request: NextRequest) {
   const svc = createServiceClient(supabaseUrl, supabaseServiceKey)
   const stellarConfig = getStellarConfig()
 
+  const { data: existing } = await svc
+    .from("stellar_wallets")
+    .select("public_key, wallet_type")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  // Existing factory accounts and classic G rows stay as they are. This route does not migrate them.
+  const existingPk = typeof existing?.public_key === "string" ? existing.public_key.trim().toUpperCase() : ""
+  if ((existing?.wallet_type === "factory" || existingPk.startsWith("G")) && existingPk) {
+    return NextResponse.json(
+      {
+        ok: true,
+        contractId: existingPk,
+        walletType: existing?.wallet_type === "factory" ? "factory" : "legacy",
+        unchanged: true,
+      },
+      { headers },
+    )
+  }
+
   const row: Record<string, string | null> = {
     user_id: userId,
     public_key: contractId.toUpperCase(),
     wallet_type: "oz",
     oz_credential_id: credentialId,
-    signer_public_key: signerPublicKey,
+    signer_public_key: null,
     turnkey_wallet_id: null,
     network: stellarConfig.network,
     updated_at: new Date().toISOString(),

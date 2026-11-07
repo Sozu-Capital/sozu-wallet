@@ -37,7 +37,11 @@ export async function GET(request: Request) {
     console.log("[Stellar Address API] Getting wallet for userId:", userId)
     let wallet = await getStellarWallet(userId, !user)
 
-    if (wallet?.publicKey?.startsWith("G")) {
+    if (
+      wallet?.publicKey?.startsWith("G") &&
+      process.env.PILOT_MAINNET !== "1" &&
+      process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1"
+    ) {
       const { ensureFactorySmartWalletForUser } = await import(
         "@/lib/stellar/migrate-legacy-wallet"
       )
@@ -62,20 +66,7 @@ export async function GET(request: Request) {
           console.warn("[Stellar Address API] G→C migration failed:", migrated.error)
         }
       } else {
-        console.warn(
-          "[Stellar Address API] Legacy G in DB; factory not configured — client should provision OZ C",
-        )
-        return NextResponse.json(
-          {
-            publicKey: null,
-            network: wallet.network,
-            walletType: "legacy",
-            signerPublicKey: wallet.signerPublicKey ?? wallet.publicKey,
-            walletMustMigrate: true,
-            provisionVia: "oz_passkey",
-          },
-          { headers: corsHeaders(request as any) },
-        )
+        console.warn("[Stellar Address API] Legacy G left in place; factory is not configured")
       }
     }
 
@@ -119,7 +110,7 @@ export async function GET(request: Request) {
         network: wallet.network,
         walletType: wallet.walletType ?? (pk.startsWith("C") ? "factory" : null),
         signerPublicKey: wallet.signerPublicKey ?? null,
-        walletMustMigrate: pk.startsWith("G"),
+        walletMustMigrate: false,
       },
       { headers: corsHeaders(request as any) }
     )

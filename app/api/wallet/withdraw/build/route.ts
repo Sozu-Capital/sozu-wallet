@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         sorobanDataXdr,
         signMethod: prepared.signMethod,
         supportsOzKitApi: prepared.supportsOzKitApi,
-        signerPublicKey: prepared.sender.signerPk,
+        signerPublicKey: prepared.sender.signerPk.startsWith("G") ? prepared.sender.signerPk : null,
         walletAddress: prepared.sender.senderC,
         ozCredentialId: prepared.sender.ozCredentialId,
         feePayerPublicKey: prepared.feePayer,

@@ -124,10 +124,9 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
       const cred = await createPasskey(challenge, challenge.user?.id, challenge.user?.displayName)
       if (!cred) throw new Error("Passkey creation failed")
       await verifyAddPasskey(cred, challenge.challenge, {})
-      const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
-      const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, cred.id, uid)
-      if (!cloned) {
-        throw new Error("Could not copy wallet keys to the new passkey on this device.")
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+        const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
+        await cloneEncryptedKeyForNewCredential(sourceCred, cred.id, uid)
       }
       storeCredentialIdInSession(cred.id)
       sessionStorage.removeItem("wallet_sync_pending")
@@ -199,13 +198,12 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
       if (targetId === sourceCred) {
         throw new Error("That is already this device’s passkey — nothing to sync.")
       }
-      const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
-      const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, targetId, uid)
-      if (!cloned) {
-        throw new Error("Could not read wallet keys from this device. Use the passkey that already controls this wallet.")
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+        const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
+        const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, targetId, uid)
+        if (cloned?.publicKey) sessionStorage.setItem("stellar_public_key", cloned.publicKey)
       }
       storeCredentialIdInSession(targetId)
-      sessionStorage.setItem("stellar_public_key", cloned.publicKey)
       sessionStorage.removeItem("wallet_sync_pending")
       setWalletSyncPending(false)
       setSyncPaste("")
