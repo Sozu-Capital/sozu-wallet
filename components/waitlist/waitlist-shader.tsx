@@ -19,7 +19,7 @@ export function WaitlistShader() {
   const isVisible = usePageVisibility()
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 z-0 bg-black">
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-0 bg-black">
       {tier === "static" || !isVisible ? (
         <div className="absolute inset-0" style={{ background: STATIC_BACKGROUND }} />
       ) : (

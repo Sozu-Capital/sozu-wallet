@@ -12,7 +12,7 @@ export const WAITLIST_BYPASS_QUERY = "access"
 
 /** Files directly under /public, like /robots.txt. Nested paths must sit in a known asset folder. */
 const ROOT_FILE = /^\/[^/]+\.[a-z0-9]+$/i
-const ASSET_FILE = /^\/(?:brand|icons|onboarding|sound|fonts)\/(?:[^/]+\/)*[^/]+\.[a-z0-9]+$/i
+const ASSET_FILE = /^\/(?:brand|icons|onboarding|sound|fonts|waitlist)\/(?:[^/]+\/)*[^/]+\.[a-z0-9]+$/i
 
 export function isWaitlistMode(): boolean {
   return process.env.WAITLIST_MODE === "1"

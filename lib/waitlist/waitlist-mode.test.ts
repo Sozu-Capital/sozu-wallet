@@ -26,6 +26,7 @@ describe("waitlist mode", () => {
     expect(waitlistGate("/api/wallet/stellar/balance", false)).toBe("asset")
     expect(waitlistGate("/.well-known/stellar.toml", false)).toBe("asset")
     expect(waitlistGate("/brand/november-2026/mark.png", false)).toBe("asset")
+    expect(waitlistGate("/waitlist/crises/paraguay.jpg", false)).toBe("asset")
     expect(waitlistGate("/fonts/SCHABO-XCondensed.woff2", false)).toBe("asset")
     expect(waitlistGate("/robots.txt", false)).toBe("asset")
     expect(waitlistGate("/robots.txt", true)).toBe("asset")

@@ -460,3 +460,145 @@
   pointer-events: none;
   background: radial-gradient(circle, transparent 58%, rgba(0, 0, 0, 0.35) 78%, rgba(0, 0, 0, 0.55) 100%);
 }
+
+/* Waitlist dive. Heights come from --sozu-app-height (frozen into --waitlist-stage)
+   so the iOS address bar and keyboard don't resize the scroll track. */
+.waitlist-dive {
+  height: calc(var(--waitlist-stage, var(--sozu-app-height, 100lvh)) * 3.5);
+}
+.waitlist-stage {
+  height: var(--waitlist-stage, var(--sozu-app-height, 100lvh));
+}
+@keyframes waitlist-hint {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(7px);
+  }
+}
+.waitlist-scroll-hint {
+  animation: waitlist-hint 2.6s ease-in-out infinite;
+}
+.waitlist-gallery {
+  height: calc(var(--waitlist-stage, var(--sozu-app-height, 100lvh)) * 5);
+}
+.waitlist-gallery-stage {
+  position: sticky;
+  top: 0;
+  height: var(--waitlist-stage, var(--sozu-app-height, 100lvh));
+}
+/* Pull the gallery into the last part of the zoom so it shows inside the mark. */
+.waitlist-ink {
+  margin-top: calc(var(--waitlist-stage, var(--sozu-app-height, 100lvh)) * -0.92);
+}
+
+/* Grain washes. Top-left and bottom-right only; the center stays clear for the mark. */
+.waitlist-corners {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.waitlist-corner {
+  position: absolute;
+  width: min(46vw, 520px);
+  height: min(44%, 440px);
+  overflow: hidden;
+  isolation: isolate;
+}
+.waitlist-corner-tl {
+  top: 0;
+  left: 0;
+  border-radius: 0 0 46% 0;
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, #000 0%, transparent 70%);
+}
+.waitlist-corner-br {
+  right: 0;
+  bottom: 0;
+  border-radius: 46% 0 0 0;
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 100% 100%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 100% 100% at 100% 100%, #000 0%, transparent 70%);
+}
+.waitlist-corner-glow {
+  position: absolute;
+  inset: -12%;
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+  animation: waitlist-corner-drift 18s ease-in-out infinite;
+}
+.waitlist-corners-light .waitlist-corner-tl .waitlist-corner-glow {
+  background:
+    radial-gradient(ellipse 90% 86% at 0% 0%, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.16) 42%, transparent 72%),
+    radial-gradient(ellipse 55% 48% at 28% 34%, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
+}
+.waitlist-corners-light .waitlist-corner-br .waitlist-corner-glow {
+  background:
+    radial-gradient(ellipse 90% 86% at 100% 100%, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.14) 42%, transparent 72%),
+    radial-gradient(ellipse 52% 46% at 70% 64%, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  animation-duration: 23s;
+  animation-delay: -9s;
+}
+.waitlist-corners-dark .waitlist-corner-tl .waitlist-corner-glow {
+  background:
+    radial-gradient(ellipse 90% 86% at 0% 0%, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.06) 46%, transparent 74%),
+    radial-gradient(ellipse 50% 44% at 30% 36%, rgba(0, 0, 0, 0.08) 0%, transparent 70%);
+}
+.waitlist-corners-dark .waitlist-corner-br .waitlist-corner-glow {
+  background:
+    radial-gradient(ellipse 90% 86% at 100% 100%, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0.06) 46%, transparent 74%),
+    radial-gradient(ellipse 50% 44% at 68% 62%, rgba(0, 0, 0, 0.08) 0%, transparent 70%);
+  animation-duration: 23s;
+  animation-delay: -9s;
+}
+.waitlist-corner-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.72;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+@keyframes waitlist-corner-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(3%, 2%, 0) scale(1.05);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waitlist-dive {
+    height: calc(var(--waitlist-stage, var(--sozu-app-height, 100lvh)) * 2);
+  }
+  .waitlist-ink {
+    margin-top: 0;
+  }
+  .waitlist-gallery,
+  .waitlist-gallery-stage {
+    height: auto;
+    position: static;
+  }
+  .waitlist-scroll-hint,
+  .waitlist-corner-glow {
+    animation: none;
+  }
+  .waitlist-scroll-hint {
+    opacity: 0.55;
+  }
+  .waitlist-mark,
+  .waitlist-manifesto-line {
+    transform: none !important;
+    filter: none !important;
+  }
+  .waitlist-manifesto-line {
+    opacity: 1 !important;
+  }
+}
