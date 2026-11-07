@@ -30,6 +30,7 @@ import {
   paymentRailForAddress,
 } from "@/lib/payment/payment-rail"
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address"
+import { groupAddressForDisplay } from "@/lib/payment/address-display"
 import { formatBalance, getUserId } from "@/lib/wallet-utils"
 import type { ReferenceFiat } from "@/lib/treasury/types"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
@@ -89,6 +90,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
     isSending,
     sendPhase,
     sendStep,
+    resolvedRecipientAddress,
     isResolvingRecipient,
     isManualMode,
     sendMemo,
@@ -846,17 +848,22 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                     requestAnimationFrame(() => recipientInputRef.current?.focus({ preventScroll: true }))
                   })
                 }}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 transition-colors hover:bg-white/[0.06]"
+                className="w-full flex flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 transition-colors hover:bg-white/[0.06]"
                 aria-label="Edit recipient"
               >
-                <span className="text-white/40 text-xs uppercase tracking-widest">To</span>
-                <span className="text-white/90 text-sm font-mono truncate max-w-[220px]">
-                  {sendRecipient.startsWith("$")
-                    ? sendRecipient
-                    : sendRecipient.length >= 12
-                      ? `${sendRecipient.slice(0, 6)}…${sendRecipient.slice(-4)}`
-                      : sendRecipient}
+                <span className="flex items-center gap-2">
+                  <span className="text-white/40 text-xs uppercase tracking-widest">To</span>
+                  {resolvedRecipientAddress && resolvedRecipientAddress !== sendRecipient.trim().toUpperCase() ? (
+                    <span className="text-white/90 text-sm">{sendRecipient}</span>
+                  ) : null}
                 </span>
+                {resolvedRecipientAddress ? (
+                  <span className="w-full break-all text-center font-mono text-[12px] leading-relaxed text-white/90">
+                    {groupAddressForDisplay(resolvedRecipientAddress)}
+                  </span>
+                ) : (
+                  <span className="text-white/90 text-sm font-mono break-all">{sendRecipient}</span>
+                )}
               </button>
               {legacyPaymentNotice ? (
                 <p className="text-amber-200/90 text-xs text-center px-2 leading-snug">
