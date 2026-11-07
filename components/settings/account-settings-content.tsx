@@ -124,10 +124,14 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
       const cred = await createPasskey(challenge, challenge.user?.id, challenge.user?.displayName)
       if (!cred) throw new Error("Passkey creation failed")
       await verifyAddPasskey(cred, challenge.challenge, {})
-      const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
-      const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, cred.id, uid)
-      if (!cloned) {
-        throw new Error("Could not copy wallet keys to the new passkey on this device.")
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+        const storedG = sessionStorage.getItem("stellar_public_key")?.trim().toUpperCase() ?? ""
+        const expectsG = storedG.startsWith("G") && storedG.length === 56
+        const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
+        const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, cred.id, uid)
+        if (expectsG && !cloned?.publicKey) {
+          throw new Error("Could not copy the signing key to this passkey.")
+        }
       }
       storeCredentialIdInSession(cred.id)
       sessionStorage.removeItem("wallet_sync_pending")
@@ -199,17 +203,29 @@ export function AccountSettingsContent({ onBack }: AccountSettingsContentProps) 
       if (targetId === sourceCred) {
         throw new Error("That is already this device’s passkey — nothing to sync.")
       }
-      const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
-      const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, targetId, uid)
-      if (!cloned) {
-        throw new Error("Could not read wallet keys from this device. Use the passkey that already controls this wallet.")
+      let copiedG = false
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+        const storedG = sessionStorage.getItem("stellar_public_key")?.trim().toUpperCase() ?? ""
+        const expectsG = storedG.startsWith("G") && storedG.length === 56
+        const { cloneEncryptedKeyForNewCredential } = await import("@/lib/storage/browser-keys")
+        const cloned = await cloneEncryptedKeyForNewCredential(sourceCred, targetId, uid)
+        if (expectsG && !cloned?.publicKey) {
+          throw new Error("Could not copy the signing key to this passkey.")
+        }
+        if (cloned?.publicKey) {
+          sessionStorage.setItem("stellar_public_key", cloned.publicKey)
+          copiedG = true
+        }
       }
       storeCredentialIdInSession(targetId)
-      sessionStorage.setItem("stellar_public_key", cloned.publicKey)
       sessionStorage.removeItem("wallet_sync_pending")
       setWalletSyncPending(false)
       setSyncPaste("")
-      setPasskeyMessage("Wallet keys are now available for the other passkey on this browser.")
+      setPasskeyMessage(
+        copiedG
+          ? "Wallet keys are now available for the other passkey on this browser."
+          : "This browser now uses that passkey.",
+      )
       await loadPasskeyStatus()
     } catch (e) {
       setPasskeyError(e instanceof Error ? e.message : "Sync failed")

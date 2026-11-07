@@ -29,6 +29,7 @@ import {
   persistAuthIdentitySession,
   persistClientWalletSession,
 } from "@/lib/client-wallet-session"
+import { hasServerWalletSession } from "@/lib/auth/wallet-session-client"
 import { clearClientSession } from "@/lib/storage/clear-session"
 import { signalBootstrapReady } from "@/lib/app-ready"
 import { peekFaucetHandoffReturn } from "@/lib/sozu-faucet/handoff-return-storage"
@@ -172,6 +173,15 @@ function AuthPageContent() {
       const session = await loadClientWalletSession()
       if (cancelled) return
       if (session.isAuthenticated && session.userId) {
+        const serverSession = await hasServerWalletSession()
+        if (cancelled) return
+        if (serverSession === false) {
+          clearClientSession()
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalBootstrapReady())
+          })
+          return
+        }
         if (stayOnAuthForPizza) {
           setIsAuthenticated(true)
           requestAnimationFrame(() => {

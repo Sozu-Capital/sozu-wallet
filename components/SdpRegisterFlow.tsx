@@ -300,6 +300,9 @@ export function SdpRegisterFlow() {
         credentialId,
       });
 
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET === "1" || process.env.PILOT_MAINNET === "1") {
+        throw new Error("G-signer provisioning is not in the mainnet build.");
+      }
       const { prepareSdpSigningMaterial } = await import(
         "@/lib/stellar/ensure-passkey-signer"
       );

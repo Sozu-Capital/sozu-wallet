@@ -24,6 +24,7 @@ import {
 } from "@/lib/stellar/soroban-fee-payer"
 import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
 import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
+import { SorobanTransactionPendingError } from "@/lib/stellar/soroban-pending"
 
 const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
 
@@ -258,12 +259,23 @@ export async function submitSignedSorobanEnvelope(
     )
   }
   if (ledger.status !== "SUCCESS") {
-    throw new Error(
-      `Transaction ${result.hash.slice(0, 8)}… is still pending on Soroban RPC. ` +
-        "Check Stellar Expert in a minute before sending again.",
-    )
+    throw new SorobanTransactionPendingError(result.hash)
   }
   return result.hash
+}
+
+/** One RPC read. Used to turn a timed-out withdraw into a receipt once the ledger catches up. */
+export async function lookupSorobanLedger(hash: string): Promise<"SUCCESS" | "FAILED" | "PENDING"> {
+  const cfg = getStellarConfig()
+  const server = new rpc.Server(getSorobanRpcUrl(cfg.network), { allowHttp: cfg.network === "testnet" })
+  try {
+    const tx = await server.getTransaction(hash)
+    if (tx.status === Api.GetTransactionStatus.SUCCESS) return "SUCCESS"
+    if (tx.status === Api.GetTransactionStatus.FAILED) return "FAILED"
+    return "PENDING"
+  } catch {
+    return "PENDING"
+  }
 }
 
 type SorobanLedgerOutcome =

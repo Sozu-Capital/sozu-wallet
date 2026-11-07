@@ -1,14 +1,13 @@
 "use client"
 
 import type { SmartAccountKit } from "smart-account-kit"
-import { Address, hash, rpc, StrKey, xdr } from "@stellar/stellar-sdk"
-import base64url from "base64url"
+import { Address, rpc, xdr } from "@stellar/stellar-sdk"
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
-import {
-  buildExternalSignerKeyData,
-  credentialIdToBuffer,
-  resolveCredentialIdBytes,
-} from "@/lib/stellar/smartAccounts/passkeyPublicKey"
+import { resolveCredentialIdBytes } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
+import { passkeyNativeDeploySigners } from "@/lib/stellar/smartAccounts/passkeyNativeSigner"
+import { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
+
+export { deriveOzContractIdForUser, ozDeploySalt }
 
 /** Kit fields used for deploy — avoid intersecting SmartAccountKit (private fields break types). */
 type KitDeployInternals = {
@@ -29,33 +28,6 @@ function asDeployKit(kit: SmartAccountKit): KitDeployInternals {
 
 function sorobanServer(rpcUrl: string): rpc.Server {
   return new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
-}
-
-/** Per-user deploy salt so a new account does not reuse another user's C for the same passkey. */
-export function ozDeploySalt(credentialId: string, userId: string): Buffer {
-  const credBuf = base64url.toBuffer(credentialId)
-  return hash(Buffer.concat([credBuf, Buffer.from(userId.trim(), "utf8")]))
-}
-
-export function deriveOzContractIdForUser(params: {
-  credentialId: string
-  userId: string
-  networkPassphrase: string
-  deployerPublicKey: string
-}): string {
-  const salt = ozDeploySalt(params.credentialId, params.userId)
-  const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
-    new xdr.HashIdPreimageContractId({
-      networkId: hash(Buffer.from(params.networkPassphrase)),
-      contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-        new xdr.ContractIdPreimageFromAddress({
-          address: Address.fromString(params.deployerPublicKey).toScAddress(),
-          salt,
-        }),
-      ),
-    }),
-  )
-  return StrKey.encodeContract(hash(preimage.toXDR()))
 }
 
 export async function isOzContractDeployedOnChain(
@@ -142,18 +114,18 @@ export async function deployOzSmartAccountForUser(params: {
     return { contractId: derivedId }
   }
 
-  // Match smart-account-kit: suffix is raw credential id bytes (prefer stored rawId).
+  // Rule 0 is this passkey only. Policies stay empty so recovery can add context rule 1 later.
   const credentialIdBuffer = resolveCredentialIdBytes(params.credentialId)
   const salt = ozDeploySalt(params.credentialId, params.userId)
-  const keyData = buildExternalSignerKeyData(params.publicKey65, credentialIdBuffer)
-  const signer = {
-    tag: "External" as const,
-    values: [kit.webauthnVerifierAddress, keyData] as [string, Buffer],
-  }
+  const signers = passkeyNativeDeploySigners({
+    webauthnVerifierAddress: kit.webauthnVerifierAddress,
+    publicKey65: params.publicKey65,
+    credentialIdBytes: credentialIdBuffer,
+  })
 
   try {
     const deployTx = await SmartAccountClient.deploy(
-      { signers: [signer], policies: new Map() },
+      { signers, policies: new Map() },
       {
         networkPassphrase: kit.networkPassphrase,
         rpcUrl: kit.rpcUrl,
@@ -165,6 +137,19 @@ export async function deployOzSmartAccountForUser(params: {
     )
 
     await kit.signWithDeployer(deployTx as Parameters<KitDeployInternals["signWithDeployer"]>[0])
+    const signedXdr = (deployTx as { signed?: { toXDR?: () => string } }).signed?.toXDR?.()
+    if (signedXdr) {
+      const sponsored = await fetch("/api/smart-accounts/submit-deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signedXdr }),
+      })
+      if (sponsored.ok) {
+        await waitForContractOnChain(kit.rpcUrl, derivedId)
+        activateKitWallet(kit, derivedId, params.credentialId)
+        return { contractId: derivedId }
+      }
+    }
     const sent = (await (deployTx as { send: () => Promise<unknown> }).send()) as {
       result?: { options?: { contractId?: string } }
       getTransactionResponse?: { status?: string; returnValue?: unknown }

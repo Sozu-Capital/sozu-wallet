@@ -243,12 +243,17 @@ async function verifyDeployedPubkey(
   credentialId: string,
   expectedPublicKey: Uint8Array,
 ): Promise<void> {
-  const userId = getUserId()
   const q = new URLSearchParams({ contractId, credentialId })
   const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`)
-  if (!res.ok) return
-  const data = (await res.json().catch(() => ({}))) as { keyDataBase64?: string }
-  if (!data.keyDataBase64) return
+  const data = (await res.json().catch(() => ({}))) as {
+    keyDataBase64?: string
+    defaultSigner?: { signerCount?: number; onlyPasskeyExternal?: boolean }
+  }
+  if (!res.ok || !data.keyDataBase64 || data.defaultSigner?.onlyPasskeyExternal !== true) {
+    throw new Error(
+      "Could not verify that this smart account's only default signer is the passkey. Retry wallet setup.",
+    )
+  }
 
   const onChainBytes = Uint8Array.from(
     atob(data.keyDataBase64.replace(/-/g, "+").replace(/_/g, "/")),
