@@ -1,7 +1,7 @@
 import "server-only"
 
 import * as rpc from "@stellar/stellar-sdk/rpc"
-import { Keypair } from "@stellar/stellar-sdk"
+import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
@@ -27,6 +27,84 @@ export function getFunderKeypair(): Keypair | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Rebuild a fee-payer-sourced envelope on the fee payer's current sequence number.
+ * The envelope was built when the order/payment was created; any other fee-payer tx that
+ * landed since (another user's send) makes that sequence stale. Soroban auth entries are
+ * copied as signed: they bind to their own nonce and expiry ledger, not the tx sequence.
+ */
+export async function resequenceOnFeePayer(
+  server: Pick<rpc.Server, "getAccount">,
+  tx: Transaction,
+  networkPassphrase: string,
+): Promise<Transaction> {
+  const account = await server.getAccount(tx.source)
+  // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
+  // adds the Soroban resource fee a second time on the SDK that CI installs.
+  const body = xdr.Transaction.fromXDR(tx.toEnvelope().v1().tx().toXDR())
+  const next = (BigInt(account.sequenceNumber()) + BigInt(1)).toString()
+  body.seqNum(xdr.Int64.fromString(next))
+  const envelope = xdr.TransactionEnvelope.envelopeTypeTx(
+    new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
+  )
+  const rebuilt = TransactionBuilder.fromXDR(envelope.toXDR("base64"), networkPassphrase)
+  if (!(rebuilt instanceof Transaction)) {
+    throw new Error("Resequenced fee-payer envelope was not an inner transaction.")
+  }
+  return rebuilt
+}
+
+export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
+  if (result.status !== "ERROR" || !result.errorResult) return false
+  try {
+    return result.errorResult.result().switch().name === "txBadSeq"
+  } catch {
+    return false
+  }
+}
+
+/** Shared by transfers and sponsored deploys. A second instance can still collide; callers retry on txBadSeq. */
+export const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
+
+let feePayerQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Serialize fee-payer submits inside one server instance so two requests never read the same
+ * sequence number. Other instances can still collide; callers retry on txBadSeq.
+ */
+/**
+ * Block the next fee-payer submit until this source's sequence has caught the tx we just sent.
+ * `sendTransaction` returns while the tx is still pending, and `getAccount` keeps the old sequence
+ * until a ledger includes it. Releasing the lock before that lets the next submit reuse it.
+ */
+export async function waitForSourceSequence(
+  server: Pick<rpc.Server, "getAccount">,
+  source: string,
+  minimumSequence: string,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<boolean> {
+  const attempts = opts.attempts ?? 12
+  const delayMs = opts.delayMs ?? 1000
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const account = await server.getAccount(source)
+      if (BigInt(account.sequenceNumber()) >= BigInt(minimumSequence)) return true
+    } catch {
+      /* account not visible yet */
+    }
+    if (i < attempts - 1 && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  return false
+}
+
+export function withFeePayerLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = feePayerQueue.then(fn, fn)
+  feePayerQueue = run.catch(() => undefined)
+  return run
 }
 
 async function sorobanAccountExists(publicKey: string, network: StellarNetwork): Promise<boolean> {

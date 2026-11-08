@@ -1,10 +1,12 @@
-import { Account, Address, Networks, Operation, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
+import { Account, Address, Keypair, Networks, Operation, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
 import { describe, expect, it } from "vitest"
 import {
   assertSponsoredCreateContract,
+  buildSignedSponsoredFeeBump,
   SPONSORED_DEPLOY_FEE,
   sponsoredDeployNetworkPassphrase,
 } from "@/lib/stellar/deploy-fee-bump"
+import { resequenceOnFeePayer } from "@/lib/stellar/soroban-fee-payer"
 import { ozDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
 import {
   OZ_SMART_ACCOUNT_WASM_HASH_TESTNET,
@@ -85,5 +87,25 @@ describe("sponsored deploy envelope", () => {
       else process.env.STELLAR_NETWORK = previous
     }
     expect(SPONSORED_DEPLOY_FEE).toBe("500000")
+  })
+
+  it("rebuilds the deployer sequence before the funder fee-bumps the deploy", async () => {
+    const stale = createContractTx(salt, wasm)
+    stale.sign(ozKitDeployerKeypair())
+    const server = { getAccount: async (id: string) => new Account(id, "40") }
+    const fresh = await resequenceOnFeePayer(server as never, stale, Networks.TESTNET)
+    fresh.sign(ozKitDeployerKeypair())
+    const funder = Keypair.random()
+    const bump = buildSignedSponsoredFeeBump({
+      inner: fresh,
+      funder,
+      networkPassphrase: Networks.TESTNET,
+    })
+
+    expect(fresh.sequence).toBe("41")
+    expect(fresh.signatures).toHaveLength(1)
+    expect(bump.innerTransaction.sequence).toBe("41")
+    expect(bump.feeSource).toBe(funder.publicKey())
+    expect(bump.signatures).toHaveLength(1)
   })
 })

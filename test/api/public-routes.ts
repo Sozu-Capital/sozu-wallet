@@ -53,6 +53,9 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   "/api/offline/prepare": { reason: "builds an unsigned settle tx from a passkey-signed cheque" },
   "/api/offline/submit": { reason: "submits a passkey-signed cheque" },
   "/api/deposits/sumup/webhook": { reason: "provider webhook" },
+  "/api/cron/fee-payer-balance": {
+    reason: "fee-payer XLM balance for ops; authorized by CRON_SECRET, not a wallet session",
+  },
   "/api/gmail/callback": { reason: "OAuth callback, bound by the OAuth state parameter" },
 
   // SDP onboarding: keyed by the HMAC-signed SDP invite cookie, not by wallet identity.
