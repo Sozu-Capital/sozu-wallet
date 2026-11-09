@@ -18,6 +18,7 @@ import { formatReferenceAmount } from "@/lib/ledger/format-fiat"
 import {
   fiatDecimals,
   fiatFromUsdcAmount,
+  formatSendInputAmount,
   usdcFromInputAmount,
 } from "@/lib/payment/send-amount-currency"
 import {
@@ -30,7 +31,6 @@ import {
   paymentRailForAddress,
 } from "@/lib/payment/payment-rail"
 import { isValidStellarReceiveAddress } from "@/lib/payment/stellar-address"
-import { groupAddressForDisplay } from "@/lib/payment/address-display"
 import { formatBalance, getUserId } from "@/lib/wallet-utils"
 import type { ReferenceFiat } from "@/lib/treasury/types"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
@@ -181,6 +181,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   const manualRecipientInputRef = useRef<HTMLInputElement>(null)
   const amountInputRef = useRef<HTMLInputElement>(null)
   const [keyboardInset, setKeyboardInset] = useState(0)
+  const [amountFieldUnlocked, setAmountFieldUnlocked] = useState(false)
 
   const resetModalScroll = useCallback(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, left: 0 })
@@ -370,6 +371,40 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   )
   const availableUsdcFormatted = `${formatBalance(availableBalance)} USDC`
 
+  const applyMaxAmount = () => {
+    setAmountError(null)
+    if (isPizzaSend) {
+      setSendAmount(String(Math.max(0, Math.floor(pizzaHeld ?? 0))))
+      return
+    }
+    if (amountInputCurrency === "usdc") {
+      const floored = Math.floor(availableBalance * 1e7) / 1e7
+      const trimmed = floored.toFixed(7).replace(/\.?0+$/, "")
+      setSendAmount(trimmed || "0")
+      return
+    }
+    const decimals = fiatDecimals(referenceFiat)
+    const factor = 10 ** decimals
+    let fiat = Number(
+      formatSendInputAmount(referenceDisplayValue(availableBalance), "fiat", referenceFiat),
+    )
+    while (fiat > 0 && usdcFromInputAmount(fiat, "fiat", referenceFiat) > availableBalance + 1e-8) {
+      fiat = Math.round((fiat - 1 / factor) * factor) / factor
+    }
+    setSendAmount(formatSendInputAmount(Math.max(0, fiat), "fiat", referenceFiat))
+  }
+
+  const recipientLabel = (() => {
+    const trimmed = sendRecipient.trim()
+    const compact = trimmed.replace(/\s/g, "")
+    const looksLikeAddress = /^[CG][A-Z0-9]{20,}$/i.test(compact)
+    if (!looksLikeAddress && trimmed) {
+      return `$${trimmed.replace(/^\$+/, "")}`
+    }
+    const addr = (resolvedRecipientAddress ?? compact).toUpperCase()
+    return addr.length > 12 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : trimmed
+  })()
+
   const displayUsdc = hasValidAmount
     ? amountInputCurrency === "usdc"
       ? parsedAmount
@@ -391,6 +426,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   const amountUsdcFormatted = hasValidAmount
     ? `${formatBalance(displayUsdc)} USDC`
     : `${formatBalance(0)} USDC`
+
+  // Keep the amount field read-only until focus so Safari doesn't treat it as a password.
+  useEffect(() => {
+    if (!isOpen || sendStep !== "amount") setAmountFieldUnlocked(false)
+  }, [isOpen, sendStep])
 
   // Re-focus when currency toggles so iOS swaps numeric ↔ decimal pad.
   useEffect(() => {
@@ -632,6 +672,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                     <Input
                       ref={recipientInputRef}
                       type="text"
+                      name="sozu-tag"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       value={sendRecipient}
                       onChange={(e) => {
                         setSendRecipient(e.target.value)
@@ -755,6 +800,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                   <Input
                     ref={manualRecipientInputRef}
                     type="text"
+                    name="sozu-address"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     value={sendRecipient}
                     onChange={(e) => {
                       setSendRecipient(e.target.value)
@@ -841,18 +891,9 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                 aria-label="Edit recipient"
               >
                 <span className="flex items-center gap-2">
-                  <span className="text-white/40 text-xs uppercase tracking-widest">To</span>
-                  {resolvedRecipientAddress && resolvedRecipientAddress !== sendRecipient.trim().toUpperCase() ? (
-                    <span className="text-white/90 text-sm">{sendRecipient}</span>
-                  ) : null}
+                  <span className="text-white/40 text-xs uppercase tracking-widest">{t.sendTo}</span>
+                  <span className="text-base font-medium text-white">{recipientLabel}</span>
                 </span>
-                {resolvedRecipientAddress ? (
-                  <span className="w-full break-all text-center font-mono text-[12px] leading-relaxed text-white/90">
-                    {groupAddressForDisplay(resolvedRecipientAddress)}
-                  </span>
-                ) : (
-                  <span className="text-white/90 text-sm font-mono break-all">{sendRecipient}</span>
-                )}
               </button>
               {legacyPaymentNotice ? (
                 <p className="text-amber-200/90 text-xs text-center px-2 leading-snug">
@@ -893,15 +934,24 @@ export const SendPaymentModal = memo(function SendPaymentModal({
               transition={{ duration: 0.5 }}
               className="space-y-2"
             >
+              <div className="relative">
               <Input
                 ref={amountInputRef}
                 type="text"
+                name="sozu-send-amount"
                 inputMode={amountInputMode}
                 pattern={amountUsesIntegerPad ? "[0-9]*" : "[0-9.,]*"}
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                readOnly={!amountFieldUnlocked}
                 value={sendAmount}
                 onChange={(e) => handleAmountChange(e.target.value)}
-                onFocus={resetModalScroll}
+                onFocus={() => {
+                  setAmountFieldUnlocked(true)
+                  resetModalScroll()
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && hasValidAmount && !isSending) {
                     e.preventDefault()
@@ -909,11 +959,20 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                   }
                 }}
                 placeholder={amountPlaceholder}
-                className={`bg-white/5 text-white placeholder:text-white/40 text-2xl text-center h-16 font-semibold tabular-nums transition-colors ${
+                className={`bg-white/5 text-white placeholder:text-white/40 text-2xl text-center h-16 font-semibold tabular-nums transition-colors pr-16 ${
                   amountError ? "border-red-500/60" : "border-white/20"
                 }`}
                 enterKeyHint="done"
               />
+              <button
+                type="button"
+                onClick={applyMaxAmount}
+                disabled={isSending}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              >
+                {t.sendMax}
+              </button>
+              </div>
 
               <AnimatePresence>
                 {amountError && (

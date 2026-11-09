@@ -41,6 +41,7 @@ import { TransactionHistory } from "@/components/wallet/transaction-history"
 import { BottomMenuBar } from "@/components/wallet/bottom-menu-bar"
 import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indicator"
 import { WalletActivityList } from "@/components/wallet/wallet-activity-list"
+import { HomeDiscoverGrid } from "@/components/home/home-discover-grid"
 import { UniversalCommandBar } from "@/components/home/universal-command-bar"
 import { WithdrawDestinationSheet } from "@/components/home/withdraw-destination-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
@@ -839,6 +840,8 @@ export function WalletScreen({
               swipeUpStartX.current = null
               const dy = startY - e.changedTouches[0].clientY
               const dx = Math.abs(e.changedTouches[0].clientX - startX)
+              const touchTarget = e.target instanceof Element ? e.target : null
+              if (touchTarget?.closest("[data-home-discover]")) return
               if (dx > 48) return
               if (dy > 32 && startY < 140) {
                 setIsWalletSwitcherOpen(true)
@@ -899,7 +902,7 @@ export function WalletScreen({
                   className="flex min-h-0 flex-1 flex-col px-6 transition-transform duration-150 ease-out"
                   style={{ transform: pull > 0 ? `translateY(${pull * 0.35}px)` : undefined }}
                 >
-                  <div className="flex min-h-0 flex-1 flex-col items-center pt-4">
+                  <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-y-contain pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                     <div className="flex w-full max-w-md flex-col">
                       {isBalanceLoading ? (
                         <BalanceCardSkeleton compact className="mb-8" />
@@ -913,11 +916,14 @@ export function WalletScreen({
                       {isBalanceLoading ? (
                         <CommandBarSkeleton className="mt-2" />
                       ) : (
-                        <UniversalCommandBar
-                          className="mt-2"
-                          onDepositClick={handleDeposit}
-                          onWithdrawClick={handleWithdraw}
-                        />
+                        <>
+                          <UniversalCommandBar
+                            className="mt-2"
+                            onDepositClick={handleDeposit}
+                            onWithdrawClick={handleWithdraw}
+                          />
+                          <HomeDiscoverGrid className="mt-8" />
+                        </>
                       )}
                     </div>
                   </div>

@@ -41,6 +41,8 @@ export type WalletTexts = {
   confirmWithPasskey: string;
   submitting: string;
   send: string;
+  sendTo: string;
+  sendMax: string;
   sendTapToSwitchCurrency: string;
   sendApproxUsdc: string;
   sendApproxFiat: string;
@@ -216,6 +218,19 @@ export type WalletTexts = {
   offlineWindowSaved: string;
   offlineWindowEmpty: string;
   cmdSavings: string;
+  homeDollarsEyebrow: string;
+  homeDollarsTitle: string;
+  homeDollarsBody: string;
+  homeInviteTitle: string;
+  homeInviteBody: string;
+  homeInviteShare: string;
+  homeInviteReady: string;
+  homeLinkCopied: string;
+  homeFeedbackTitle: string;
+  homeFeedbackBody: string;
+  homeFeedbackPlaceholder: string;
+  homeFeedbackSend: string;
+  homeFeedbackReady: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -569,6 +584,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirmar con passkey...",
     submitting: "Enviando transacción...",
     send: "Enviar",
+    sendTo: "Para",
+    sendMax: "Máx",
     sendTapToSwitchCurrency: "Toca la moneda para cambiar",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -751,6 +768,20 @@ export const walletTexts = {
     offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
     offlineWindowEmpty: "Todavía no hay un saldo guardado. Abre la billetera una vez con internet.",
     cmdSavings: "Ahorro",
+    homeDollarsEyebrow: "Dólares digitales",
+    homeDollarsTitle: "Conoce más",
+    homeDollarsBody:
+      "USDC es un dólar digital. En Sozu está en tu cuenta y lo puedes enviar a otra persona con un toque.",
+    homeInviteTitle: "Invita a alguien",
+    homeInviteBody: "A probar la app",
+    homeInviteShare: "Prueba Sozu, dólares digitales en el teléfono.",
+    homeInviteReady: "Listo para invitar.",
+    homeLinkCopied: "Enlace copiado.",
+    homeFeedbackTitle: "Deja tu opinión",
+    homeFeedbackBody: "Cuéntanos cómo se sintió",
+    homeFeedbackPlaceholder: "Qué te gustó, qué faltó…",
+    homeFeedbackSend: "Enviar",
+    homeFeedbackReady: "Gracias. Tu nota quedó lista para compartir.",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -1074,6 +1105,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirm with passkey...",
     submitting: "Submitting...",
     send: "Send",
+    sendTo: "To",
+    sendMax: "Max",
     sendTapToSwitchCurrency: "Tap currency to switch",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -1252,6 +1285,20 @@ export const walletTexts = {
     offlineWindowSaved: "Balance saved on this phone the last time it was online.",
     offlineWindowEmpty: "No balance is saved yet. Open the wallet once while online.",
     cmdSavings: "Savings",
+    homeDollarsEyebrow: "Digital dollars",
+    homeDollarsTitle: "Learn more",
+    homeDollarsBody:
+      "USDC is a digital dollar. In Sozu it sits in your account, and you can send it to someone with a tap.",
+    homeInviteTitle: "Invite someone",
+    homeInviteBody: "To try the app",
+    homeInviteShare: "Try Sozu, digital dollars on your phone.",
+    homeInviteReady: "Ready to invite.",
+    homeLinkCopied: "Link copied.",
+    homeFeedbackTitle: "Leave feedback",
+    homeFeedbackBody: "Tell us how it felt",
+    homeFeedbackPlaceholder: "What worked, what was missing…",
+    homeFeedbackSend: "Send",
+    homeFeedbackReady: "Thanks. Your note is ready to share.",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",

@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDownToLine, ArrowUpFromLine, Landmark, PiggyBank } from "lucide-react"
+import { ArrowDownToLine, ArrowUpFromLine, Landmark, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { formatWalletText } from "@/lib/wallet-texts"
@@ -34,7 +34,7 @@ export function UniversalCommandBar({
     { key: "deposit", label: t.cmdDeposit, icon: ArrowDownToLine, onClick: onDepositClick },
     { key: "withdraw", label: t.cmdWithdraw, icon: ArrowUpFromLine, onClick: onWithdrawClick },
     { key: "credit", label: t.cmdCredit, icon: Landmark, onClick: () => showComingSoon(t.cmdCredit) },
-    { key: "savings", label: t.cmdSavings, icon: PiggyBank, onClick: () => showComingSoon(t.cmdSavings) },
+    { key: "savings", label: t.cmdSavings, icon: TrendingUp, onClick: () => showComingSoon(t.cmdSavings) },
   ] as const
 
   return (
