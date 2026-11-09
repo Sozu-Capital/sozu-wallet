@@ -205,6 +205,16 @@ export type WalletTexts = {
   cmdOfframp: string;
   cmdDeposit: string;
   cmdWithdraw: string;
+  withdrawDestinationTitle: string;
+  withdrawToSozuWallet: string;
+  withdrawToSozuWalletHint: string;
+  withdrawToBank: string;
+  withdrawToBankHint: string;
+  withdrawBankUnavailable: string;
+  offlineWindowTitle: string;
+  offlineWindowAvailable: string;
+  offlineWindowSaved: string;
+  offlineWindowEmpty: string;
   cmdBusiness: string;
   cmdPlan: string;
   cmdCredit: string;
@@ -271,6 +281,7 @@ export type WalletTexts = {
   depositFaucetBusy: string;
   depositFaucetSuccess: string;
   depositFaucetError: string;
+  depositFaucetDailyLimit: string;
   // Fiat deposit flow (bank transfer)
   depositFiatTabLabel: string;
   depositCryptoTabLabel: string;
@@ -729,6 +740,16 @@ export const walletTexts = {
     cmdOfframp: "Retiro",
     cmdDeposit: "Depositar",
     cmdWithdraw: "Retirar",
+    withdrawDestinationTitle: "Retirar",
+    withdrawToSozuWallet: "Otra billetera Sozu",
+    withdrawToSozuWalletHint: "Envía USDC a un $sozutag o una dirección.",
+    withdrawToBank: "Cuenta bancaria",
+    withdrawToBankHint: "Convierte USDC y retíralo a tu banco.",
+    withdrawBankUnavailable: "El retiro a banco no está activo en este entorno.",
+    offlineWindowTitle: "Sin conexión",
+    offlineWindowAvailable: "Disponible para pagos offline",
+    offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
+    offlineWindowEmpty: "Todavía no hay un saldo guardado. Abre la billetera una vez con internet.",
     cmdBusiness: "Negocio",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
@@ -789,11 +810,12 @@ export const walletTexts = {
       "Los pagos usan BlendUSDC en tu cuenta C (no el USDC clásico de Circle en G). Copia tu dirección C abajo y recibe BlendUSDC ahí.",
     depositBlendFaucet: "Abrir testnet.blend.capital",
     depositBlendPool: "Pool USDC (Blend)",
-    depositFaucetCta: "Obtener 20 USDC de prueba",
-    depositFaucetHint: "Un clic — Circle USDC (testnet) vía Sozu Faucet.",
+    depositFaucetCta: "Obtener 100 USDC de prueba",
+    depositFaucetHint: "Una vez por billetera al día.",
     depositFaucetBusy: "Fondeando…",
-    depositFaucetSuccess: "Listo — 20 USDC en camino. Yendo al inicio…",
+    depositFaucetSuccess: "Listo — 100 USDC en camino. Yendo al inicio…",
     depositFaucetError: "No se pudo fondear. Intenta de nuevo.",
+    depositFaucetDailyLimit: "Ya reclamaste hoy. 100 USDC de prueba, una vez por billetera al día.",
     depositFiatTabLabel: "Pesos CLP",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Depósito en pesos",
@@ -1219,6 +1241,16 @@ export const walletTexts = {
     cmdOfframp: "Offramp",
     cmdDeposit: "Deposit",
     cmdWithdraw: "Withdraw",
+    withdrawDestinationTitle: "Withdraw",
+    withdrawToSozuWallet: "Another Sozu wallet",
+    withdrawToSozuWalletHint: "Send USDC to a $sozutag or an address.",
+    withdrawToBank: "Bank account",
+    withdrawToBankHint: "Convert USDC and withdraw it to your bank.",
+    withdrawBankUnavailable: "Bank withdrawal isn't turned on in this environment.",
+    offlineWindowTitle: "No connection",
+    offlineWindowAvailable: "Available for offline payments",
+    offlineWindowSaved: "Balance saved on this phone the last time it was online.",
+    offlineWindowEmpty: "No balance is saved yet. Open the wallet once while online.",
     cmdBusiness: "Business",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
@@ -1279,11 +1311,12 @@ export const walletTexts = {
       "Payments use BlendUSDC on your C smart account (not classic Circle USDC on G). Copy your C address below and receive BlendUSDC there.",
     depositBlendFaucet: "Open testnet.blend.capital",
     depositBlendPool: "USDC pool (Blend)",
-    depositFaucetCta: "Get 20 testnet USDC",
-    depositFaucetHint: "One click — Circle USDC (testnet) via Sozu Faucet.",
+    depositFaucetCta: "Get 100 testnet USDC",
+    depositFaucetHint: "Once per wallet per day.",
     depositFaucetBusy: "Funding…",
-    depositFaucetSuccess: "Done — 20 USDC on the way. Heading home…",
+    depositFaucetSuccess: "Done — 100 USDC on the way. Heading home…",
     depositFaucetError: "Could not fund. Try again.",
+    depositFaucetDailyLimit: "You already claimed today. 100 testnet USDC, once per wallet per day.",
     depositFiatTabLabel: "CLP pesos",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Peso deposit",

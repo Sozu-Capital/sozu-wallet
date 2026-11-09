@@ -15,6 +15,7 @@ import {
   writeCachedUsdcBalance,
   type CachedUsdcBalance,
 } from "@/lib/wallet/cached-usdc-balance"
+import { offlineCardUsdc, saveOfflineBalanceLocal } from "@/lib/offline/offline-balance"
 
 export interface Vault {
   id: string
@@ -116,6 +117,13 @@ export function useWalletData() {
     return sessionStorage.getItem("wallet_setup_error")
   })
   const [isFinishingSetup, setIsFinishingSetup] = useState(false)
+
+  useEffect(() => {
+    if (!walletAddress || !defindexBalance) return
+    const usdc = offlineCardUsdc(defindexBalance)
+    if (usdc == null) return
+    saveOfflineBalanceLocal({ wallet: walletAddress, usdc })
+  }, [walletAddress, defindexBalance])
 
   // LRU cache for address-to-tag mapping (limit to 100 entries)
   const updateAddressToTagMap = useCallback((address: string, tag: string) => {

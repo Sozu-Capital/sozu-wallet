@@ -14,7 +14,6 @@ import { useWalletLanguage } from "@/lib/wallet-language"
 import { getWithdrawTexts } from "@/lib/withdraw/withdraw-texts"
 import { getUserId } from "@/lib/wallet-utils"
 import { cn } from "@/lib/utils"
-import { rampEnabled } from "@/lib/app-config"
 import { getOrCreateRealWallet } from "@/lib/stellar/wallet-creator"
 import {
   isSmartContractWalletAddress,
@@ -44,6 +43,7 @@ import { BottomMenuBar } from "@/components/wallet/bottom-menu-bar"
 import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indicator"
 import { WalletActivityList } from "@/components/wallet/wallet-activity-list"
 import { UniversalCommandBar } from "@/components/home/universal-command-bar"
+import { WithdrawDestinationSheet } from "@/components/home/withdraw-destination-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
 import { transactionToPaymentReceipt } from "@/lib/payment/transaction-to-receipt"
@@ -165,6 +165,7 @@ export function WalletScreen({
   )
   const [isOfframpOpen, setIsOfframpOpen] = useState(false)
   const [isWithdrawAllOpen, setIsWithdrawAllOpen] = useState(false)
+  const [isWithdrawDestOpen, setIsWithdrawDestOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
@@ -408,7 +409,17 @@ export function WalletScreen({
     setIsDepositOpen(true)
   }, [setIsDepositOpen])
 
-  const handleOfframp = useCallback(() => {
+  const handleWithdraw = useCallback(() => {
+    setIsWithdrawDestOpen(true)
+  }, [])
+
+  const handleWithdrawToWallet = useCallback(() => {
+    setIsWithdrawDestOpen(false)
+    setSendModalOpen(true)
+  }, [setSendModalOpen])
+
+  const handleWithdrawToBank = useCallback(() => {
+    setIsWithdrawDestOpen(false)
     setIsOfframpOpen(true)
   }, [])
 
@@ -719,11 +730,16 @@ export function WalletScreen({
         />
       </Suspense>
 
-      {rampEnabled ? (
-        <Suspense fallback={null}>
-          <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
-        </Suspense>
-      ) : null}
+      <WithdrawDestinationSheet
+        open={isWithdrawDestOpen}
+        onClose={() => setIsWithdrawDestOpen(false)}
+        onSozuWallet={handleWithdrawToWallet}
+        onBank={handleWithdrawToBank}
+      />
+
+      <Suspense fallback={null}>
+        <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
+      </Suspense>
 
       <Suspense fallback={null}>
         <WithdrawAllModal
@@ -922,7 +938,7 @@ export function WalletScreen({
                         <UniversalCommandBar
                           className="mt-2"
                           onDepositClick={handleDeposit}
-                          onWithdrawClick={handleOfframp}
+                          onWithdrawClick={handleWithdraw}
                         />
                       )}
                       <button

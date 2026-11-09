@@ -32,6 +32,35 @@ type DepositModalProps = {
 
 type CopyMode = "tag" | "address"
 
+const FAUCET_COOLDOWN_KEY = "sozu_faucet_claim_until_v1"
+const FAUCET_COOLDOWN_MS = 24 * 60 * 60 * 1000
+
+function readFaucetCooldown(wallet: string): boolean {
+  try {
+    const raw = localStorage.getItem(FAUCET_COOLDOWN_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { wallet?: string; until?: number }
+    return (
+      parsed.wallet === wallet.trim().toUpperCase() &&
+      typeof parsed.until === "number" &&
+      parsed.until > Date.now()
+    )
+  } catch {
+    return false
+  }
+}
+
+function writeFaucetCooldown(wallet: string, untilMs: number) {
+  try {
+    localStorage.setItem(
+      FAUCET_COOLDOWN_KEY,
+      JSON.stringify({ wallet: wallet.trim().toUpperCase(), until: untilMs }),
+    )
+  } catch {
+    /* private mode or quota */
+  }
+}
+
 function buildAddressQrPayload(address: string): string {
   return address
 }
@@ -62,6 +91,7 @@ export function DepositModal({
   const [resolving, setResolving] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [faucetBusy, setFaucetBusy] = useState(false)
+  const [faucetLocked, setFaucetLocked] = useState(false)
   const [faucetStatus, setFaucetStatus] = useState<"idle" | "ok" | "err">("idle")
   const [faucetError, setFaucetError] = useState<string | null>(null)
   // "crypto" = existing QR flow; "fiat" = CLP bank transfer (closed beta only)
@@ -185,6 +215,13 @@ export function DepositModal({
     [effectiveAddress],
   )
 
+  useEffect(() => {
+    if (!isOpen) return
+    const wallet = effectiveAddress || address
+    if (!wallet) return
+    setFaucetLocked(readFaucetCooldown(wallet))
+  }, [isOpen, effectiveAddress, address])
+
   const qrCaption = effectiveAddress
     ? effectiveAddress.startsWith("C")
       ? `${formatWalletText(t.depositAddressCaption, { addr: addressLabel })} · ${t.depositSmartAccountHint}`
@@ -208,18 +245,29 @@ export function DepositModal({
   }
 
   const handleSozuFaucetFund = async () => {
-    if (faucetBusy || walletNetwork !== "testnet") return
+    if (faucetBusy || faucetLocked || walletNetwork !== "testnet") return
     setFaucetBusy(true)
     setFaucetStatus("idle")
     setFaucetError(null)
     try {
       const result = await fundViaSozuFaucet(effectiveAddress || address)
+      const fundedWallet = ("to" in result && result.to) || effectiveAddress || address
       if (result.ok) {
+        writeFaucetCooldown(fundedWallet, Date.now() + FAUCET_COOLDOWN_MS)
+        setFaucetLocked(true)
         setFaucetStatus("ok")
         markWelcomeOnboardingComplete()
         markWalletActivationComplete()
         onClose()
         router.replace("/home")
+        return
+      }
+      if (result.reason === "wallet_daily_limit") {
+        const until = result.nextAvailableAt ? Date.parse(result.nextAvailableAt) : Number.NaN
+        writeFaucetCooldown(fundedWallet, Number.isFinite(until) ? until : Date.now() + FAUCET_COOLDOWN_MS)
+        setFaucetLocked(true)
+        setFaucetStatus("err")
+        setFaucetError(t.depositFaucetDailyLimit)
         return
       }
       setFaucetStatus("err")
@@ -272,7 +320,7 @@ export function DepositModal({
         >
           <button
             type="button"
-            disabled={faucetBusy || resolving || !effectiveAddress}
+            disabled={faucetBusy || faucetLocked || resolving || !effectiveAddress}
             onClick={() => void handleSozuFaucetFund()}
             className="flex w-full items-center justify-center rounded-2xl border border-white/20 bg-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/90 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] backdrop-blur-sm transition hover:bg-white/[0.14] hover:text-white active:scale-[0.99] disabled:opacity-50"
           >
@@ -284,6 +332,8 @@ export function DepositModal({
             <p className="text-center text-[10px] text-red-300/90">
               {faucetError || t.depositFaucetError}
             </p>
+          ) : faucetLocked ? (
+            <p className="text-center text-[10px] text-white/55">{t.depositFaucetDailyLimit}</p>
           ) : (
             <p className="text-center text-[10px] text-white/40">{t.depositFaucetHint}</p>
           )}
