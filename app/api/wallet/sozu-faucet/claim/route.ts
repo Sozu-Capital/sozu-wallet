@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { requireSession } from "@/lib/auth/session"
+import { markWalletDepositClaim, reserveWalletDepositClaim } from "@/lib/db/sozu-faucet-claims"
 import { getSozuFaucetUrl } from "@/lib/sozu-faucet/config"
 import { mintSozuFaucetToken } from "@/lib/sozu-faucet/mint-token"
+import { faucetFailureConsumesDailyClaim } from "@/lib/sozu-faucet/wallet-claim-limit"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 
@@ -31,6 +33,7 @@ function isValidStellarAddress(addr: string): boolean {
 /**
  * POST /api/wallet/sozu-faucet/claim
  * One-click testnet Circle USDC via standalone Sozu Faucet (Mode A JWT).
+ * One successful claim per wallet and per account per 24 hours.
  */
 export async function POST(request: Request) {
   const auth = requireSession(request)
@@ -55,6 +58,8 @@ export async function POST(request: Request) {
   } catch {
     body = {}
   }
+
+  let claimId: string | null = null
 
   try {
     const wallet = await getStellarWallet(userId, true).catch(() => null)
@@ -97,11 +102,57 @@ export async function POST(request: Request) {
       )
     }
 
+    try {
+      const reserved = await reserveWalletDepositClaim({ userId, walletAddress })
+      if (!reserved.ok) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "This wallet already claimed testnet USDC today.",
+            reason: "wallet_daily_limit",
+            nextAvailableAt: reserved.nextAvailableAt,
+            to: walletAddress,
+          },
+          { status: 429 },
+        )
+      }
+      claimId = reserved.claimId
+    } catch (err) {
+      console.error("[sozu-faucet/claim] reserve", err)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Faucet claim limit is unavailable. Try again in a moment.",
+          reason: "claim_limit_unavailable",
+        },
+        { status: 503 },
+      )
+    }
+
+    if (!claimId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Faucet claim limit is unavailable. Try again in a moment.",
+          reason: "claim_limit_unavailable",
+        },
+        { status: 503 },
+      )
+    }
+    const reservedClaimId = claimId
+
+    const releaseClaim = async () => {
+      await markWalletDepositClaim(reservedClaimId, "failed", null, null).catch((err) => {
+        console.error("[sozu-faucet/claim] release", err)
+      })
+    }
+
     let token: string
     try {
       token = mintSozuFaucetToken({ userId, walletAddress })
     } catch (err) {
       console.error("[sozu-faucet/claim] mint", err)
+      await releaseClaim()
       return NextResponse.json(
         {
           success: false,
@@ -126,14 +177,22 @@ export async function POST(request: Request) {
     const claimBody = (await claimRes.json().catch(() => ({}))) as FaucetClaimJson
 
     if (!claimRes.ok || !claimBody.success) {
+      const reason = claimBody.reason ?? "payment_failed"
+      if (faucetFailureConsumesDailyClaim(reason, claimRes.status)) {
+        await markWalletDepositClaim(reservedClaimId, "success", claimBody.txHash ?? null, claimBody.amount ?? null).catch(
+          (err) => console.error("[sozu-faucet/claim] consume", err),
+        )
+      } else {
+        await releaseClaim()
+      }
       return NextResponse.json(
         {
           success: false,
-          amount: claimBody.amount ?? 20,
+          amount: claimBody.amount ?? 100,
           error:
             claimBody.error ??
             `Faucet claim failed (${claimRes.status}). Try again shortly.`,
-          reason: claimBody.reason ?? "payment_failed",
+          reason,
           nextAvailableAt: claimBody.nextAvailableAt,
           to: walletAddress,
         },
@@ -141,9 +200,16 @@ export async function POST(request: Request) {
       )
     }
 
+    await markWalletDepositClaim(
+      reservedClaimId,
+      "success",
+      claimBody.txHash ?? null,
+      typeof claimBody.amount === "number" ? claimBody.amount : null,
+    ).catch((err) => console.error("[sozu-faucet/claim] complete", err))
+
     return NextResponse.json({
       success: true,
-      amount: claimBody.amount ?? 20,
+      amount: claimBody.amount ?? 100,
       asset: claimBody.asset ?? "circle_usdc_sac",
       network: "testnet",
       to: claimBody.to ?? walletAddress,
@@ -152,6 +218,11 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error("[POST /api/wallet/sozu-faucet/claim]", err)
+    if (claimId) {
+      await markWalletDepositClaim(claimId, "failed", null, null).catch((releaseErr) => {
+        console.error("[sozu-faucet/claim] release", releaseErr)
+      })
+    }
     return NextResponse.json(
       {
         success: false,

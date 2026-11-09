@@ -72,7 +72,7 @@ export function OfframpModal({ open, onClose }: OfframpModalProps) {
 
   // Fresh state every time the modal opens — no stale quote/phase from a previous visit.
   useEffect(() => {
-    if (!open) return
+    if (!open || !rampEnabled) return
     reset()
     setAmountUsdc("")
     setQuoteRefreshTick(0)
@@ -137,7 +137,7 @@ export function OfframpModal({ open, onClose }: OfframpModalProps) {
     return () => clearInterval(id)
   }, [quote])
 
-  if (!open || !mounted || !rampEnabled) return null
+  if (!open || !mounted) return null
 
   const errorText = offrampErrorText(error, t)
 
@@ -180,7 +180,9 @@ export function OfframpModal({ open, onClose }: OfframpModalProps) {
           {t.rampOfframpTitle}
         </p>
 
-        {gateStatus === "loading" ? (
+        {!rampEnabled ? (
+          <p className="text-sm leading-relaxed text-white/70">{t.withdrawBankUnavailable}</p>
+        ) : gateStatus === "loading" ? (
           <div className="h-32 w-full animate-pulse rounded-2xl bg-white/5" />
         ) : gateStatus === "blocked" ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/70">

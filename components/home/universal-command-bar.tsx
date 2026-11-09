@@ -1,8 +1,9 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { ArrowDownToLine, ArrowUpFromLine, Briefcase, Landmark } from "lucide-react"
+import { ArrowDownToLine, ArrowUpFromLine, Landmark, TrendingUp } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { formatWalletText } from "@/lib/wallet-texts"
 import { useWalletLanguage } from "@/lib/wallet-language"
 
 const actionIconClass = cn(
@@ -21,14 +22,19 @@ export function UniversalCommandBar({
   onDepositClick?: () => void
   onWithdrawClick?: () => void
 }) {
-  const router = useRouter()
   const { t } = useWalletLanguage()
+
+  const showComingSoon = (label: string) => {
+    toast(t.comingSoon, {
+      description: formatWalletText(t.comingSoonDesc, { label }),
+    })
+  }
 
   const actions = [
     { key: "deposit", label: t.cmdDeposit, icon: ArrowDownToLine, onClick: onDepositClick },
     { key: "withdraw", label: t.cmdWithdraw, icon: ArrowUpFromLine, onClick: onWithdrawClick },
-    { key: "credit", label: t.cmdCredit, icon: Landmark, onClick: () => router.push("/credit") },
-    { key: "business", label: t.cmdBusiness, icon: Briefcase, onClick: () => router.push("/dashboard/business") },
+    { key: "credit", label: t.cmdCredit, icon: Landmark, onClick: () => showComingSoon(t.cmdCredit) },
+    { key: "savings", label: t.cmdSavings, icon: TrendingUp, onClick: () => showComingSoon(t.cmdSavings) },
   ] as const
 
   return (

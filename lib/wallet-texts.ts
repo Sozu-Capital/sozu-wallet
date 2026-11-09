@@ -41,6 +41,8 @@ export type WalletTexts = {
   confirmWithPasskey: string;
   submitting: string;
   send: string;
+  sendTo: string;
+  sendMax: string;
   sendTapToSwitchCurrency: string;
   sendApproxUsdc: string;
   sendApproxFiat: string;
@@ -205,7 +207,30 @@ export type WalletTexts = {
   cmdOfframp: string;
   cmdDeposit: string;
   cmdWithdraw: string;
-  cmdBusiness: string;
+  withdrawDestinationTitle: string;
+  withdrawToSozuWallet: string;
+  withdrawToSozuWalletHint: string;
+  withdrawToBank: string;
+  withdrawToBankHint: string;
+  withdrawBankUnavailable: string;
+  offlineWindowTitle: string;
+  offlineWindowAvailable: string;
+  offlineWindowSaved: string;
+  offlineWindowEmpty: string;
+  cmdSavings: string;
+  homeDollarsEyebrow: string;
+  homeDollarsTitle: string;
+  homeDollarsBody: string;
+  homeInviteTitle: string;
+  homeInviteBody: string;
+  homeInviteShare: string;
+  homeInviteReady: string;
+  homeLinkCopied: string;
+  homeFeedbackTitle: string;
+  homeFeedbackBody: string;
+  homeFeedbackPlaceholder: string;
+  homeFeedbackSend: string;
+  homeFeedbackReady: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -271,6 +296,7 @@ export type WalletTexts = {
   depositFaucetBusy: string;
   depositFaucetSuccess: string;
   depositFaucetError: string;
+  depositFaucetDailyLimit: string;
   // Fiat deposit flow (bank transfer)
   depositFiatTabLabel: string;
   depositCryptoTabLabel: string;
@@ -558,6 +584,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirmar con passkey...",
     submitting: "Enviando transacción...",
     send: "Enviar",
+    sendTo: "Para",
+    sendMax: "Máx",
     sendTapToSwitchCurrency: "Toca la moneda para cambiar",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -729,7 +757,31 @@ export const walletTexts = {
     cmdOfframp: "Retiro",
     cmdDeposit: "Depositar",
     cmdWithdraw: "Retirar",
-    cmdBusiness: "Negocio",
+    withdrawDestinationTitle: "Retirar",
+    withdrawToSozuWallet: "Otra billetera Sozu",
+    withdrawToSozuWalletHint: "Envía USDC a un $sozutag o una dirección.",
+    withdrawToBank: "Cuenta bancaria",
+    withdrawToBankHint: "Convierte USDC y retíralo a tu banco.",
+    withdrawBankUnavailable: "El retiro a banco no está activo en este entorno.",
+    offlineWindowTitle: "Sin conexión",
+    offlineWindowAvailable: "Disponible para pagos offline",
+    offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
+    offlineWindowEmpty: "Todavía no hay un saldo guardado. Abre la billetera una vez con internet.",
+    cmdSavings: "Ahorro",
+    homeDollarsEyebrow: "Dólares digitales",
+    homeDollarsTitle: "Conoce más",
+    homeDollarsBody:
+      "USDC es un dólar digital. En Sozu está en tu cuenta y lo puedes enviar a otra persona con un toque.",
+    homeInviteTitle: "Invita a alguien",
+    homeInviteBody: "A probar la app",
+    homeInviteShare: "Prueba Sozu, dólares digitales en el teléfono.",
+    homeInviteReady: "Listo para invitar.",
+    homeLinkCopied: "Enlace copiado.",
+    homeFeedbackTitle: "Deja tu opinión",
+    homeFeedbackBody: "Cuéntanos cómo se sintió",
+    homeFeedbackPlaceholder: "Qué te gustó, qué faltó…",
+    homeFeedbackSend: "Enviar",
+    homeFeedbackReady: "Gracias. Tu nota quedó lista para compartir.",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -789,11 +841,12 @@ export const walletTexts = {
       "Los pagos usan BlendUSDC en tu cuenta C (no el USDC clásico de Circle en G). Copia tu dirección C abajo y recibe BlendUSDC ahí.",
     depositBlendFaucet: "Abrir testnet.blend.capital",
     depositBlendPool: "Pool USDC (Blend)",
-    depositFaucetCta: "Obtener 20 USDC de prueba",
-    depositFaucetHint: "Un clic — Circle USDC (testnet) vía Sozu Faucet.",
+    depositFaucetCta: "Obtener 100 USDC de prueba",
+    depositFaucetHint: "Una vez por billetera al día.",
     depositFaucetBusy: "Fondeando…",
-    depositFaucetSuccess: "Listo — 20 USDC en camino. Yendo al inicio…",
+    depositFaucetSuccess: "Listo — 100 USDC en camino. Yendo al inicio…",
     depositFaucetError: "No se pudo fondear. Intenta de nuevo.",
+    depositFaucetDailyLimit: "Ya reclamaste hoy. 100 USDC de prueba, una vez por billetera al día.",
     depositFiatTabLabel: "Pesos CLP",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Depósito en pesos",
@@ -1052,6 +1105,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirm with passkey...",
     submitting: "Submitting...",
     send: "Send",
+    sendTo: "To",
+    sendMax: "Max",
     sendTapToSwitchCurrency: "Tap currency to switch",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -1219,7 +1274,31 @@ export const walletTexts = {
     cmdOfframp: "Offramp",
     cmdDeposit: "Deposit",
     cmdWithdraw: "Withdraw",
-    cmdBusiness: "Business",
+    withdrawDestinationTitle: "Withdraw",
+    withdrawToSozuWallet: "Another Sozu wallet",
+    withdrawToSozuWalletHint: "Send USDC to a $sozutag or an address.",
+    withdrawToBank: "Bank account",
+    withdrawToBankHint: "Convert USDC and withdraw it to your bank.",
+    withdrawBankUnavailable: "Bank withdrawal isn't turned on in this environment.",
+    offlineWindowTitle: "No connection",
+    offlineWindowAvailable: "Available for offline payments",
+    offlineWindowSaved: "Balance saved on this phone the last time it was online.",
+    offlineWindowEmpty: "No balance is saved yet. Open the wallet once while online.",
+    cmdSavings: "Savings",
+    homeDollarsEyebrow: "Digital dollars",
+    homeDollarsTitle: "Learn more",
+    homeDollarsBody:
+      "USDC is a digital dollar. In Sozu it sits in your account, and you can send it to someone with a tap.",
+    homeInviteTitle: "Invite someone",
+    homeInviteBody: "To try the app",
+    homeInviteShare: "Try Sozu, digital dollars on your phone.",
+    homeInviteReady: "Ready to invite.",
+    homeLinkCopied: "Link copied.",
+    homeFeedbackTitle: "Leave feedback",
+    homeFeedbackBody: "Tell us how it felt",
+    homeFeedbackPlaceholder: "What worked, what was missing…",
+    homeFeedbackSend: "Send",
+    homeFeedbackReady: "Thanks. Your note is ready to share.",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",
@@ -1279,11 +1358,12 @@ export const walletTexts = {
       "Payments use BlendUSDC on your C smart account (not classic Circle USDC on G). Copy your C address below and receive BlendUSDC there.",
     depositBlendFaucet: "Open testnet.blend.capital",
     depositBlendPool: "USDC pool (Blend)",
-    depositFaucetCta: "Get 20 testnet USDC",
-    depositFaucetHint: "One click — Circle USDC (testnet) via Sozu Faucet.",
+    depositFaucetCta: "Get 100 testnet USDC",
+    depositFaucetHint: "Once per wallet per day.",
     depositFaucetBusy: "Funding…",
-    depositFaucetSuccess: "Done — 20 USDC on the way. Heading home…",
+    depositFaucetSuccess: "Done — 100 USDC on the way. Heading home…",
     depositFaucetError: "Could not fund. Try again.",
+    depositFaucetDailyLimit: "You already claimed today. 100 testnet USDC, once per wallet per day.",
     depositFiatTabLabel: "CLP pesos",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Peso deposit",

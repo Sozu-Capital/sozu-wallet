@@ -11,10 +11,8 @@ import { WalletLazySectionSkeleton, WalletSkeleton } from "@/components/ui/walle
 import { BalanceCardSkeleton, CommandBarSkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { WalletErrorBoundary } from "@/components/wallet/wallet-error-boundary"
 import { useWalletLanguage } from "@/lib/wallet-language"
-import { getWithdrawTexts } from "@/lib/withdraw/withdraw-texts"
 import { getUserId } from "@/lib/wallet-utils"
 import { cn } from "@/lib/utils"
-import { rampEnabled } from "@/lib/app-config"
 import { getOrCreateRealWallet } from "@/lib/stellar/wallet-creator"
 import {
   isSmartContractWalletAddress,
@@ -43,7 +41,9 @@ import { TransactionHistory } from "@/components/wallet/transaction-history"
 import { BottomMenuBar } from "@/components/wallet/bottom-menu-bar"
 import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indicator"
 import { WalletActivityList } from "@/components/wallet/wallet-activity-list"
+import { HomeDiscoverGrid } from "@/components/home/home-discover-grid"
 import { UniversalCommandBar } from "@/components/home/universal-command-bar"
+import { WithdrawDestinationSheet } from "@/components/home/withdraw-destination-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
 import { transactionToPaymentReceipt } from "@/lib/payment/transaction-to-receipt"
@@ -55,7 +55,6 @@ import { WalletSwitcherModal } from "@/components/wallet/wallet-switcher-modal"
 const SendPaymentModal = lazy(() => import("@/components/wallet/send-payment-modal").then(mod => ({ default: mod.SendPaymentModal })))
 const DepositModal = lazy(() => import("@/components/home/deposit-modal").then(mod => ({ default: mod.DepositModal })))
 const OfframpModal = lazy(() => import("@/components/home/offramp-modal").then(mod => ({ default: mod.OfframpModal })))
-const WithdrawAllModal = lazy(() => import("@/components/wallet/withdraw-all-modal").then(mod => ({ default: mod.WithdrawAllModal })))
 const ProfileSheet = lazy(() => import("@/components/wallet/profile-sheet").then(mod => ({ default: mod.ProfileSheet })))
 const TrustPointsModal = lazy(() => import("@/components/wallet/trust-points-modal").then(mod => ({ default: mod.TrustPointsModal })))
 const BalanceAuditModal = lazy(() => import("@/components/wallet/balance-audit-modal").then(mod => ({ default: mod.BalanceAuditModal })))
@@ -85,7 +84,7 @@ export function WalletScreen({
   shellLayout,
 }: WalletScreenProps) {
   const searchParams = useSearchParams()
-  const { t, language } = useWalletLanguage()
+  const { t } = useWalletLanguage()
 
   // Wallet data hook
   const walletData = useWalletDataContext()
@@ -164,7 +163,7 @@ export function WalletScreen({
     [onDepositModalOpenChange],
   )
   const [isOfframpOpen, setIsOfframpOpen] = useState(false)
-  const [isWithdrawAllOpen, setIsWithdrawAllOpen] = useState(false)
+  const [isWithdrawDestOpen, setIsWithdrawDestOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
@@ -408,7 +407,17 @@ export function WalletScreen({
     setIsDepositOpen(true)
   }, [setIsDepositOpen])
 
-  const handleOfframp = useCallback(() => {
+  const handleWithdraw = useCallback(() => {
+    setIsWithdrawDestOpen(true)
+  }, [])
+
+  const handleWithdrawToWallet = useCallback(() => {
+    setIsWithdrawDestOpen(false)
+    setSendModalOpen(true)
+  }, [setSendModalOpen])
+
+  const handleWithdrawToBank = useCallback(() => {
+    setIsWithdrawDestOpen(false)
     setIsOfframpOpen(true)
   }, [])
 
@@ -416,17 +425,6 @@ export function WalletScreen({
     setIsOfframpOpen(false)
     void refreshWalletData({ pollSoroban: true })
   }, [refreshWalletData])
-
-  const handleWithdrawAllSuccess = useCallback(
-    (receipt: PaymentReceipt) => {
-      setIsWithdrawAllOpen(false)
-      setPaymentReceipt(receipt)
-      setReceiptModalVariant("success")
-      setShowSuccessModal(true)
-      void refreshWalletData({ pollSoroban: true })
-    },
-    [refreshWalletData],
-  )
 
   const refreshOnboardingState = useCallback(async () => {
     if (walletNetwork !== "testnet") {
@@ -719,18 +717,15 @@ export function WalletScreen({
         />
       </Suspense>
 
-      {rampEnabled ? (
-        <Suspense fallback={null}>
-          <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
-        </Suspense>
-      ) : null}
+      <WithdrawDestinationSheet
+        open={isWithdrawDestOpen}
+        onClose={() => setIsWithdrawDestOpen(false)}
+        onSozuWallet={handleWithdrawToWallet}
+        onBank={handleWithdrawToBank}
+      />
 
       <Suspense fallback={null}>
-        <WithdrawAllModal
-          open={isWithdrawAllOpen}
-          onClose={() => setIsWithdrawAllOpen(false)}
-          onSuccess={handleWithdrawAllSuccess}
-        />
+        <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
       </Suspense>
 
       <Suspense fallback={null}>
@@ -845,6 +840,8 @@ export function WalletScreen({
               swipeUpStartX.current = null
               const dy = startY - e.changedTouches[0].clientY
               const dx = Math.abs(e.changedTouches[0].clientX - startX)
+              const touchTarget = e.target instanceof Element ? e.target : null
+              if (touchTarget?.closest("[data-home-discover]")) return
               if (dx > 48) return
               if (dy > 32 && startY < 140) {
                 setIsWalletSwitcherOpen(true)
@@ -905,7 +902,7 @@ export function WalletScreen({
                   className="flex min-h-0 flex-1 flex-col px-6 transition-transform duration-150 ease-out"
                   style={{ transform: pull > 0 ? `translateY(${pull * 0.35}px)` : undefined }}
                 >
-                  <div className="flex min-h-0 flex-1 flex-col items-center pt-4">
+                  <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-y-contain pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                     <div className="flex w-full max-w-md flex-col">
                       {isBalanceLoading ? (
                         <BalanceCardSkeleton compact className="mb-8" />
@@ -919,19 +916,15 @@ export function WalletScreen({
                       {isBalanceLoading ? (
                         <CommandBarSkeleton className="mt-2" />
                       ) : (
-                        <UniversalCommandBar
-                          className="mt-2"
-                          onDepositClick={handleDeposit}
-                          onWithdrawClick={handleOfframp}
-                        />
+                        <>
+                          <UniversalCommandBar
+                            className="mt-2"
+                            onDepositClick={handleDeposit}
+                            onWithdrawClick={handleWithdraw}
+                          />
+                          <HomeDiscoverGrid className="mt-8" />
+                        </>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setIsWithdrawAllOpen(true)}
-                        className="mt-2 flex h-10 w-full items-center justify-center rounded-2xl border border-white/10 bg-transparent text-[9px] font-medium uppercase tracking-[0.16em] text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 active:scale-[0.97]"
-                      >
-                        {getWithdrawTexts(language).entry}
-                      </button>
                     </div>
                   </div>
                 </div>
