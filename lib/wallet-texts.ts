@@ -215,7 +215,7 @@ export type WalletTexts = {
   offlineWindowAvailable: string;
   offlineWindowSaved: string;
   offlineWindowEmpty: string;
-  cmdBusiness: string;
+  cmdSavings: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -750,7 +750,7 @@ export const walletTexts = {
     offlineWindowAvailable: "Disponible para pagos offline",
     offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
     offlineWindowEmpty: "Todavía no hay un saldo guardado. Abre la billetera una vez con internet.",
-    cmdBusiness: "Negocio",
+    cmdSavings: "Ahorro",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -1251,7 +1251,7 @@ export const walletTexts = {
     offlineWindowAvailable: "Available for offline payments",
     offlineWindowSaved: "Balance saved on this phone the last time it was online.",
     offlineWindowEmpty: "No balance is saved yet. Open the wallet once while online.",
-    cmdBusiness: "Business",
+    cmdSavings: "Savings",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",
