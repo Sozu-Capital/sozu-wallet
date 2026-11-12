@@ -12,9 +12,9 @@ import { WalletLanguageProvider } from "@/lib/wallet-language"
 import { signalBootstrapReady } from "@/lib/app-ready"
 import { PANEL_NAMES, panelIndex } from "@/lib/shell/panels"
 import {
+  followOffset,
   nextPanelIndex,
   releaseMotion,
-  rubberBandOffset,
   springStep,
 } from "@/lib/shell/panel-motion"
 import {
@@ -59,6 +59,8 @@ function MobileAppShellPanels() {
   const modeRef = useRef<"idle" | "drag" | "spring" | "fade">("idle")
   const rafRef = useRef(0)
   const fadeTimerRef = useRef(0)
+  const shownRef = useRef(0)
+  const dragOriginRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (activePanel === 2) setHistoryMounted(true)
@@ -97,6 +99,7 @@ function MobileAppShellPanels() {
   }, [])
 
   const place = useCallback((px: number) => {
+    shownRef.current = px
     const track = trackRef.current
     if (!track) return
     track.style.transform = `translate3d(${px}px,0,0)`
@@ -198,11 +201,20 @@ function MobileAppShellPanels() {
     disabled: isSendModalOpen || isDepositModalOpen || isOnboardingOverlayOpen,
     onDrag: (dx) => {
       cancelAnimationFrame(rafRef.current)
+      if (dragOriginRef.current === null) dragOriginRef.current = shownRef.current
       modeRef.current = "drag"
-      place(baseX() + rubberBandOffset(dx, indexRef.current, PANEL_NAMES.length))
+      place(
+        followOffset(
+          dragOriginRef.current,
+          dx,
+          PANEL_NAMES.length,
+          widthRef.current || 1,
+        ),
+      )
     },
     onRelease: ({ dx, velocity }) => {
-      const from = baseX() + rubberBandOffset(dx, indexRef.current, PANEL_NAMES.length)
+      dragOriginRef.current = null
+      const from = shownRef.current
       const next = nextPanelIndex({
         index: indexRef.current,
         count: PANEL_NAMES.length,
@@ -293,7 +305,10 @@ function MobileAppShellPanels() {
         <PanelDots
           names={PANEL_NAMES}
           active={activePanel}
-          onSelect={(index) => moveTo(index, baseX())}
+          onSelect={(index) => {
+            dragOriginRef.current = null
+            moveTo(index, shownRef.current)
+          }}
         />
       ) : null}
     </div>

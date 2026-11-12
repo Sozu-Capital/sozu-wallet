@@ -20,6 +20,17 @@ export function rubberBandOffset(dx: number, index: number, count: number): numb
   return dx
 }
 
+/** Pixel position while a finger is down. Past the first or last panel, only part of the pull shows. */
+export function followOffset(origin: number, dx: number, count: number, width: number): number {
+  if (count <= 0 || width <= 0) return origin
+  const raw = origin + dx
+  const max = 0
+  const min = -(count - 1) * width
+  if (raw > max) return (raw - max) * RUBBER_BAND
+  if (raw < min) return min + (raw - min) * RUBBER_BAND
+  return raw
+}
+
 /**
  * Finger left (negative dx or velocity) moves toward the next panel.
  * Distance and flick both commit. The index never leaves 0..count-1.

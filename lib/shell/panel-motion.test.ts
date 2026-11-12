@@ -4,6 +4,7 @@ import {
   RUBBER_BAND,
   SPRING_DAMPING,
   SPRING_STIFFNESS,
+  followOffset,
   nextPanelIndex,
   releaseMotion,
   rubberBandOffset,
@@ -18,6 +19,13 @@ describe("panel motion", () => {
     expect(rubberBandOffset(-80, 1, 4)).toBe(-80)
     expect(rubberBandOffset(80, 0, 4)).toBe(80 * RUBBER_BAND)
     expect(rubberBandOffset(-80, 3, 4)).toBe(-80 * RUBBER_BAND)
+  })
+
+  it("continues a drag from the position already on screen", () => {
+    expect(followOffset(-WIDTH, -40, 4, WIDTH)).toBe(-WIDTH - 40)
+    expect(followOffset(-WIDTH / 2, -10, 4, WIDTH)).toBe(-WIDTH / 2 - 10)
+    expect(followOffset(0, 80, 4, WIDTH)).toBe(80 * RUBBER_BAND)
+    expect(followOffset(-3 * WIDTH, -80, 4, WIDTH)).toBe(-3 * WIDTH - 80 * RUBBER_BAND)
   })
 
   it("commits a short fast flick and a long slow drag", () => {
