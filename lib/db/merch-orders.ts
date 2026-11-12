@@ -27,6 +27,7 @@ type Row = {
   failure_reason: string | null
   transfer_hash: string | null
   transfer_attempted: boolean
+  created_at?: string | null
 }
 
 function db() {
@@ -57,6 +58,7 @@ function toOrder(row: Row): MerchOrder {
     failureReason: row.failure_reason,
     transferHash: row.transfer_hash,
     transferAttempted: row.transfer_attempted,
+    createdAt: row.created_at ?? null,
   }
 }
 
@@ -130,5 +132,14 @@ export const supabaseMerchOrderStore: MerchOrderStore = {
   async save(order) {
     const { error } = await db().from(TABLE).update(toRow(order)).eq("id", order.id)
     if (error) raise("save", error)
+  },
+  async listByUser(userId) {
+    const { data, error } = await db()
+      .from(TABLE)
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+    if (error) raise("list", error)
+    return (data as Row[]).map(toOrder)
   },
 }

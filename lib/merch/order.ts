@@ -16,6 +16,7 @@ export type MerchOrder = {
   failureReason: string | null
   transferHash: string | null
   transferAttempted: boolean
+  createdAt?: string | null
 }
 
 export type PaymentSubmitResult =
@@ -34,6 +35,7 @@ export interface MerchOrderStore {
   /** Moves paid → transferring. False when a transfer is already claimed or finished. */
   claimTransfer(id: string): Promise<boolean>
   save(order: MerchOrder): Promise<void>
+  listByUser(userId: string): Promise<MerchOrder[]>
 }
 
 export type ConfirmMerchOrderInput = {
@@ -96,6 +98,9 @@ export function createMemoryOrderStore(): MerchOrderStore {
     },
     async save(order) {
       byId.set(order.id, clone(order))
+    },
+    async listByUser(userId) {
+      return [...byId.values()].filter((order) => order.userId === userId).map(clone)
     },
   }
 }

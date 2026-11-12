@@ -129,3 +129,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, code: "payment_failed" }, { status: 500 })
   }
 }
+
+/** Purchases for the signed-in guest. History reads this; it does not trust a body user id. */
+export async function GET(request: NextRequest) {
+  const auth = requireSession(request)
+  if (auth.error) return auth.error
+  try {
+    const orders = await supabaseMerchOrderStore.listByUser(auth.userId)
+    return NextResponse.json({
+      orders: orders
+        .filter((order) => order.status !== "awaiting_payment" && order.status !== "charging")
+        .map((order) => ({
+          ...orderBody(order),
+          slug: order.slug,
+          createdAt: order.createdAt ?? null,
+        })),
+    })
+  } catch (err) {
+    if (err instanceof MerchOrderStoreUnavailableError) {
+      return NextResponse.json({ success: false, code: "orders_unavailable" }, { status: 503 })
+    }
+    console.error("[merch/orders] list", err instanceof Error ? err.message : err)
+    return NextResponse.json({ success: false, code: "orders_unavailable" }, { status: 500 })
+  }
+}
