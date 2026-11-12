@@ -9,9 +9,13 @@ const allowGate: BuyGate = { kind: "allow", buyDisabled: false, payment: null }
 export function ItemPageView({
   model,
   gate = allowGate,
+  notice = null,
+  onBuy,
 }: {
   model: ItemPageModel
   gate?: BuyGate
+  notice?: string | null
+  onBuy?: () => void
 }) {
   const soldOut = model.soldOut
   const showShortfall = !soldOut && gate.kind === "shortfall"
@@ -47,7 +51,7 @@ export function ItemPageView({
           {model.buyLabel}
         </a>
       ) : (
-        <button type="button" disabled={buyDisabled} className={buyClass}>
+        <button type="button" disabled={buyDisabled} onClick={onBuy} className={buyClass}>
           {model.buyLabel}
         </button>
       )}
@@ -56,6 +60,7 @@ export function ItemPageView({
           {gate.depositLabel}
         </a>
       ) : null}
+      {notice ? <p className="mt-3 text-center text-sm text-white/70">{notice}</p> : null}
     </main>
   )
 }
