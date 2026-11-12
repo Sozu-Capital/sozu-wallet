@@ -174,14 +174,15 @@ async function readBalanceViaLedger(
 
 /**
  * Read the Soroban token balance for `userAddress` from contract `tokenAddress`.
- * Returns a decimal value (divided by 10^decimals; PizzaToken uses 0).
+ * Returns a decimal value (divided by 10^decimals; PizzaToken uses 0), or null
+ * when the ledger read fails. A zero balance is a real zero, not a failure.
  */
-export async function getSorobanTokenBalance(
+export async function tryGetSorobanTokenBalance(
   tokenAddress: string,
   userAddress: string,
   network: "testnet" | "mainnet" = "testnet",
   decimals = DEFAULT_TOKEN_DECIMALS,
-): Promise<number> {
+): Promise<number | null> {
   const holder = normalizeHolderAddress(userAddress)
   const token = tokenAddress.trim().toUpperCase()
 
@@ -210,7 +211,21 @@ export async function getSorobanTokenBalance(
     }
   }
 
-  return 0
+  return null
+}
+
+/**
+ * Same read as `tryGetSorobanTokenBalance`, with a failed read reported as 0
+ * so existing USDC callers keep their previous fallback.
+ */
+export async function getSorobanTokenBalance(
+  tokenAddress: string,
+  userAddress: string,
+  network: "testnet" | "mainnet" = "testnet",
+  decimals = DEFAULT_TOKEN_DECIMALS,
+): Promise<number> {
+  const value = await tryGetSorobanTokenBalance(tokenAddress, userAddress, network, decimals)
+  return value ?? 0
 }
 
 export function getBlendUsdcContractId(network: "testnet" | "mainnet"): string {
