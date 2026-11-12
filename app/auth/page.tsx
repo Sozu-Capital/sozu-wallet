@@ -39,6 +39,7 @@ import {
 } from "@/lib/sozu-faucet/return-allowlist"
 import { toast } from "sonner"
 import { nfcUsdcDropReturnPath } from "@/lib/faucet/nfc-usdc-drop"
+import { itemAuthReturnPath } from "@/lib/merch/buy-gate"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
@@ -141,7 +142,9 @@ function AuthPageContent() {
     return null
   })()
 
-  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? postAuthPath
+  const itemReturn = itemAuthReturnPath(searchParams.get("redirect"))
+
+  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? itemReturn ?? postAuthPath
   const pizzaAuth = resolvePizzaAuthSearch(searchParams)
   const stayOnAuthForPizza = pizzaAuth.kind !== "none"
   const pizzaHopReturnTo = pizzaAuth.kind === "hop" ? pizzaAuth.returnTo : null
