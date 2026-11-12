@@ -263,6 +263,7 @@ function MobileAppShellPanels() {
       onTouchStart={swipeHandlers.onTouchStart}
       onTouchMove={swipeHandlers.onTouchMove}
       onTouchEnd={swipeHandlers.onTouchEnd}
+      onTouchCancel={swipeHandlers.onTouchCancel}
       onMouseDown={swipeHandlers.onMouseDown}
       onMouseMove={swipeHandlers.onMouseMove}
       onMouseUp={swipeHandlers.onMouseUp}

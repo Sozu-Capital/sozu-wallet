@@ -16,6 +16,7 @@ export type PanelSwipeHandlers = {
   onMouseMove: (e: React.MouseEvent) => void
   onMouseUp: (e: React.MouseEvent) => void
   onMouseLeave: (e: React.MouseEvent) => void
+  onTouchCancel: () => void
 }
 
 export function useHorizontalPanelSwipe({
@@ -54,7 +55,7 @@ export function useHorizontalPanelSwipe({
     lastT.current = now
   }, [])
 
-  const finish = useCallback(() => {
+  const finish = useCallback((canceled = false) => {
     const horizontal = lockedAxis.current === "horizontal"
     const dx =
       horizontal && startX.current !== null && lastX.current !== null
@@ -62,7 +63,8 @@ export function useHorizontalPanelSwipe({
         : 0
     const sampleAge =
       lastT.current === null ? Number.POSITIVE_INFINITY : performance.now() - lastT.current
-    const agedVelocity = horizontal ? releaseVelocity(velocity.current, sampleAge) : 0
+    const agedVelocity =
+      canceled || !horizontal ? 0 : releaseVelocity(velocity.current, sampleAge)
     reset()
     onRelease({ dx, velocity: agedVelocity })
   }, [onRelease, reset])
@@ -103,6 +105,11 @@ export function useHorizontalPanelSwipe({
   const onTouchEnd = useCallback(() => {
     if (startX.current === null) return
     finish()
+  }, [finish])
+
+  const onTouchCancel = useCallback(() => {
+    if (startX.current === null) return
+    finish(true)
   }, [finish])
 
   const onMouseDown = useCallback(
@@ -153,5 +160,6 @@ export function useHorizontalPanelSwipe({
     onMouseMove,
     onMouseUp,
     onMouseLeave,
+    onTouchCancel,
   }
 }
