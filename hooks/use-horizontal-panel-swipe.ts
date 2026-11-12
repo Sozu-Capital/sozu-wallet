@@ -1,14 +1,16 @@
 import { useRef, useCallback } from "react"
 
-const SWIPE_THRESHOLD = 35
 const AXIS_LOCK_RATIO = 1.5
 
+export type PanelGesture = {
+  dx: number
+  velocity: number
+}
+
 export type PanelSwipeHandlers = {
-  // Touch
   onTouchStart: (e: React.TouchEvent) => void
   onTouchMove: (e: React.TouchEvent) => void
   onTouchEnd: (e: React.TouchEvent) => void
-  // Mouse (drag-to-swipe for desktop simulation)
   onMouseDown: (e: React.MouseEvent) => void
   onMouseMove: (e: React.MouseEvent) => void
   onMouseUp: (e: React.MouseEvent) => void
@@ -16,17 +18,19 @@ export type PanelSwipeHandlers = {
 }
 
 export function useHorizontalPanelSwipe({
-  onSwipeLeft,
-  onSwipeRight,
+  onDrag,
+  onRelease,
   disabled = false,
 }: {
-  onSwipeLeft: () => void
-  onSwipeRight: () => void
+  onDrag: (dx: number) => void
+  onRelease: (gesture: PanelGesture) => void
   disabled?: boolean
 }): PanelSwipeHandlers {
   const startX = useRef<number | null>(null)
   const startY = useRef<number | null>(null)
   const lastX = useRef<number | null>(null)
+  const lastT = useRef<number | null>(null)
+  const velocity = useRef(0)
   const lockedAxis = useRef<"horizontal" | "vertical" | null>(null)
   const isDragging = useRef(false)
 
@@ -34,78 +38,109 @@ export function useHorizontalPanelSwipe({
     startX.current = null
     startY.current = null
     lastX.current = null
+    lastT.current = null
+    velocity.current = 0
     lockedAxis.current = null
     isDragging.current = false
   }, [])
 
-  const settle = useCallback(() => {
-    if (startX.current === null || lastX.current === null || lockedAxis.current !== "horizontal") {
-      reset()
-      return
+  const sample = useCallback((x: number, now: number) => {
+    if (lastX.current !== null && lastT.current !== null) {
+      const dt = now - lastT.current
+      if (dt > 0) velocity.current = (x - lastX.current) / dt
     }
-    const dx = lastX.current - startX.current
-    if (Math.abs(dx) >= SWIPE_THRESHOLD) {
-      if (dx < 0) onSwipeLeft()
-      else onSwipeRight()
-    }
+    lastX.current = x
+    lastT.current = now
+  }, [])
+
+  const finish = useCallback(() => {
+    const horizontal = lockedAxis.current === "horizontal"
+    const dx =
+      horizontal && startX.current !== null && lastX.current !== null
+        ? lastX.current - startX.current
+        : 0
+    const releaseVelocity = horizontal ? velocity.current : 0
     reset()
-  }, [reset, onSwipeLeft, onSwipeRight])
+    onRelease({ dx, velocity: releaseVelocity })
+  }, [onRelease, reset])
 
-  // ── Touch ──────────────────────────────────────────────────────────────
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (disabled || e.touches.length !== 1) return
-    startX.current = e.touches[0].clientX
-    startY.current = e.touches[0].clientY
-    lastX.current = e.touches[0].clientX
-    lockedAxis.current = null
-  }, [disabled])
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (disabled || e.touches.length !== 1) return
+      const now = performance.now()
+      startX.current = e.touches[0].clientX
+      startY.current = e.touches[0].clientY
+      lastX.current = e.touches[0].clientX
+      lastT.current = now
+      velocity.current = 0
+      lockedAxis.current = null
+    },
+    [disabled],
+  )
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (disabled || startX.current === null || startY.current === null) return
-    const dx = e.touches[0].clientX - startX.current
-    const dy = e.touches[0].clientY - startY.current
-    lastX.current = e.touches[0].clientX
-    if (!lockedAxis.current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      lockedAxis.current =
-        Math.abs(dx) > Math.abs(dy) * AXIS_LOCK_RATIO ? "horizontal" : "vertical"
-    }
-    if (lockedAxis.current === "horizontal") e.preventDefault()
-  }, [disabled])
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (disabled || startX.current === null || startY.current === null) return
+      const x = e.touches[0].clientX
+      const dx = x - startX.current
+      const dy = e.touches[0].clientY - startY.current
+      sample(x, performance.now())
+      if (!lockedAxis.current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        lockedAxis.current =
+          Math.abs(dx) > Math.abs(dy) * AXIS_LOCK_RATIO ? "horizontal" : "vertical"
+      }
+      if (lockedAxis.current === "horizontal") {
+        e.preventDefault()
+        onDrag(dx)
+      }
+    },
+    [disabled, onDrag, sample],
+  )
 
-  const onTouchEnd = useCallback((_e: React.TouchEvent) => {
-    settle()
-  }, [settle])
+  const onTouchEnd = useCallback(() => {
+    if (startX.current === null) return
+    finish()
+  }, [finish])
 
-  // ── Mouse (drag simulation) ─────────────────────────────────────────────
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if (disabled || e.button !== 0) return
-    startX.current = e.clientX
-    startY.current = e.clientY
-    lastX.current = e.clientX
-    lockedAxis.current = null
-    isDragging.current = true
-  }, [disabled])
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (disabled || e.button !== 0) return
+      const now = performance.now()
+      startX.current = e.clientX
+      startY.current = e.clientY
+      lastX.current = e.clientX
+      lastT.current = now
+      velocity.current = 0
+      lockedAxis.current = null
+      isDragging.current = true
+    },
+    [disabled],
+  )
 
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (disabled || !isDragging.current || startX.current === null || startY.current === null) return
-    const dx = e.clientX - startX.current
-    const dy = e.clientY - startY.current
-    lastX.current = e.clientX
-    if (!lockedAxis.current && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-      lockedAxis.current =
-        Math.abs(dx) > Math.abs(dy) * AXIS_LOCK_RATIO ? "horizontal" : "vertical"
-    }
-  }, [disabled])
+  const onMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (disabled || !isDragging.current || startX.current === null || startY.current === null) return
+      const dx = e.clientX - startX.current
+      const dy = e.clientY - startY.current
+      sample(e.clientX, performance.now())
+      if (!lockedAxis.current && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        lockedAxis.current =
+          Math.abs(dx) > Math.abs(dy) * AXIS_LOCK_RATIO ? "horizontal" : "vertical"
+      }
+      if (lockedAxis.current === "horizontal") onDrag(dx)
+    },
+    [disabled, onDrag, sample],
+  )
 
-  const onMouseUp = useCallback((_e: React.MouseEvent) => {
+  const onMouseUp = useCallback(() => {
     if (!isDragging.current) return
-    settle()
-  }, [settle])
+    finish()
+  }, [finish])
 
-  const onMouseLeave = useCallback((_e: React.MouseEvent) => {
+  const onMouseLeave = useCallback(() => {
     if (!isDragging.current) return
-    settle()
-  }, [settle])
+    finish()
+  }, [finish])
 
   return {
     onTouchStart,
