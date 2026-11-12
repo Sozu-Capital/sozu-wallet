@@ -6,7 +6,7 @@ import { isClientAuthed } from "@/lib/client-auth-gate"
 import type { MerchNetwork } from "@/lib/merch/catalog"
 import { decideBuy, ordinaryUsdcFromBalance, parsePriceUsdc } from "@/lib/merch/buy-gate"
 import { buildItemPageModel } from "@/lib/merch/item-page"
-import type { MerchLanguage } from "@/lib/merch/copy"
+import { merchCopy, type MerchLanguage } from "@/lib/merch/copy"
 import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import type { PreparedPasskeyBuild } from "@/lib/stellar/smartAccounts/sign-prepared-build"
 
@@ -136,7 +136,33 @@ export function ItemPage({
       const data = (await response.json().catch(() => ({}))) as {
         code?: string
         build?: PreparedPasskeyBuild
-        order?: { status?: string; paymentHash?: string | null; failureReason?: string | null }
+        order?: { status?: string; paymentHash?: string | null; failureReason?: string | null; transferHash?: string | null }
+      }
+      const copy = merchCopy(language)
+      const noteOrder = (order: NonNullable<typeof data.order> | undefined) => {
+        if (order?.status === "completed") {
+          try {
+            sessionStorage.removeItem(storageKey)
+          } catch {
+            // ignore
+          }
+          setNotice(copy.completed)
+          return true
+        }
+        if (order?.status === "paid") {
+          setNotice(copy.receiptPending)
+          return true
+        }
+        if (order?.status === "failed") {
+          try {
+            sessionStorage.removeItem(storageKey)
+          } catch {
+            // ignore
+          }
+          setNotice(order.failureReason ?? (language === "en" ? "Payment failed." : "El pago falló."))
+          return true
+        }
+        return false
       }
       if (data.code === "merch_address_unrecorded") {
         setNotice(
@@ -156,35 +182,11 @@ export function ItemPage({
         const signedEnvelopeXdr = await signMerchBuild(data.build)
         const confirmed = await post(signedEnvelopeXdr)
         const paid = (await confirmed.json().catch(() => ({}))) as typeof data
-        if (paid.order?.status === "paid" && paid.order.paymentHash) {
-          setNotice(paid.order.paymentHash)
-          return
-        }
-        if (paid.order?.status === "failed") {
-          try {
-            sessionStorage.removeItem(storageKey)
-          } catch {
-            // ignore
-          }
-          setNotice(paid.order.failureReason ?? (language === "en" ? "Payment failed." : "El pago falló."))
-          return
-        }
+        if (noteOrder(paid.order)) return
         setNotice(language === "en" ? "Could not start the payment." : "No se pudo iniciar el pago.")
         return
       }
-      if (data.order?.status === "paid" && data.order.paymentHash) {
-        setNotice(data.order.paymentHash)
-        return
-      }
-      if (data.order?.status === "failed") {
-        try {
-          sessionStorage.removeItem(storageKey)
-        } catch {
-          // ignore
-        }
-        setNotice(data.order.failureReason ?? (language === "en" ? "Payment failed." : "El pago falló."))
-        return
-      }
+      if (noteOrder(data.order)) return
       if (!response.ok) {
         setNotice(language === "en" ? "Could not start the payment." : "No se pudo iniciar el pago.")
       }

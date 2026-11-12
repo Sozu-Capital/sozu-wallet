@@ -8,6 +8,8 @@ export type MerchCopy = {
   shortfall: (amount: string) => string
   deposit: string
   networkMismatch: string
+  receiptPending: string
+  completed: string
 }
 
 const es: MerchCopy = {
@@ -18,6 +20,8 @@ const es: MerchCopy = {
   shortfall: (amount) => `Faltan ${amount} USDC`,
   deposit: "Depositar",
   networkMismatch: "La red de tu billetera no coincide.",
+  receiptPending: "Comprobante en camino",
+  completed: "Completada",
 }
 
 const en: MerchCopy = {
@@ -28,6 +32,8 @@ const en: MerchCopy = {
   shortfall: (amount) => `Short ${amount} USDC`,
   deposit: "Deposit",
   networkMismatch: "Your wallet is on a different network.",
+  receiptPending: "Receipt pending",
+  completed: "Completed",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {
