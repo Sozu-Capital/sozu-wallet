@@ -142,6 +142,7 @@ function MobileAppShellPanels() {
   const fadeTo = useCallback(
     (index: number) => {
       modeRef.current = "fade"
+      indexRef.current = index
       cancelAnimationFrame(rafRef.current)
       if (index === 0) setSettingsMounted(true)
       if (index === 2) setHistoryMounted(true)
@@ -194,8 +195,10 @@ function MobileAppShellPanels() {
     (index: number, from: number) => {
       if (releaseMotion(reducedRef.current) === "fade") {
         if (index === indexRef.current) {
+          window.clearTimeout(fadeTimerRef.current)
+          setFading(false)
           modeRef.current = "idle"
-          place(baseX())
+          place(-index * widthRef.current)
           return
         }
         fadeTo(index)
@@ -203,7 +206,7 @@ function MobileAppShellPanels() {
       }
       springTo(index, from)
     },
-    [baseX, fadeTo, place, springTo],
+    [fadeTo, place, springTo],
   )
 
   const swipeHandlers = useHorizontalPanelSwipe({
