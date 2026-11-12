@@ -25,6 +25,12 @@ export function AppBootstrapGate({ children }: AppBootstrapGateProps) {
     }
 
     if (!isClientAuthed()) {
+      const panel = new URLSearchParams(window.location.search).get("panel")
+      if (panel && ["settings", "home", "history", "collections"].includes(panel)) {
+        const returnTo = `/home?panel=${panel}`
+        window.location.replace(`/auth?redirect=${encodeURIComponent(returnTo)}`)
+        return
+      }
       const next = `/auth${window.location.search}${window.location.hash}`
       window.location.replace(next)
       return
