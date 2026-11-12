@@ -25,6 +25,7 @@ export default async function MerchItemPage({ params }: PageProps) {
 
   return (
     <ItemPage
+      slug={item.slug}
       name={item.name}
       imagePath={item.imagePath}
       priceUsdc={item.priceUsdc}
