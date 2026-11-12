@@ -47,6 +47,7 @@ function MobileAppShellPanels() {
   const [activePanel, setActivePanel] = useState(() => panelIndex(searchParams?.get("panel")))
   const [isSendModalOpen, setIsSendModalOpen] = useState(false)
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false)
+  const [settingsMounted, setSettingsMounted] = useState(() => activePanel === 0)
   const [historyMounted, setHistoryMounted] = useState(false)
   const [collectionsMounted, setCollectionsMounted] = useState(false)
   const [fading, setFading] = useState(false)
@@ -63,6 +64,7 @@ function MobileAppShellPanels() {
   const dragOriginRef = useRef<number | null>(null)
 
   useEffect(() => {
+    if (activePanel === 0) setSettingsMounted(true)
     if (activePanel === 2) setHistoryMounted(true)
     if (activePanel === 3) setCollectionsMounted(true)
   }, [activePanel])
@@ -141,6 +143,9 @@ function MobileAppShellPanels() {
     (index: number) => {
       modeRef.current = "fade"
       cancelAnimationFrame(rafRef.current)
+      if (index === 0) setSettingsMounted(true)
+      if (index === 2) setHistoryMounted(true)
+      if (index === 3) setCollectionsMounted(true)
       setFading(true)
       window.clearTimeout(fadeTimerRef.current)
       fadeTimerRef.current = window.setTimeout(() => {
@@ -158,6 +163,9 @@ function MobileAppShellPanels() {
       modeRef.current = "spring"
       cancelAnimationFrame(rafRef.current)
       indexRef.current = index
+      if (index === 0) setSettingsMounted(true)
+      if (index === 2) setHistoryMounted(true)
+      if (index === 3) setCollectionsMounted(true)
       setActivePanel(index)
       let x = from
       let v = 0
@@ -204,6 +212,11 @@ function MobileAppShellPanels() {
       cancelAnimationFrame(rafRef.current)
       if (dragOriginRef.current === null) dragOriginRef.current = shownRef.current
       modeRef.current = "drag"
+      const index = indexRef.current
+      if (dx > 0 && index === 1) setSettingsMounted(true)
+      if (dx < 0 && index === 1) setHistoryMounted(true)
+      if (dx > 0 && index === 3) setHistoryMounted(true)
+      if (dx < 0 && index === 2) setCollectionsMounted(true)
       place(
         followOffset(
           dragOriginRef.current,
@@ -265,7 +278,7 @@ function MobileAppShellPanels() {
           className="h-full overflow-y-auto overscroll-none no-scrollbar"
           style={{ width: `${100 / PANEL_NAMES.length}%` }}
         >
-          {activePanel === 0 ? (
+          {settingsMounted ? (
             <Suspense fallback={null}>
               <SettingsPanel />
             </Suspense>
