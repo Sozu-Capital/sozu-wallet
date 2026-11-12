@@ -10,6 +10,12 @@ export type MerchCopy = {
   networkMismatch: string
   receiptPending: string
   completed: string
+  purchase: (item: string) => string
+  statusPending: string
+  statusFailed: string
+  disclaimer: string
+  paymentLink: string
+  transferLink: string
 }
 
 const es: MerchCopy = {
@@ -22,6 +28,12 @@ const es: MerchCopy = {
   networkMismatch: "La red de tu billetera no coincide.",
   receiptPending: "Comprobante en camino",
   completed: "Completada",
+  purchase: (item) => `Compra · ${item}`,
+  statusPending: "Pendiente",
+  statusFailed: "Fallida",
+  disclaimer: "Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.",
+  paymentLink: "Pago",
+  transferLink: "Coleccionable",
 }
 
 const en: MerchCopy = {
@@ -34,6 +46,12 @@ const en: MerchCopy = {
   networkMismatch: "Your wallet is on a different network.",
   receiptPending: "Receipt pending",
   completed: "Completed",
+  purchase: (item) => `Purchase · ${item}`,
+  statusPending: "Pending",
+  statusFailed: "Failed",
+  disclaimer: "This collectible is a proof of purchase. It is not an investment and does not represent funds.",
+  paymentLink: "Payment",
+  transferLink: "Collectible",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {
