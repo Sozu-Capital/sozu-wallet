@@ -96,10 +96,6 @@ function MobileAppShellPanels() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, [])
 
-  useEffect(() => {
-    indexRef.current = activePanel
-  }, [activePanel])
-
   const place = useCallback((px: number) => {
     const track = trackRef.current
     if (!track) return
@@ -221,9 +217,10 @@ function MobileAppShellPanels() {
   useLayoutEffect(() => {
     const shell = shellRef.current
     if (shell) widthRef.current = shell.clientWidth
+    indexRef.current = activePanel
     if (modeRef.current !== "idle") return
-    place(baseX())
-  }, [activePanel, baseX, place])
+    place(-activePanel * widthRef.current)
+  }, [activePanel, place])
 
   return (
         <div
