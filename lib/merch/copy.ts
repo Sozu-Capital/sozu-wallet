@@ -16,6 +16,8 @@ export type MerchCopy = {
   disclaimer: string
   paymentLink: string
   transferLink: string
+  collections: string
+  emptyCollections: string
 }
 
 const es: MerchCopy = {
@@ -34,6 +36,8 @@ const es: MerchCopy = {
   disclaimer: "Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.",
   paymentLink: "Pago",
   transferLink: "Coleccionable",
+  collections: "Colecciones",
+  emptyCollections: "Todavía no tienes coleccionables.",
 }
 
 const en: MerchCopy = {
@@ -52,6 +56,8 @@ const en: MerchCopy = {
   disclaimer: "This collectible is a proof of purchase. It is not an investment and does not represent funds.",
   paymentLink: "Payment",
   transferLink: "Collectible",
+  collections: "Collections",
+  emptyCollections: "You don't hold a collectible yet.",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {

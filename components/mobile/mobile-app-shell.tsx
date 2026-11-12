@@ -9,6 +9,7 @@ import { SmartAccountKitProvider } from "@/components/SmartAccountKitProvider"
 import { WalletDataProvider } from "@/components/wallet/wallet-data-provider"
 import { WalletLanguageProvider } from "@/lib/wallet-language"
 import { signalBootstrapReady } from "@/lib/app-ready"
+import { PANEL_NAMES, panelIndex } from "@/lib/shell/panels"
 import {
   OnboardingOverlayProvider,
   useOnboardingOverlay,
@@ -28,20 +29,10 @@ const WalletScreenHistory = dynamic(
   { ssr: false },
 )
 
-// 0 = Settings  |  1 = Landing (balance + commands)  |  2 = History
-const PANEL_COUNT = 3
-
-const PANEL_NAMES = ["settings", "home", "history"] as const
-type PanelName = (typeof PANEL_NAMES)[number]
-
-function panelIndex(name: string | null): number {
-  if (!name) return 1
-  const idx = PANEL_NAMES.indexOf(name as PanelName)
-  if (idx >= 0) return idx
-  // Legacy ?panel=wallet lands on balance + commands
-  if (name === "wallet") return 1
-  return 1
-}
+const CollectionsPanel = dynamic(
+  () => import("@/components/merch/collections-panel").then((mod) => ({ default: mod.CollectionsPanel })),
+  { ssr: false },
+)
 
 function MobileAppShellPanels() {
   const { isOnboardingOverlayOpen } = useOnboardingOverlay()
@@ -50,10 +41,12 @@ function MobileAppShellPanels() {
   const [isSendModalOpen, setIsSendModalOpen] = useState(false)
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false)
   const [historyMounted, setHistoryMounted] = useState(false)
+  const [collectionsMounted, setCollectionsMounted] = useState(false)
   const panelParamConsumedRef = useRef(false)
 
   useEffect(() => {
     if (activePanel === 2) setHistoryMounted(true)
+    if (activePanel === 3) setCollectionsMounted(true)
   }, [activePanel])
 
   useAppViewportLock()
@@ -92,7 +85,7 @@ function MobileAppShellPanels() {
   }, [])
 
   const goRight = useCallback(() => {
-    setActivePanel(p => Math.min(PANEL_COUNT - 1, p + 1))
+    setActivePanel(p => Math.min(PANEL_NAMES.length - 1, p + 1))
   }, [])
 
   const swipeHandlers = useHorizontalPanelSwipe({
@@ -101,7 +94,7 @@ function MobileAppShellPanels() {
     disabled: isSendModalOpen || isDepositModalOpen || isOnboardingOverlayOpen,
   })
 
-  const translateX = -((100 / PANEL_COUNT) * activePanel)
+  const translateX = -((100 / PANEL_NAMES.length) * activePanel)
 
   return (
         <div
@@ -121,7 +114,7 @@ function MobileAppShellPanels() {
       <div
         className="flex h-full overflow-hidden"
         style={{
-          width: `${PANEL_COUNT * 100}%`,
+          width: `${PANEL_NAMES.length * 100}%`,
           transform: `translateX(${translateX}%)`,
           transition: "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
           willChange: "transform",
@@ -130,7 +123,7 @@ function MobileAppShellPanels() {
         {/* Panel 0 — Settings (lazy: only mount when visited) */}
         <div
           className="h-full overflow-y-auto overscroll-none no-scrollbar"
-          style={{ width: `${100 / PANEL_COUNT}%` }}
+          style={{ width: `${100 / PANEL_NAMES.length}%` }}
         >
           {activePanel === 0 ? (
             <Suspense fallback={null}>
@@ -140,7 +133,7 @@ function MobileAppShellPanels() {
         </div>
 
         {/* Panel 1 — Landing: balance card + commands (statically imported, critical path) */}
-        <div className="h-full overflow-hidden" style={{ width: `${100 / PANEL_COUNT}%` }}>
+        <div className="h-full overflow-hidden" style={{ width: `${100 / PANEL_NAMES.length}%` }}>
           <WalletScreen
             shellLayout="landing"
             isSendModalOpen={isSendModalOpen}
@@ -152,10 +145,18 @@ function MobileAppShellPanels() {
         </div>
 
         {/* Panel 2 — Transaction history (lazy: only mounted after first swipe) */}
-        <div className="relative h-full overflow-hidden" style={{ width: `${100 / PANEL_COUNT}%` }}>
+        <div className="relative h-full overflow-hidden" style={{ width: `${100 / PANEL_NAMES.length}%` }}>
           {historyMounted ? (
             <Suspense fallback={null}>
               <WalletScreenHistory shellLayout="history" hideBottomBar />
+            </Suspense>
+          ) : null}
+        </div>
+
+        <div className="relative h-full overflow-hidden" style={{ width: `${100 / PANEL_NAMES.length}%` }}>
+          {collectionsMounted ? (
+            <Suspense fallback={null}>
+              <CollectionsPanel />
             </Suspense>
           ) : null}
         </div>
@@ -166,14 +167,14 @@ function MobileAppShellPanels() {
           aria-label="Wallet panels"
           className="absolute bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-1.5"
         >
-          {[0, 1, 2].map((i) => {
+          {PANEL_NAMES.map((name, i) => {
             const active = i === activePanel
             return (
               <button
-                key={PANEL_NAMES[i]}
+                key={name}
                 type="button"
                 onClick={() => setActivePanel(i)}
-                aria-label={PANEL_NAMES[i]}
+                aria-label={name}
                 aria-current={active ? "page" : undefined}
                 className="flex h-5 w-5 items-center justify-center"
               >
