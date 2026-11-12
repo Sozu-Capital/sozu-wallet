@@ -155,14 +155,15 @@ function MobileAppShellPanels() {
 
   const springTo = useCallback(
     (index: number, from: number) => {
-      const to = -index * widthRef.current
       modeRef.current = "spring"
       cancelAnimationFrame(rafRef.current)
+      indexRef.current = index
       setActivePanel(index)
       let x = from
       let v = 0
       let last = performance.now()
       const tick = (now: number) => {
+        const to = -index * widthRef.current
         const dt = Math.min(0.032, (now - last) / 1000)
         last = now
         const next = springStep({ x, v }, to, dt)
