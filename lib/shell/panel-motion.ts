@@ -8,6 +8,9 @@ export const COMMIT_FRACTION = 0.25
 /** Finger speed, in pixels per millisecond, that changes panel on a short flick. */
 export const FLICK_PX_PER_MS = 0.5
 
+/** A sample older than this is a held finger, not a flick. */
+export const FLICK_SAMPLE_MS = 80
+
 /** How much of a pull past the first or last panel is shown. */
 export const RUBBER_BAND = 0.35
 
@@ -51,6 +54,12 @@ export function nextPanelIndex(input: {
   if (signed === 0) return index
   const delta = signed < 0 ? 1 : -1
   return Math.min(count - 1, Math.max(0, index + delta))
+}
+
+/** A finger that has been still does not count as a flick. */
+export function releaseVelocity(velocity: number, sampleAgeMs: number): number {
+  if (!Number.isFinite(sampleAgeMs) || sampleAgeMs > FLICK_SAMPLE_MS) return 0
+  return velocity
 }
 
 /** Reduced motion cross-fades. It does not run the spring, so there is no overshoot. */

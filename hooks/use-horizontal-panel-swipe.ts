@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react"
+import { releaseVelocity } from "@/lib/shell/panel-motion"
 
 const AXIS_LOCK_RATIO = 1.5
 
@@ -59,9 +60,11 @@ export function useHorizontalPanelSwipe({
       horizontal && startX.current !== null && lastX.current !== null
         ? lastX.current - startX.current
         : 0
-    const releaseVelocity = horizontal ? velocity.current : 0
+    const sampleAge =
+      lastT.current === null ? Number.POSITIVE_INFINITY : performance.now() - lastT.current
+    const agedVelocity = horizontal ? releaseVelocity(velocity.current, sampleAge) : 0
     reset()
-    onRelease({ dx, velocity: releaseVelocity })
+    onRelease({ dx, velocity: agedVelocity })
   }, [onRelease, reset])
 
   const onTouchStart = useCallback(

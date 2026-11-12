@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
   FLICK_PX_PER_MS,
+  FLICK_SAMPLE_MS,
   RUBBER_BAND,
   SPRING_DAMPING,
   SPRING_STIFFNESS,
   followOffset,
   nextPanelIndex,
   releaseMotion,
+  releaseVelocity,
   rubberBandOffset,
   springIsUnderdamped,
   springStep,
@@ -58,6 +60,11 @@ describe("panel motion", () => {
     expect(
       nextPanelIndex({ index: 3, count: 4, dx: -WIDTH, velocity: -1, width: WIDTH }),
     ).toBe(3)
+  })
+
+  it("drops flick speed after the finger has been still", () => {
+    expect(releaseVelocity(-1, FLICK_SAMPLE_MS)).toBe(-1)
+    expect(releaseVelocity(-1, FLICK_SAMPLE_MS + 1)).toBe(0)
   })
 
   it("uses a spring that can overshoot, and a cross-fade when reduced motion is on", () => {
