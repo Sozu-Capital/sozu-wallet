@@ -5,6 +5,8 @@ import { getMerchItem } from "@/lib/merch/catalog"
 import { merchUsdcAddress } from "@/lib/merch/destination"
 import { confirmMerchOrder, isMerchAttemptId, openMerchOrder, type MerchOrder } from "@/lib/merch/order"
 import { prepareMerchPaymentBuild } from "@/lib/merch/payment-build"
+import { sendOneCollectible } from "@/lib/merch/send-collectible"
+import { deliverMerchCollectible } from "@/lib/merch/transfer"
 import { parseSacTransferEnvelope } from "@/lib/stellar/parse-sac-transfer-envelope"
 import { submitSignedSorobanEnvelope } from "@/lib/stellar/send-token"
 import { decimalStringToMinor } from "@/lib/withdraw/amount"
@@ -21,7 +23,14 @@ function orderBody(order: MerchOrder) {
     destination: order.destination,
     payer: order.payer,
     transferAttempted: order.transferAttempted,
+    transferHash: order.transferHash,
   }
+}
+
+async function settleCollectible(order: MerchOrder): Promise<MerchOrder> {
+  if (order.status !== "paid") return order
+  const delivered = await deliverMerchCollectible(order, supabaseMerchOrderStore, sendOneCollectible)
+  return delivered.ok ? delivered.order : order
 }
 
 /** Confirm Buy: one USDC payment per attempt. The payer is the session wallet. */
@@ -71,7 +80,8 @@ export async function POST(request: NextRequest) {
       const opened = await openMerchOrder(input, supabaseMerchOrderStore)
       if (!opened.ok) return NextResponse.json({ success: false, code: opened.code }, { status: 400 })
       if (opened.order.status !== "awaiting_payment") {
-        return NextResponse.json({ success: true, order: orderBody(opened.order), submitted: false })
+        const settled = await settleCollectible(opened.order)
+        return NextResponse.json({ success: true, order: orderBody(settled), submitted: false })
       }
       const built = await prepareMerchPaymentBuild({
         sender: resolved.sender,
@@ -104,9 +114,10 @@ export async function POST(request: NextRequest) {
       return { ok: true, hash }
     })
     if (!confirmed.ok) return NextResponse.json({ success: false, code: confirmed.code }, { status: 400 })
+    const settled = await settleCollectible(confirmed.order)
     return NextResponse.json({
-      success: confirmed.order.status === "paid",
-      order: orderBody(confirmed.order),
+      success: settled.status === "paid" || settled.status === "completed",
+      order: orderBody(settled),
       submitted: confirmed.submitted,
     })
   } catch (err) {

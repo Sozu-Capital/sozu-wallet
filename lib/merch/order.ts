@@ -1,6 +1,6 @@
 import { IDEMPOTENCY_KEY_PATTERN } from "@/lib/idempotency/idempotency"
 
-export type MerchOrderStatus = "awaiting_payment" | "charging" | "paid" | "failed" | "completed"
+export type MerchOrderStatus = "awaiting_payment" | "charging" | "paid" | "transferring" | "failed" | "completed"
 
 export type MerchOrder = {
   id: string
@@ -14,6 +14,7 @@ export type MerchOrder = {
   status: MerchOrderStatus
   paymentHash: string | null
   failureReason: string | null
+  transferHash: string | null
   transferAttempted: boolean
 }
 
@@ -30,6 +31,8 @@ export interface MerchOrderStore {
   insert(order: MerchOrder): Promise<MerchOrder | "conflict">
   /** Moves awaiting_payment → charging. False when another confirm already claimed it. */
   claimCharge(id: string): Promise<boolean>
+  /** Moves paid → transferring. False when a transfer is already claimed or finished. */
+  claimTransfer(id: string): Promise<boolean>
   save(order: MerchOrder): Promise<void>
 }
 
@@ -46,7 +49,7 @@ export type ConfirmMerchOrderResult =
   | { ok: true; order: MerchOrder; submitted: boolean }
   | { ok: false; code: "invalid_attempt" | "invalid_payer" | "invalid_destination" | "invalid_price" }
 
-const OPEN: ReadonlySet<MerchOrderStatus> = new Set(["awaiting_payment", "charging", "paid"])
+const OPEN: ReadonlySet<MerchOrderStatus> = new Set(["awaiting_payment", "charging", "paid", "transferring"])
 
 export function isMerchAttemptId(value: string): boolean {
   return IDEMPOTENCY_KEY_PATTERN.test(value)
@@ -85,6 +88,12 @@ export function createMemoryOrderStore(): MerchOrderStore {
       order.status = "charging"
       return true
     },
+    async claimTransfer(id) {
+      const order = byId.get(id)
+      if (!order || order.status !== "paid" || order.transferHash) return false
+      order.status = "transferring"
+      return true
+    },
     async save(order) {
       byId.set(order.id, clone(order))
     },
@@ -121,6 +130,7 @@ async function loadOrCreate(
     status: "awaiting_payment",
     paymentHash: null,
     failureReason: null,
+    transferHash: null,
     transferAttempted: false,
   }
   const inserted = await store.insert(created)
@@ -182,6 +192,7 @@ export async function confirmMerchOrder(
         status: "paid",
         paymentHash: result.hash,
         failureReason: null,
+        transferHash: null,
         transferAttempted: false,
       }
     : {
@@ -189,6 +200,7 @@ export async function confirmMerchOrder(
         status: "failed",
         paymentHash: null,
         failureReason: result.reason,
+        transferHash: null,
         transferAttempted: false,
       }
   await store.save(finished)

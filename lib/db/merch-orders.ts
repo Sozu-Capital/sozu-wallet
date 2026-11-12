@@ -5,7 +5,7 @@ import type { MerchOrder, MerchOrderStatus, MerchOrderStore } from "@/lib/merch/
 
 const TABLE = "merch_orders"
 const MISSING_TABLE_CODES = new Set(["PGRST205", "42P01"])
-const OPEN = ["awaiting_payment", "charging", "paid"]
+const OPEN = ["awaiting_payment", "charging", "paid", "transferring"]
 
 export class MerchOrderStoreUnavailableError extends Error {
   constructor(message: string) {
@@ -25,6 +25,7 @@ type Row = {
   status: MerchOrderStatus
   payment_hash: string | null
   failure_reason: string | null
+  transfer_hash: string | null
   transfer_attempted: boolean
 }
 
@@ -54,6 +55,7 @@ function toOrder(row: Row): MerchOrder {
     status: row.status,
     paymentHash: row.payment_hash,
     failureReason: row.failure_reason,
+    transferHash: row.transfer_hash,
     transferAttempted: row.transfer_attempted,
   }
 }
@@ -70,6 +72,7 @@ function toRow(order: MerchOrder): Row {
     status: order.status,
     payment_hash: order.paymentHash,
     failure_reason: order.failureReason,
+    transfer_hash: order.transferHash,
     transfer_attempted: order.transferAttempted,
   }
 }
@@ -111,6 +114,17 @@ export const supabaseMerchOrderStore: MerchOrderStore = {
       .eq("status", "awaiting_payment")
       .select("id")
     if (error) raise("claim", error)
+    return Array.isArray(data) && data.length > 0
+  },
+  async claimTransfer(id) {
+    const { data, error } = await db()
+      .from(TABLE)
+      .update({ status: "transferring", transfer_attempted: true })
+      .eq("id", id)
+      .eq("status", "paid")
+      .is("transfer_hash", null)
+      .select("id")
+    if (error) raise("claim transfer", error)
     return Array.isArray(data) && data.length > 0
   },
   async save(order) {
