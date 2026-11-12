@@ -77,6 +77,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Hang-tag item pages. NFC and QR open the same URL with no session.
+  if (pathname === "/item" || pathname.startsWith("/item/")) {
+    return NextResponse.next()
+  }
+
   // Allow /tracker (Expense Tracker) without auth so we can test the UI
   if (pathname.startsWith("/tracker")) {
     return NextResponse.next()

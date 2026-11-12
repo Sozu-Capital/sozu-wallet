@@ -33,6 +33,8 @@ export type WaitlistGateDecision = "pass" | "rewrite" | "redirect"
 export function waitlistGate(pathname: string, hasBypass: boolean): WaitlistGateDecision {
   if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return "pass"
   if (ROOT_FILE.test(pathname) || ASSET_FILE.test(pathname)) return "pass"
+  // Hang tags open /item/<slug> on a phone that has not joined the waitlist.
+  if (pathname === "/item" || pathname.startsWith("/item/")) return "pass"
   if (hasBypass) return "pass"
   if (pathname === "/") return "rewrite"
   return "redirect"

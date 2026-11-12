@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" fill="none">
+  <rect width="800" height="800" fill="#161616"/>
+  <rect x="36" y="36" width="728" height="728" rx="40" stroke="#ffffff" stroke-opacity="0.22"/>
+  <text x="400" y="360" fill="#ffffff" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="72" font-weight="600">Liquid</text>
+  <text x="400" y="440" fill="#ffffff" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="72" font-weight="600">Society</text>
+  <text x="400" y="500" fill="#ffffff" fill-opacity="0.5" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" letter-spacing="4">18 NOV 2026</text>
+</svg>
