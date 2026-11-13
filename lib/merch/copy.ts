@@ -20,6 +20,9 @@ export type MerchCopy = {
   emptyCollections: string
   previousReceipt: string
   nextReceipt: string
+  findNear: string
+  findCity: string
+  findOpen: string
 }
 
 const es: MerchCopy = {
@@ -42,6 +45,9 @@ const es: MerchCopy = {
   emptyCollections: "Todavía no tienes coleccionables.",
   previousReceipt: "Anterior",
   nextReceipt: "Siguiente",
+  findNear: "Cerca de ti",
+  findCity: "En la ciudad",
+  findOpen: "Ver",
 }
 
 const en: MerchCopy = {
@@ -64,6 +70,9 @@ const en: MerchCopy = {
   emptyCollections: "You don't hold a collectible yet.",
   previousReceipt: "Previous",
   nextReceipt: "Next",
+  findNear: "Near you",
+  findCity: "In the city",
+  findOpen: "View",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {

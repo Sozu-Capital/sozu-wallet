@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Gift, MapPin, Loader2, Wallet } from "lucide-react";
+import { CITY_SPOTS, type TreasureSpot } from "@/lib/city/spots";
 import { cn } from "@/lib/utils";
 
 const CITY_EXPLAINER_KEY = "sozu_city_explainer_seen";
@@ -26,52 +27,7 @@ const CITY_EXPLAINER_KEY = "sozu_city_explainer_seen";
 const SANTIAGO_CENTER: [number, number] = [-70.6483, -33.4489];
 const DEFAULT_ZOOM = 13;
 
-export type TreasureSpot = {
-  id: string;
-  name: string;
-  longitude: number;
-  latitude: number;
-  description?: string;
-  rewardLabel?: string;
-  redeemed?: boolean;
-};
-
-// Treasure spots: partner stores in Santiago (coordinates from geocoding)
-// París 834 → Nominatim; Agustinas/Villavicencio/Bellavista → geocoding + references
-const DEFAULT_SPOTS: TreasureSpot[] = [
-  {
-    id: "1",
-    name: "Pandevilla",
-    longitude: -70.6481253,
-    latitude: -33.4446721,
-    description: "París 834, Santiago, Chile. Canjea tu tesoro aquí.",
-    rewardLabel: "Pandevilla",
-  },
-  {
-    id: "2",
-    name: "Swe Store",
-    longitude: -70.6512,
-    latitude: -33.4419,
-    description: "Agustinas 651, 8320195 Santiago. Canjea tu tesoro aquí.",
-    rewardLabel: "Swe Store",
-  },
-  {
-    id: "3",
-    name: "Casawork",
-    longitude: -70.6408018,
-    latitude: -33.4380742,
-    description: "Villavicencio 395, 8320129 Santiago, Región Metropolitana.",
-    rewardLabel: "Casawork",
-  },
-  {
-    id: "4",
-    name: "Charlie Wok",
-    longitude: -70.6454365,
-    latitude: -33.4326041,
-    description: "Bellavista 419, 8420488 Recoleta, Región Metropolitana.",
-    rewardLabel: "Charlie Wok",
-  },
-];
+export type { TreasureSpot };
 
 export function CityMap() {
   const [showExplainer, setShowExplainer] = useState(false);
@@ -82,7 +38,7 @@ export function CityMap() {
     lat: number;
   } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [spots] = useState<TreasureSpot[]>(DEFAULT_SPOTS);
+  const [spots] = useState(CITY_SPOTS);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
