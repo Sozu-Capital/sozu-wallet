@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Purchases for the signed-in guest. History reads this; it does not trust a body user id. */
+/** Purchases for the signed-in guest. Collections joins these onto held items. */
 export async function GET(request: NextRequest) {
   const auth = requireSession(request)
   if (auth.error) return auth.error
