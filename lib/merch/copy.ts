@@ -18,6 +18,8 @@ export type MerchCopy = {
   transferLink: string
   collections: string
   emptyCollections: string
+  previousReceipt: string
+  nextReceipt: string
 }
 
 const es: MerchCopy = {
@@ -38,6 +40,8 @@ const es: MerchCopy = {
   transferLink: "Coleccionable",
   collections: "Colecciones",
   emptyCollections: "Todavía no tienes coleccionables.",
+  previousReceipt: "Anterior",
+  nextReceipt: "Siguiente",
 }
 
 const en: MerchCopy = {
@@ -58,6 +62,8 @@ const en: MerchCopy = {
   transferLink: "Collectible",
   collections: "Collections",
   emptyCollections: "You don't hold a collectible yet.",
+  previousReceipt: "Previous",
+  nextReceipt: "Next",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {

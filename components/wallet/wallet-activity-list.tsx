@@ -7,7 +7,6 @@ import { TransactionHistorySkeleton } from "@/components/wallet/wallet-skeleton-
 import { getStellarExpertTxUrl } from "@/lib/wallet-utils"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import type { WalletActivityItem, WalletActivityKind } from "@/hooks/use-wallet-activity"
-import { CollectibleReceipt, PurchaseLine } from "@/components/merch/collectible-receipt"
 import { cn } from "@/lib/utils"
 
 const PREVIEW_COUNT = 8
@@ -23,10 +22,6 @@ const KIND_TAG: Record<WalletActivityKind, { label: string; className: string }>
   },
   manual: {
     label: "manual",
-    className: "border-white/15 bg-white/5 text-white/45",
-  },
-  merch: {
-    label: "merch",
     className: "border-white/15 bg-white/5 text-white/45",
   },
 }
@@ -48,7 +43,6 @@ export const WalletActivityList = memo(function WalletActivityList({
 }: Props) {
   const { t } = useWalletLanguage()
   const [isExpanded, setIsExpanded] = useState(false)
-  const [openMerchId, setOpenMerchId] = useState<string | null>(null)
 
   if (isLoading && items.length === 0) {
     return (
@@ -120,16 +114,6 @@ export const WalletActivityList = memo(function WalletActivityList({
             </li>
           ) : (
             visible.map((item) => {
-              if (item.kind === "merch" && item.merchReceipt) {
-                const receipt = item.merchReceipt
-                const open = openMerchId === item.id
-                return (
-                  <li key={item.id} className="list-none">
-                    <PurchaseLine model={receipt} onOpen={() => setOpenMerchId(open ? null : item.id)} />
-                    {open ? <CollectibleReceipt model={receipt} /> : null}
-                  </li>
-                )
-              }
               const tag = KIND_TAG[item.kind]
               const isChain = item.kind === "chain"
               const hash = item.chainTx?.hash

@@ -156,7 +156,7 @@ function MobileAppShellPanels() {
         <div className="relative h-full overflow-hidden" style={{ width: `${100 / PANEL_NAMES.length}%` }}>
           {collectionsMounted ? (
             <Suspense fallback={null}>
-              <CollectionsPanel />
+              <CollectionsPanel onLeavePrevious={goLeft} />
             </Suspense>
           ) : null}
         </div>
