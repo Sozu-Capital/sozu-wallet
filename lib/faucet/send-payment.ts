@@ -148,7 +148,7 @@ async function submitTreasuryInvocation(params: {
   const sent = await server.sendTransaction(prepared);
   if (sent.status === "ERROR" || !sent.hash) {
     const detail = sent.errorResult
-      ? sent.errorResult.result()?.switch?.().name ?? "unknown"
+      ? sent.errorResult.result.type
       : "no hash";
     throw new Error(
       `Faucet payment rejected by Soroban RPC (${detail}) [faucet=${params.faucetSlug}]`,

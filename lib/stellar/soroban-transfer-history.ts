@@ -29,39 +29,28 @@ export type SorobanWalletTransaction = {
 
 function coerceScVal(raw: unknown): xdr.ScVal | null {
   if (raw == null) return null
-  if (raw instanceof xdr.ScVal) return raw
+  if (xdr.ScVal.is(raw)) return raw
   if (typeof raw === "string") {
     try {
-      return xdr.ScVal.fromXDR(raw, "base64")
+      return xdr.ScVal.fromXdr(raw, "base64")
     } catch {
       return null
     }
   }
-  if (
-    typeof raw === "object" &&
-    raw !== null &&
-    "switch" in raw &&
-    typeof (raw as xdr.ScVal).switch === "function"
-  ) {
+  if (typeof raw === "object" && raw !== null && "type" in raw) {
     return raw as xdr.ScVal
   }
   return null
 }
 
 function scValSymbolText(val: xdr.ScVal): string {
-  if (val.switch().name !== "scvSymbol") return ""
-  const sym = val.sym() as string | Buffer | undefined
-  if (typeof sym === "string") return sym
-  if (Buffer.isBuffer(sym)) return sym.toString("utf8")
-  return sym != null ? String(sym) : ""
+  if (val.type !== "scvSymbol") return ""
+  return val.sym.toString()
 }
 
 function scValI128ToBigInt(val: xdr.ScVal): bigint {
-  if (val.switch().name !== "scvI128") return BigInt(0)
-  const parts = val.i128()
-  const lo = BigInt(parts.lo().toString())
-  const hi = BigInt(parts.hi().toString())
-  return (hi << BigInt(64)) + lo
+  if (val.type !== "scvI128") return BigInt(0)
+  return (val.i128.hi << BigInt(64)) + val.i128.lo
 }
 
 function stroopsToAmount(stroops: bigint): number {
@@ -143,10 +132,10 @@ export async function getSorobanWalletTransactions(
           t0 = coerceScVal(topic[0])
           const t1 = coerceScVal(topic[1])
           const t2 = coerceScVal(topic[2])
-          if (t1?.switch().name === "scvAddress") {
+          if (t1?.type === "scvAddress") {
             from = Address.fromScVal(t1).toString().toUpperCase()
           }
-          if (t2?.switch().name === "scvAddress") {
+          if (t2?.type === "scvAddress") {
             to = Address.fromScVal(t2).toString().toUpperCase()
           }
         } catch {

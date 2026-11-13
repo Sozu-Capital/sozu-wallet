@@ -27,14 +27,12 @@ export interface VerifyOfframpEnvelopeExpected {
 }
 
 function i128ToBigInt(val: xdr.ScVal): bigint {
-  const parts = val.i128()
-  const lo = BigInt(parts.lo().toString())
-  const hi = BigInt(parts.hi().toString())
-  return (hi << BigInt(64)) + lo
+  if (val.type !== "scvI128") return BigInt(0)
+  return (val.i128.hi << BigInt(64)) + val.i128.lo
 }
 
-function functionNameToString(name: string | Buffer): string {
-  return Buffer.isBuffer(name) ? name.toString("utf8") : name
+function functionNameToString(name: { toString(): string }): string {
+  return name.toString()
 }
 
 export function verifyOfframpEnvelope(
@@ -59,27 +57,27 @@ export function verifyOfframpEnvelope(
     return { ok: false, reason: "not_invoke_host_function" }
   }
   const func = (op as unknown as { func: xdr.HostFunction }).func
-  if (func.switch().name !== "hostFunctionTypeInvokeContract") {
+  if (func.type !== "hostFunctionTypeInvokeContract") {
     return { ok: false, reason: "not_contract_invocation" }
   }
 
-  const invoke = func.invokeContract()
-  const contractId = Address.fromScAddress(invoke.contractAddress()).toString().trim().toUpperCase()
+  const invoke = func.invokeContract
+  const contractId = Address.fromScAddress(invoke.contractAddress).toString().trim().toUpperCase()
   if (contractId !== expected.sacContractId.trim().toUpperCase()) {
     return { ok: false, reason: "wrong_contract" }
   }
 
-  const fnName = functionNameToString(invoke.functionName())
+  const fnName = functionNameToString(invoke.functionName)
   if (fnName !== "transfer") {
     return { ok: false, reason: "not_transfer" }
   }
 
-  const args = invoke.args()
+  const args = invoke.args
   if (args.length !== 3) {
     return { ok: false, reason: "wrong_arg_count" }
   }
   const [fromArg, toArg, amountArg] = args
-  if (fromArg.switch().name !== "scvAddress" || toArg.switch().name !== "scvAddress") {
+  if (fromArg.type !== "scvAddress" || toArg.type !== "scvAddress") {
     return { ok: false, reason: "wrong_arg_types" }
   }
 
@@ -93,7 +91,7 @@ export function verifyOfframpEnvelope(
     return { ok: false, reason: "wrong_destination" }
   }
 
-  if (amountArg.switch().name !== "scvI128") {
+  if (amountArg.type !== "scvI128") {
     return { ok: false, reason: "wrong_amount_type" }
   }
   const amount = i128ToBigInt(amountArg)

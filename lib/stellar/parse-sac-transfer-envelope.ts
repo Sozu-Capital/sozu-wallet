@@ -29,29 +29,29 @@ export function parseSacTransferEnvelope(envelopeXdr: string, networkPassphrase:
   const op = parsed.operations[0]
   if (op.type !== "invokeHostFunction") return { ok: false, reason: "not_invoke_host_function" }
   const func = (op as unknown as { func: xdr.HostFunction }).func
-  if (func.switch().name !== "hostFunctionTypeInvokeContract") return { ok: false, reason: "not_contract_invocation" }
+  if (func.type !== "hostFunctionTypeInvokeContract") return { ok: false, reason: "not_contract_invocation" }
 
-  const invoke = func.invokeContract()
-  const fnName = invoke.functionName()
-  if ((Buffer.isBuffer(fnName) ? fnName.toString("utf8") : fnName) !== "transfer") {
+  const invoke = func.invokeContract
+  const fnName = invoke.functionName.toString()
+  if (fnName !== "transfer") {
     return { ok: false, reason: "not_transfer" }
   }
-  const args = invoke.args()
+  const args = invoke.args
   if (args.length !== 3) return { ok: false, reason: "wrong_arg_count" }
   const [fromArg, toArg, amountArg] = args
-  if (fromArg.switch().name !== "scvAddress" || toArg.switch().name !== "scvAddress") {
+  if (fromArg.type !== "scvAddress" || toArg.type !== "scvAddress") {
     return { ok: false, reason: "wrong_arg_types" }
   }
-  if (amountArg.switch().name !== "scvI128") return { ok: false, reason: "wrong_amount_type" }
+  if (amountArg.type !== "scvI128") return { ok: false, reason: "wrong_amount_type" }
 
   return {
     ok: true,
     intent: {
-      contractId: Address.fromScAddress(invoke.contractAddress()).toString(),
+      contractId: Address.fromScAddress(invoke.contractAddress).toString(),
       from: Address.fromScVal(fromArg).toString(),
       to: Address.fromScVal(toArg).toString(),
       amountMinor: i128ScValToBigInt(amountArg),
-      txHash: parsed.hash().toString("hex"),
+      txHash: Buffer.from(parsed.hash()).toString("hex"),
     },
   }
 }

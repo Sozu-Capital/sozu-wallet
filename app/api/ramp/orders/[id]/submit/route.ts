@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // below when we record the confirmed on-chain hash — this pre-check just
     // avoids a redundant submit attempt for the common "client retried the
     // same request" case.
-    const envelopeHash = parsed.hash().toString("hex")
+    const envelopeHash = Buffer.from(parsed.hash()).toString("hex")
     const priorUse = await findRampOrderByUserTxHash(envelopeHash)
     if (priorUse) {
       return NextResponse.json({ error: "envelope_reused" }, { status: 409 })

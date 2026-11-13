@@ -137,22 +137,23 @@ function formatSorobanSubmitError(result: {
 }): string {
   if (result.errorResult) {
     try {
-      const txResult = result.errorResult.result()?.switch?.().name
-      if (txResult === "txMalformed") {
+      const txResult = result.errorResult.result
+      const txResultName = txResult.type
+      if (txResultName === "txMalformed") {
         return "transaction envelope is invalid (missing Soroban data). Refresh and try send again."
       }
-      if (txResult === "txBadAuth") {
+      if (txResultName === "txBadAuth") {
         return "passkey signature was rejected. Sign out, sign in on the same URL, then retry."
       }
-      if (txResult === "txInsufficientFee") {
+      if (txResultName === "txInsufficientFee") {
         return "insufficient fee on the fee-payer account. Fund STELLAR_FUNDER_SECRET with XLM."
       }
-      const opResults = result.errorResult.result()?.results()
-      const first = opResults?.[0]
-      const tr = first?.tr?.()
-      const opName = tr?.switch?.().name
+      const opName =
+        txResult.type === "txFailed" && txResult.results[0]?.type === "opInner"
+          ? txResult.results[0].tr.type
+          : undefined
       if (opName) return `transaction failed (${opName})`
-      if (txResult) return `transaction failed (${txResult})`
+      if (txResultName) return `transaction failed (${txResultName})`
     } catch {
       /* fall through */
     }
@@ -315,7 +316,7 @@ function formatSorobanLedgerFailure(tx: Api.GetFailedTransactionResponse): strin
   const events = failed.diagnosticEventsXdr ?? []
   for (const ev of events) {
     try {
-      const text = ev.toXDR("base64")
+      const text = ev.toXdr("base64")
       if (text.includes("instructions exceeds amount")) {
         return "Soroban resource budget too low (retry send after refreshing the page)"
       }
@@ -327,9 +328,11 @@ function formatSorobanLedgerFailure(tx: Api.GetFailedTransactionResponse): strin
     }
   }
   try {
-    const tr = failed.resultXdr?.result?.()?.results?.()?.[0]?.tr?.()
-    const name = tr?.switch?.()?.name
-    if (name) return name
+    const result = failed.resultXdr?.result
+    if (result?.type === "txFailed") {
+      const first = result.results[0]
+      if (first?.type === "opInner") return first.tr.type
+    }
   } catch {
     /* ignore */
   }

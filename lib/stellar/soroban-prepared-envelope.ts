@@ -7,9 +7,11 @@ export function extractSorobanDataXdr(
 ): string | null {
   try {
     const tx = new Transaction(envelopeXdr, networkPassphrase)
-    const ext = tx.toEnvelope().v1().tx().ext()
-    const sorobanData = ext.sorobanData()
-    return sorobanData.toXDR("base64")
+    const envelope = tx.toEnvelope()
+    if (envelope.type !== "envelopeTypeTx") return null
+    const ext = envelope.v1.tx.ext
+    if (ext.type !== "sorobanData") return null
+    return ext.sorobanData.toXdr("base64")
   } catch {
     return null
   }

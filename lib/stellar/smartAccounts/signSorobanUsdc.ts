@@ -107,8 +107,14 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   })
 
   const signOne = async (entry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry> => {
-    const creds = entry.credentials().address()
-    const fromEntry = creds.signatureExpirationLedger()
+    const credentials = entry.credentials
+    const creds =
+      credentials.type === "sorobanCredentialsAddress"
+        ? credentials.address
+        : credentials.type === "sorobanCredentialsAddressV2"
+          ? credentials.addressV2
+          : null
+    const fromEntry = creds?.signatureExpirationLedger
     const expirationFromPrepare =
       fromEntry != null && Number(fromEntry) > 0 ? Number(fromEntry) : undefined
 
