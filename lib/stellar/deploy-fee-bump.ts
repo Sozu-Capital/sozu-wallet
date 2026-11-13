@@ -93,32 +93,31 @@ export function assertSponsoredCreateContract(
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
   const func = op.func
-  const switchName = func.switch().name
   const args =
-    switchName === "hostFunctionTypeCreateContractV2"
-      ? func.createContractV2()
-      : switchName === "hostFunctionTypeCreateContract"
-        ? func.createContract()
+    func.type === "hostFunctionTypeCreateContractV2"
+      ? func.createContractV2
+      : func.type === "hostFunctionTypeCreateContract"
+        ? func.createContract
         : null
   if (!args) {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  const preimage = args.contractIdPreimage()
-  if (preimage.switch().name !== "contractIdPreimageFromAddress") {
+  const preimage = args.contractIdPreimage
+  if (preimage.type !== "contractIdPreimageFromAddress") {
     throw new SponsoredDeployRejected("Deploy envelope must create an address-salted contract.")
   }
-  const fromAddress = preimage.fromAddress()
-  const deployer = Address.fromScAddress(fromAddress.address()).toString()
+  const fromAddress = preimage.fromAddress
+  const deployer = Address.fromScAddress(fromAddress.address).toString()
   assertSponsoredDeploySource(deployer)
-  const salt = Buffer.from(fromAddress.salt())
+  const salt = Buffer.from(fromAddress.salt.toBytes())
   if (!saltMatches(salt, params.allowedSalts)) {
     throw new SponsoredDeployRejected("Deploy salt does not match this account.")
   }
-  const executable = args.executable()
-  if (executable.switch().name !== "contractExecutableWasm") {
+  const executable = args.executable
+  if (executable.type !== "contractExecutableWasm") {
     throw new SponsoredDeployRejected("Deploy envelope must use the smart-account WASM.")
   }
-  const wasmHashHex = Buffer.from(executable.wasmHash()).toString("hex")
+  const wasmHashHex = Buffer.from(executable.wasmHash.toBytes()).toString("hex")
   if (wasmHashHex.toLowerCase() !== params.wasmHashHex.trim().toLowerCase()) {
     throw new SponsoredDeployRejected("Deploy WASM does not match the pinned smart-account hash.")
   }

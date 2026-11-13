@@ -62,7 +62,7 @@ export async function signTransactionWithPasskeyApproval(
   console.log("[Client Signing] Starting transaction signing with passkey approval")
 
   // Step 1: Calculate transaction hash
-  const transactionHash = transaction.hash().toString("hex")
+  const transactionHash = Buffer.from(transaction.hash()).toString("hex")
   console.log("[Client Signing] Transaction hash:", transactionHash.substring(0, 20) + "...")
 
   // Step 2: Request challenge from server

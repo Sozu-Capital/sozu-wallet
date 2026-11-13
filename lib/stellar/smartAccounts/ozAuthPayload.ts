@@ -1,9 +1,16 @@
 import { hash, xdr } from "@stellar/stellar-sdk"
 import base64url from "base64url"
 
+function addressCredentials(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
+  const credentials = entry.credentials
+  if (credentials.type === "sorobanCredentialsAddress") return credentials.address
+  if (credentials.type === "sorobanCredentialsAddressV2") return credentials.addressV2
+  throw new Error("Soroban auth entry is not address credentials")
+}
+
 /** XDR-encode Vec<u32> the same way Soroban `ToXdr` does for context_rule_ids. */
 export function contextRuleIdsToXdr(ruleIds: number[]): Buffer {
-  return xdr.ScVal.scvVec(ruleIds.map((id) => xdr.ScVal.scvU32(id))).toXDR()
+  return Buffer.from(xdr.ScVal.scvVec(ruleIds.map((id) => xdr.ScVal.scvU32(id))).toXdr())
 }
 
 /**
@@ -15,7 +22,7 @@ export function computeOzAuthDigest(
   contextRuleIds: number[],
 ): Buffer {
   const preimage = Buffer.concat([signaturePayload32, contextRuleIdsToXdr(contextRuleIds)])
-  return hash(preimage)
+  return Buffer.from(hash(preimage))
 }
 
 /**
@@ -25,16 +32,16 @@ export function sorobanSignaturePayloadFromEntry(params: {
   networkPassphrase: string
   entry: xdr.SorobanAuthorizationEntry
 }): Buffer {
-  const credentials = params.entry.credentials().address()
+  const credentials = addressCredentials(params.entry)
   const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
     new xdr.HashIdPreimageSorobanAuthorization({
       networkId: hash(Buffer.from(params.networkPassphrase)),
-      nonce: credentials.nonce(),
-      signatureExpirationLedger: credentials.signatureExpirationLedger(),
-      invocation: params.entry.rootInvocation(),
+      nonce: credentials.nonce,
+      signatureExpirationLedger: credentials.signatureExpirationLedger,
+      invocation: params.entry.rootInvocation,
     }),
   )
-  return hash(preimage.toXDR())
+  return Buffer.from(hash(preimage.toXdr()))
 }
 
 /** WebAuthn challenge (base64url) for OZ passkey signing on new smart-account WASM. */

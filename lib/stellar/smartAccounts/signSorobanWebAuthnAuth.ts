@@ -32,7 +32,7 @@ const AUTH_EXPIRATION_LEDGER_TTL = 60
 /** Bump stale prepare expiration so __check_auth does not fail after the user approves Touch ID. */
 async function resolveSignatureExpirationLedger(
   preferred: number | undefined,
-  credentials: ReturnType<xdr.SorobanAuthorizationEntry["credentials"]>,
+  credentials: xdr.SorobanAddressCredentials,
 ): Promise<number> {
   const rpcUrl =
     process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
@@ -44,7 +44,7 @@ async function resolveSignatureExpirationLedger(
 
   let expiration = preferred
   if (expiration == null || expiration <= 0) {
-    const fromEntry = credentials.address().signatureExpirationLedger()
+    const fromEntry = credentials.signatureExpirationLedger
     const entryExp = fromEntry != null ? Number(fromEntry) : 0
     expiration = entryExp > 0 ? entryExp : ledger + AUTH_EXPIRATION_LEDGER_TTL
   }
@@ -89,6 +89,7 @@ function assertPasskeyMatchesOnChainKeyData(
 }
 
 export function shouldFallbackPasskeySign(err: unknown): boolean {
+  if (err instanceof TypeError) return true
   const msg = err instanceof Error ? err.message : String(err)
   return (
     msg.includes("get_context_rules") ||
@@ -98,7 +99,8 @@ export function shouldFallbackPasskeySign(err: unknown): boolean {
     msg.includes("MissingValue") ||
     msg.includes("WasmVm") ||
     msg.includes("missing function") ||
-    msg.includes("not found in contract")
+    msg.includes("not found in contract") ||
+    msg.includes("is not a function")
   )
 }
 
@@ -178,42 +180,87 @@ function buildSignatureMapEntry(
   ])
   return new xdr.ScMapEntry({
     key: keyVal,
-    val: xdr.ScVal.scvBytes(sigDataScVal.toXDR()),
+    val: xdr.ScVal.scvBytes(sigDataScVal.toXdr()),
   })
 }
 
 function sortSignerMapEntries(sigMap: xdr.ScMapEntry[]): void {
   if (sigMap.length <= 1) return
   sigMap.sort((a, b) => {
-    const aKeyXdr = a.key().toXDR("hex")
-    const bKeyXdr = b.key().toXDR("hex")
+    const aKeyXdr = a.key.toXdr("hex")
+    const bKeyXdr = b.key.toXdr("hex")
     return aKeyXdr.localeCompare(bKeyXdr)
   })
 }
 
-/** New OZ WASM expects AuthPayload on credentials.signature, not a bare signer vec. */
-function applyOzAuthPayloadSignature(
+function addressCredentialsOf(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
+  const credentials = entry.credentials
+  if (credentials.type === "sorobanCredentialsAddress") return credentials.address
+  if (credentials.type === "sorobanCredentialsAddressV2") return credentials.addressV2
+  throw new Error("Soroban auth entry is not address credentials")
+}
+
+function entryWithAddressCredentials(
+  entry: xdr.SorobanAuthorizationEntry,
+  next: xdr.SorobanAddressCredentials,
+): xdr.SorobanAuthorizationEntry {
+  const current = entry.credentials
+  const credentials =
+    current.type === "sorobanCredentialsAddressV2"
+      ? xdr.SorobanCredentials.sorobanCredentialsAddressV2(next)
+      : xdr.SorobanCredentials.sorobanCredentialsAddress(next)
+  return new xdr.SorobanAuthorizationEntry({
+    credentials,
+    rootInvocation: entry.rootInvocation,
+  })
+}
+
+function credentialsWithExpiration(
   credentials: xdr.SorobanAddressCredentials,
+  expiration: number,
+): xdr.SorobanAddressCredentials {
+  return new xdr.SorobanAddressCredentials({
+    address: credentials.address,
+    nonce: credentials.nonce,
+    signatureExpirationLedger: expiration,
+    signature: credentials.signature,
+  })
+}
+
+function credentialsWithSignature(
+  credentials: xdr.SorobanAddressCredentials,
+  signature: xdr.ScVal,
+): xdr.SorobanAddressCredentials {
+  return new xdr.SorobanAddressCredentials({
+    address: credentials.address,
+    nonce: credentials.nonce,
+    signatureExpirationLedger: credentials.signatureExpirationLedger,
+    signature,
+  })
+}
+
+/** New OZ WASM expects AuthPayload on credentials.signature, not a bare signer vec. */
+function nextOzAuthPayloadSignature(
+  currentSig: xdr.ScVal,
   scMapEntry: xdr.ScMapEntry,
   contextRuleIds: number[],
-): void {
-  const currentSig = credentials.signature()
-  if (currentSig.switch().name === "scvMap") {
-    const payloadMap = currentSig.map() ?? []
-    let signersMap: xdr.ScMapEntry[] | null = null
-    for (const entry of payloadMap) {
-      if (entry.key().switch().name === "scvSymbol" && entry.key().sym().toString() === "signers") {
-        signersMap = entry.val().map() ?? []
-        break
+): xdr.ScVal {
+  if (currentSig.type === "scvMap") {
+    for (const entry of currentSig.map ?? []) {
+      if (entry.key.type === "scvSymbol" && entry.key.sym.toString() === "signers" && entry.val.type === "scvMap") {
+        const signersMap = [...(entry.val.map ?? []), scMapEntry]
+        sortSignerMapEntries(signersMap)
+        return xdr.ScVal.scvMap(
+          (currentSig.map ?? []).map((item) =>
+            item === entry
+              ? new xdr.ScMapEntry({ key: item.key, val: xdr.ScVal.scvMap(signersMap) })
+              : item,
+          ),
+        )
       }
     }
-    if (signersMap) {
-      signersMap.push(scMapEntry)
-      sortSignerMapEntries(signersMap)
-      return
-    }
   }
-  credentials.signature(buildOzAuthPayloadScVal([scMapEntry], contextRuleIds))
+  return buildOzAuthPayloadScVal([scMapEntry], contextRuleIds)
 }
 
 function assertKeyDataMatchesStoredPasskey(keyData: Buffer, storedPublicKey65: Uint8Array): void {
@@ -238,7 +285,7 @@ export async function resolveKeyDataFromChain(params: {
   const q = new URLSearchParams({
     contractId: params.contractId,
     credentialId: params.credentialId,
-    authEntryXdr: params.authEntry.toXDR("base64"),
+    authEntryXdr: params.authEntry.toXdr("base64"),
   })
   const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`)
   const data = (await res.json().catch(() => ({}))) as { keyDataBase64?: string }
@@ -428,14 +475,13 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   smartAccountContractId: string
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
-  const entryXdrBytes = params.entry.toXDR()
-  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entryXdrBytes)
-  const credentials = normalizedEntry.credentials().address()
+  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXdr(params.entry.toXdr())
+  const preparedCredentials = addressCredentialsOf(normalizedEntry)
 
   // Use the server-prepared expiration directly when it looks valid (> 0).
   // Only hit `getLatestLedger` if it's missing or zero — skipping the RPC call
   // means the passkey prompt can appear as soon as the challenge is ready.
-  const entryExpiration = Number(credentials.signatureExpirationLedger())
+  const entryExpiration = Number(preparedCredentials.signatureExpirationLedger)
   let expiration: number
   if (entryExpiration > 0 && (!params.expiration || params.expiration <= 0)) {
     expiration = entryExpiration
@@ -443,14 +489,17 @@ export async function signAuthEntryWithResolvedKeyData(params: {
     expiration = params.expiration
   } else {
     // Fallback: must hit RPC to get current ledger.
-    expiration = await resolveSignatureExpirationLedger(undefined, normalizedEntry.credentials())
+    expiration = await resolveSignatureExpirationLedger(undefined, preparedCredentials)
   }
-  credentials.signatureExpirationLedger(expiration)
+  const entryForChallenge = entryWithAddressCredentials(
+    normalizedEntry,
+    credentialsWithExpiration(preparedCredentials, expiration),
+  )
 
-  const contextRuleIds = defaultContextRuleIdsForEntry(normalizedEntry)
+  const contextRuleIds = defaultContextRuleIdsForEntry(entryForChallenge)
   const challenge = ozWebAuthnChallengeFromEntry({
     networkPassphrase: params.networkPassphrase,
-    entry: normalizedEntry,
+    entry: entryForChallenge,
     contextRuleIds,
   })
 
@@ -468,7 +517,7 @@ export async function signAuthEntryWithResolvedKeyData(params: {
     resolveKeyDataFromChain({
       contractId: params.smartAccountContractId,
       credentialId: webAuthnSig.credentialId,
-      authEntry: normalizedEntry,
+      authEntry: entryForChallenge,
     }),
     loadPasskeyPublicKey65({ credentialId: webAuthnSig.credentialId }),
   ])
@@ -506,9 +555,16 @@ export async function signAuthEntryWithResolvedKeyData(params: {
     signature: webAuthnSig.signature,
   })
 
-  applyOzAuthPayloadSignature(credentials, scMapEntry, contextRuleIds)
+  const signedCredentials = credentialsWithSignature(
+    addressCredentialsOf(entryForChallenge),
+    nextOzAuthPayloadSignature(
+      addressCredentialsOf(entryForChallenge).signature,
+      scMapEntry,
+      contextRuleIds,
+    ),
+  )
 
-  return normalizedEntry
+  return entryWithAddressCredentials(entryForChallenge, signedCredentials)
 }
 
 /**
@@ -524,17 +580,18 @@ export async function signAuthEntryWithStoredPasskey(params: {
   kit?: SmartAccountKit
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
-  const entryXdrBytes = params.entry.toXDR()
-  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entryXdrBytes)
-  const credentials = normalizedEntry.credentials().address()
+  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXdr(params.entry.toXdr())
+  const preparedCredentials = addressCredentialsOf(normalizedEntry)
+  const expiration = await resolveSignatureExpirationLedger(params.expiration, preparedCredentials)
+  const entryForChallenge = entryWithAddressCredentials(
+    normalizedEntry,
+    credentialsWithExpiration(preparedCredentials, expiration),
+  )
 
-  const expiration = await resolveSignatureExpirationLedger(params.expiration, normalizedEntry.credentials())
-  credentials.signatureExpirationLedger(expiration)
-
-  const contextRuleIds = defaultContextRuleIdsForEntry(normalizedEntry)
+  const contextRuleIds = defaultContextRuleIdsForEntry(entryForChallenge)
   const challenge = ozWebAuthnChallengeFromEntry({
     networkPassphrase: params.networkPassphrase,
-    entry: normalizedEntry,
+    entry: entryForChallenge,
     contextRuleIds,
   })
 
@@ -566,7 +623,7 @@ export async function signAuthEntryWithStoredPasskey(params: {
     keyData = await resolveKeyDataFromChain({
       contractId: params.smartAccountContractId,
       credentialId: credForLookup,
-      authEntry: normalizedEntry,
+      authEntry: entryForChallenge,
     })
   }
 
@@ -587,10 +644,17 @@ export async function signAuthEntryWithStoredPasskey(params: {
   if (process.env.NODE_ENV === "development") {
     console.log("[signSorobanWebAuthnAuth] applying AuthPayload", {
       contextRuleIds,
-      priorSigType: credentials.signature().switch().name,
+      priorSigType: addressCredentialsOf(entryForChallenge).signature.type,
     })
   }
-  applyOzAuthPayloadSignature(credentials, scMapEntry, contextRuleIds)
+  const signedCredentials = credentialsWithSignature(
+    addressCredentialsOf(entryForChallenge),
+    nextOzAuthPayloadSignature(
+      addressCredentialsOf(entryForChallenge).signature,
+      scMapEntry,
+      contextRuleIds,
+    ),
+  )
 
-  return normalizedEntry
+  return entryWithAddressCredentials(entryForChallenge, signedCredentials)
 }

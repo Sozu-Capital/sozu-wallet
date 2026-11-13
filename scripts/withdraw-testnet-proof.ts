@@ -55,13 +55,33 @@ async function classicTx(kp: Keypair, ops: xdr.Operation[]) {
 
 async function signAuthAsHolder(unsignedXdr: string, holder: Keypair): Promise<string> {
   const latest = await sorobanRpc.getLatestLedger()
-  const env = xdr.TransactionEnvelope.fromXDR(unsignedXdr, "base64")
-  const op = env.v1().tx().operations()[0].body().invokeHostFunctionOp()
+  const env = xdr.TransactionEnvelope.fromXdr(unsignedXdr, "base64")
+  if (env.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+  const tx = env.v1.tx
+  const op = tx.operations[0]
+  if (!op || op.body.type !== "invokeHostFunction") throw new Error("expected invoke host function")
+  const host = op.body.invokeHostFunctionOp
   const signed = await Promise.all(
-    op.auth().map((entry) => authorizeEntry(entry, holder, latest.sequence + 60, passphrase)),
+    host.auth.map((entry) => authorizeEntry(entry, holder, latest.sequence + 60, passphrase)),
   )
-  op.auth(signed)
-  return env.toXDR("base64")
+  const nextOp = new xdr.Operation({
+    sourceAccount: op.sourceAccount,
+    body: xdr.OperationBody.invokeHostFunction(
+      new xdr.InvokeHostFunctionOp({ hostFunction: host.hostFunction, auth: signed }),
+    ),
+  })
+  const nextTx = new xdr.Transaction({
+    sourceAccount: tx.sourceAccount,
+    fee: tx.fee,
+    seqNum: tx.seqNum,
+    cond: tx.cond,
+    memo: tx.memo,
+    operations: [nextOp, ...tx.operations.slice(1)],
+    ext: tx.ext,
+  })
+  return xdr.TransactionEnvelope.envelopeTypeTx(
+    new xdr.TransactionV1Envelope({ tx: nextTx, signatures: env.v1.signatures }),
+  ).toXdr("base64")
 }
 
 async function checkDestination(address: string, memo: string, amountMinor: bigint) {
@@ -169,12 +189,18 @@ async function main() {
     if (tx.status === rpc.Api.GetTransactionStatus.SUCCESS) {
       const events = (tx as unknown as { events?: { contractEventsXdr?: xdr.ContractEvent[][] } }).events?.contractEventsXdr?.flat() ?? []
       muxedEvent = events.map((e) => {
-        const body = e.body().v0()
+        const body = e.body.type === "v0" ? e.body.v0 : null
+        if (!body) return { topics: [], data: e.body.type }
         return {
-          topics: body.topics().map((t) => (t.switch().name === "scvSymbol" ? t.sym().toString() : t.switch().name)),
-          data: body.data().switch().name === "scvMap"
-            ? body.data().map()!.map((m) => `${m.key().sym().toString()}=${m.val().switch().name === "scvU64" ? m.val().u64().toString() : m.val().switch().name}`)
-            : body.data().switch().name,
+          topics: body.topics.map((t) => (t.type === "scvSymbol" ? t.sym.toString() : t.type)),
+          data:
+            body.data.type === "scvMap"
+              ? (body.data.map ?? []).map((m) => {
+                  const key = m.key.type === "scvSymbol" ? m.key.sym.toString() : m.key.type
+                  const value = m.val.type === "scvU64" ? m.val.u64.toString() : m.val.type
+                  return `${key}=${value}`
+                })
+              : body.data.type,
         }
       })
     }

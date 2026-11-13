@@ -113,19 +113,19 @@ export async function GET(request: NextRequest) {
         if (Api.isSimulationSuccess(result) && result.result) {
           try {
             const returnValue = result.result.retval
-            const nativeValue = returnValue ? returnValue.value() : null
+            const nativeValue = returnValue ? returnValue.value : null
 
             results.functionTests.push({
               function: functionName,
               status: "success",
               responseTime: endTime - startTime,
-              returnType: returnValue ? returnValue.switch().name : "unknown",
+              returnType: returnValue ? returnValue.type : "unknown",
               rawValue: nativeValue,
               hasResult: true,
             })
 
             console.log(`[DeFindex Contract Test] ✅ ${functionName}:`, {
-              type: returnValue?.switch().name,
+              type: returnValue?.type,
               value: nativeValue,
               time: endTime - startTime + "ms"
             })

@@ -4,7 +4,7 @@ import base64url from "base64url"
 /** Per-user deploy salt so a new account does not reuse another user's C for the same passkey. */
 export function ozDeploySalt(credentialId: string, userId: string): Buffer {
   const credBuf = base64url.toBuffer(credentialId)
-  return hash(Buffer.concat([credBuf, Buffer.from(userId.trim(), "utf8")]))
+  return Buffer.from(hash(Buffer.concat([credBuf, Buffer.from(userId.trim(), "utf8")])))
 }
 
 export function deriveOzContractIdForUser(params: {
@@ -25,7 +25,7 @@ export function deriveOzContractIdForUser(params: {
       ),
     }),
   )
-  return StrKey.encodeContract(hash(preimage.toXDR()))
+  return StrKey.encodeContract(hash(preimage.toXdr()))
 }
 
 export function contractIdForDeploySalt(params: {
@@ -44,5 +44,5 @@ export function contractIdForDeploySalt(params: {
       ),
     }),
   )
-  return StrKey.encodeContract(hash(preimage.toXDR()))
+  return StrKey.encodeContract(hash(preimage.toXdr()))
 }

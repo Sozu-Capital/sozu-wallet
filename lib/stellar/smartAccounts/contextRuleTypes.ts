@@ -28,58 +28,37 @@ export function buildContextRuleTypesFromAuthEntry(
   }
 
   const walk = (invocation: xdr.SorobanAuthorizedInvocation) => {
-    const fn = invocation.function()
-    const switchName = fn.switch().name
-    if (switchName === "sorobanAuthorizedFunctionTypeContractFn") {
-      const args = fn.contractFn()
-      const contractAddress = Address.fromScAddress(args.contractAddress()).toString()
+    const fn = invocation.function
+    if (fn.type === "sorobanAuthorizedFunctionTypeContractFn") {
+      const contractAddress = Address.fromScAddress(fn.contractFn.contractAddress).toString()
       add({ tag: "CallContract", values: [contractAddress] })
-    } else if (switchName.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
+    } else if (fn.type.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
       const wasmHash = extractCreateContractWasmHash(fn)
       if (wasmHash) {
         add({ tag: "CreateContract", values: [wasmHash] })
       }
     }
-    for (const sub of invocation.subInvocations()) {
+    for (const sub of invocation.subInvocations) {
       walk(sub)
     }
   }
 
-  walk(entry.rootInvocation())
+  walk(entry.rootInvocation)
   add({ tag: "Default", values: undefined })
   return types
 }
 
+function wasmHashOf(executable: xdr.ContractExecutable): Buffer | null {
+  if (executable.type !== "contractExecutableWasm") return null
+  return Buffer.from(executable.wasmHash.toBytes())
+}
+
 function extractCreateContractWasmHash(fn: xdr.SorobanAuthorizedFunction): Buffer | null {
-  const fnAny = fn as xdr.SorobanAuthorizedFunction & {
-    createContractHostFn?: () => { executable?: () => { switch?: () => { name: string }; wasm?: () => Buffer } }
-    createContractWithCtorHostFn?: () => { executable?: () => { switch?: () => { name: string }; wasm?: () => Buffer } }
-    createContractWithConstructorHostFn?: () => {
-      executable?: () => { switch?: () => { name: string }; wasm?: () => Buffer }
-    }
+  if (fn.type === "sorobanAuthorizedFunctionTypeCreateContractHostFn") {
+    return wasmHashOf(fn.createContractHostFn.executable)
   }
-  const candidates = [
-    fnAny.createContractHostFn?.(),
-    fnAny.createContractWithCtorHostFn?.(),
-    fnAny.createContractWithConstructorHostFn?.(),
-  ]
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue
-    const ctx = candidate as {
-      executable?: (() => { switch?: () => { name: string }; wasm?: () => Buffer }) | {
-        switch?: () => { name: string }
-        wasm?: () => Buffer
-      }
-    }
-    const executable =
-      typeof ctx.executable === "function" ? ctx.executable() : ctx.executable
-    if (!executable || typeof executable !== "object") continue
-    const execAny = executable as { switch?: () => { name: string }; wasm?: () => Buffer }
-    const execSwitch = execAny.switch?.()
-    if (execSwitch?.name === "contractExecutableWasm") {
-      const wasm = typeof execAny.wasm === "function" ? execAny.wasm() : execAny.wasm
-      if (wasm) return Buffer.from(wasm)
-    }
+  if (fn.type === "sorobanAuthorizedFunctionTypeCreateContractV2HostFn") {
+    return wasmHashOf(fn.createContractV2HostFn.executable)
   }
   return null
 }

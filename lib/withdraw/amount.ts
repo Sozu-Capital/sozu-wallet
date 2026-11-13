@@ -38,8 +38,8 @@ export function minorToI128ScVal(minor: bigint): xdr.ScVal {
 }
 
 export function i128ScValToBigInt(val: xdr.ScVal): bigint {
-  const parts = val.i128()
-  const hi = BigInt.asIntN(64, BigInt(parts.hi().toString()))
-  const lo = BigInt.asUintN(64, BigInt(parts.lo().toString()))
+  if (val.type !== "scvI128") throw new Error("expected i128 amount")
+  const hi = BigInt.asIntN(64, val.i128.hi)
+  const lo = BigInt.asUintN(64, val.i128.lo)
   return (hi << BigInt(64)) + lo
 }

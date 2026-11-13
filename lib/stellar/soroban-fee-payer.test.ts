@@ -36,13 +36,20 @@ function signedLookingTransfer(sequence: string) {
       subInvocations: [],
     }),
   })
-  op.body().invokeHostFunctionOp().auth([auth])
+  const host = op.body.type === "invokeHostFunction" ? op.body.invokeHostFunctionOp : null
+  if (!host) throw new Error("expected invoke host function")
+  const withAuth = new xdr.Operation({
+    sourceAccount: op.sourceAccount,
+    body: xdr.OperationBody.invokeHostFunction(
+      new xdr.InvokeHostFunctionOp({ hostFunction: host.hostFunction, auth: [auth] }),
+    ),
+  })
   return new TransactionBuilder(new Account(funder.publicKey(), sequence), {
     fee: "12345",
     networkPassphrase: Networks.TESTNET,
     sorobanData: new SorobanDataBuilder().setResourceFee(5000).build(),
   })
-    .addOperation(op)
+    .addOperation(withAuth)
     .setTimeout(60)
     .build()
 }
@@ -59,20 +66,28 @@ describe("resequenceOnFeePayer", () => {
     expect(fresh.source).toBe(funder.publicKey())
     expect(fresh.fee).toBe(stale.fee)
     expect(fresh.timeBounds).toEqual(stale.timeBounds)
-    const opsXdr = (t: typeof stale) => t.toEnvelope().v1().tx().operations().map((o) => o.toXDR("base64"))
+    const opsXdr = (t: typeof stale) => {
+      const envelope = t.toEnvelope()
+      if (envelope.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+      return envelope.v1.tx.operations.map((o) => o.toXdr("base64"))
+    }
     expect(opsXdr(fresh)).toEqual(opsXdr(stale))
-    expect(fresh.toEnvelope().v1().tx().ext().sorobanData().resourceFee().toString()).toBe("5000")
+    const freshEnvelope = fresh.toEnvelope()
+    if (freshEnvelope.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+    const ext = freshEnvelope.v1.tx.ext
+    if (ext.type !== "sorobanData") throw new Error("expected soroban data")
+    expect(ext.sorobanData.resourceFee.toString()).toBe("5000")
   })
 })
 
 describe("isBadSequenceResult", () => {
   const result = (name: "txBadSeq" | "txBadAuth") =>
-    xdr.TransactionResult.fromXDR(
+    xdr.TransactionResult.fromXdr(
       new xdr.TransactionResult({
-        feeCharged: xdr.Int64.fromString("100"),
+        feeCharged: BigInt(100),
         result: xdr.TransactionResultResult[name](),
-        ext: new xdr.TransactionResultExt(0),
-      }).toXDR(),
+        ext: xdr.TransactionResultExt.v0(),
+      }).toXdr(),
     )
 
   it("detects txBadSeq and nothing else", () => {

@@ -17,7 +17,7 @@ async function assertPasskeyForSorobanSend(params: {
   if (!(tx instanceof Transaction)) {
     throw new Error("Invalid prepared transaction")
   }
-  const transactionHash = tx.hash().toString("hex")
+  const transactionHash = Buffer.from(tx.hash()).toString("hex")
 
   const challengeResponse = await fetch("/api/wallet/stellar/signing-challenge", {
     method: "POST",

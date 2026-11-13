@@ -43,13 +43,25 @@ export async function resequenceOnFeePayer(
   const account = await server.getAccount(tx.source)
   // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
   // adds the Soroban resource fee a second time on the SDK that CI installs.
-  const body = xdr.Transaction.fromXDR(tx.toEnvelope().v1().tx().toXDR())
-  const next = (BigInt(account.sequenceNumber()) + BigInt(1)).toString()
-  body.seqNum(xdr.Int64.fromString(next))
+  const envelopeIn = tx.toEnvelope()
+  if (envelopeIn.type !== "envelopeTypeTx") {
+    throw new Error("Resequenced fee-payer envelope was not a v1 transaction.")
+  }
+  const inner = envelopeIn.v1.tx
+  const next = BigInt(account.sequenceNumber()) + BigInt(1)
+  const body = new xdr.Transaction({
+    sourceAccount: inner.sourceAccount,
+    fee: inner.fee,
+    seqNum: next,
+    cond: inner.cond,
+    memo: inner.memo,
+    operations: inner.operations,
+    ext: inner.ext,
+  })
   const envelope = xdr.TransactionEnvelope.envelopeTypeTx(
     new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
   )
-  const rebuilt = TransactionBuilder.fromXDR(envelope.toXDR("base64"), networkPassphrase)
+  const rebuilt = TransactionBuilder.fromXDR(envelope.toXdr("base64"), networkPassphrase)
   if (!(rebuilt instanceof Transaction)) {
     throw new Error("Resequenced fee-payer envelope was not an inner transaction.")
   }
@@ -59,7 +71,7 @@ export async function resequenceOnFeePayer(
 export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
   if (result.status !== "ERROR" || !result.errorResult) return false
   try {
-    return result.errorResult.result().switch().name === "txBadSeq"
+    return result.errorResult.result.type === "txBadSeq"
   } catch {
     return false
   }

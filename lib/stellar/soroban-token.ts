@@ -43,23 +43,15 @@ function getNetworkPassphrase(network: "testnet" | "mainnet"): string {
 }
 
 function scValToBalanceStroops(val: xdr.ScVal): bigint {
-  switch (val.switch().name) {
-    case "scvI128": {
-      const p = val.i128()
-      const hi = BigInt(p.hi().toString())
-      const lo = BigInt(p.lo().toString())
-      return (hi << BigInt(64)) + lo
-    }
-    case "scvU128": {
-      const p = val.u128()
-      const hi = BigInt(p.hi().toString())
-      const lo = BigInt(p.lo().toString())
-      return (hi << BigInt(64)) + lo
-    }
+  switch (val.type) {
+    case "scvI128":
+      return (val.i128.hi << BigInt(64)) + val.i128.lo
+    case "scvU128":
+      return (val.u128.hi << BigInt(64)) + val.u128.lo
     case "scvI64":
-      return BigInt(val.i64().toString())
+      return val.i64
     case "scvU64":
-      return BigInt(val.u64().toString())
+      return val.u64
     default:
       return BigInt(0)
   }
