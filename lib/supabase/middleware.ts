@@ -78,6 +78,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Sozu Connect demo calls login() and pay() from a merchant page, not a wallet session.
+  if (pathname === "/connect-demo" || pathname.startsWith("/connect-demo/")) {
+    return NextResponse.next()
+  }
+
   // Hang-tag item pages. NFC and QR open the same URL with no session.
   if (pathname === "/item" || pathname.startsWith("/item/")) {
     return NextResponse.next()
