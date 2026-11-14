@@ -177,14 +177,11 @@ export async function signSorobanPreparedTxWithPasskey(params: {
       builder.addOperation(signedInvoke)
       const built = builder.build()
       const { Api } = await import("@stellar/stellar-sdk/rpc")
-      const sim = await params.kit.rpc.simulateTransaction(built)
+      const sim = await params.kit.rpc.simulateTransaction(built, undefined, "enforce")
       if (Api.isSimulationError(sim)) {
         const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
         if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
-          const host = typeof window !== "undefined" ? window.location.host : "this site"
-          throw new Error(
-            `The smart account rejected this passkey signature. Refresh the checkout on ${host} and tap Pay with SOZU again.`,
-          )
+          throw new Error("The smart account rejected this passkey signature.")
         }
         throw new Error(`Post-sign simulation failed: ${detail.slice(0, 800)}`)
       }
@@ -223,14 +220,11 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   if (isDev) {
     console.log("[signSorobanUsdc] re-simulating with signed auth (no sorobanDataXdr on hand)")
   }
-  const sim = await params.kit.rpc.simulateTransaction(rebuilt)
+  const sim = await params.kit.rpc.simulateTransaction(rebuilt, undefined, "enforce")
   if (Api.isSimulationError(sim)) {
     const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
     if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
-      const host = typeof window !== "undefined" ? window.location.host : "this site"
-      throw new Error(
-        `The smart account rejected this passkey signature. Refresh the checkout on ${host} and tap Pay with SOZU again.`,
-      )
+      throw new Error("The smart account rejected this passkey signature.")
     }
     throw new Error(`Simulation failed: ${detail.slice(0, 800)}`)
   }

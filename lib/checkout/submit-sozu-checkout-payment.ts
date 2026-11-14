@@ -155,11 +155,15 @@ export async function submitSozuCheckoutPayment({
           ? build.sorobanDataXdr
           : extractSorobanDataXdr(unsignedXdr, config.networkPassphrase);
 
+      const preparedPassphrase =
+        typeof build.networkPassphrase === "string" && build.networkPassphrase.trim()
+          ? build.networkPassphrase.trim()
+          : config.networkPassphrase;
       signedEnvelopeXdr = await signSorobanPreparedTxWithPasskey({
         kit,
         unsignedXdr,
         sorobanDataXdr,
-        networkPassphrase: config.networkPassphrase,
+        networkPassphrase: preparedPassphrase,
         credentialId,
         smartAccountContractId: walletContractId,
         webauthnVerifierAddress: config.webauthnVerifierAddress,

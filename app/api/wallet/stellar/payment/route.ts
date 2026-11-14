@@ -800,6 +800,7 @@ export async function POST(request: NextRequest) {
         passkeyRegisteredOnContract,
         feePayerPublicKey: feePayer,
         usedFunderRelayer: usedFunder,
+        networkPassphrase: stellarConfig.network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
         signerPublicKey: useFactoryGSigner ? signerPk : null,
         walletAddress: senderPk,
         ozCredentialId: wallet.ozCredentialId ?? null,

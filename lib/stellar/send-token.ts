@@ -168,7 +168,7 @@ async function simulateBeforeSubmit(
   server: rpc.Server,
   tx: Transaction | FeeBumpTransaction,
 ): Promise<void> {
-  const sim = await server.simulateTransaction(tx)
+  const sim = await server.simulateTransaction(tx, undefined, "enforce")
   if (Api.isSimulationError(sim)) {
     const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
     console.error("[simulateBeforeSubmit] Simulation error:", detail.slice(0, 1000))
@@ -205,7 +205,11 @@ export async function submitSignedSorobanEnvelope(
   async function prepare(t: Transaction | FeeBumpTransaction): Promise<Transaction | FeeBumpTransaction> {
     if (!(t instanceof Transaction)) return t
     try {
-      return await server.prepareTransaction(t)
+      const sim = await server.simulateTransaction(t, undefined, "enforce")
+      if (Api.isSimulationError(sim)) {
+        throw new Error(typeof sim.error === "string" ? sim.error : "simulation failed")
+      }
+      return rpc.assembleTransaction(t, sim).build()
     } catch (e) {
       if (process.env.NODE_ENV === "development") {
         console.warn("[submitSignedSorobanEnvelope] prepareTransaction skipped:", e)

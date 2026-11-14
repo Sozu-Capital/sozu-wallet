@@ -273,11 +273,12 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
                 </div>
               )}
               <CheckoutMethodPicker
-                allowDebit={session.allowDebit}
-                allowCredit={session.allowCredit}
-                allowBankTransfer={session.allowBankTransfer}
+                allowDebit={false}
+                allowCredit={false}
+                allowBankTransfer={false}
                 onPayWithSozu={handlePayWithSozu}
                 disabled={false}
+                sozuSubtitle="Sign with your passkey"
               />
             </>
           )}

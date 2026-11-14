@@ -28,9 +28,11 @@ export function CheckoutMethodPicker({
 
   return (
     <div className="space-y-4">
-      <div className="text-center text-sm font-medium text-white/60">
-        Choose payment method
-      </div>
+      {(allowCredit || allowDebit || allowBankTransfer) && (
+        <div className="text-center text-sm font-medium text-white/60">
+          Choose payment method
+        </div>
+      )}
 
       {/* SOZU - primary option */}
       <button
@@ -44,7 +46,7 @@ export function CheckoutMethodPicker({
               <Fingerprint className="h-6 w-6 text-white" />
             </div>
             <div>
-              <div className="text-lg font-bold text-white">Pay with SOZU</div>
+              <div className="text-lg font-bold text-white">Pay now</div>
               <div className="text-sm text-white/60">{sozuSubtitle}</div>
             </div>
           </div>

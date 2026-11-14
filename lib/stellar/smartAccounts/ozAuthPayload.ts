@@ -27,20 +27,35 @@ export function computeOzAuthDigest(
 
 /**
  * Soroban host signature_payload for a SorobanAuthorizationEntry (32-byte hash).
+ * Address v2 credentials bind the account address into the preimage. Signing the
+ * v1 preimage makes __check_auth reject a passkey that is otherwise valid.
  */
 export function sorobanSignaturePayloadFromEntry(params: {
   networkPassphrase: string
   entry: xdr.SorobanAuthorizationEntry
 }): Buffer {
-  const credentials = addressCredentials(params.entry)
-  const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-    new xdr.HashIdPreimageSorobanAuthorization({
-      networkId: hash(Buffer.from(params.networkPassphrase)),
-      nonce: credentials.nonce,
-      signatureExpirationLedger: credentials.signatureExpirationLedger,
-      invocation: params.entry.rootInvocation,
-    }),
-  )
+  const credentials = params.entry.credentials
+  const isV2 = credentials.type === "sorobanCredentialsAddressV2"
+  const addressCreds = isV2 ? credentials.addressV2 : addressCredentials(params.entry)
+  const networkId = hash(Buffer.from(params.networkPassphrase))
+  const preimage = isV2
+    ? xdr.HashIdPreimage.envelopeTypeSorobanAuthorizationWithAddress(
+        new xdr.HashIdPreimageSorobanAuthorizationWithAddress({
+          networkId,
+          nonce: addressCreds.nonce,
+          signatureExpirationLedger: addressCreds.signatureExpirationLedger,
+          address: addressCreds.address,
+          invocation: params.entry.rootInvocation,
+        }),
+      )
+    : xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+        new xdr.HashIdPreimageSorobanAuthorization({
+          networkId,
+          nonce: addressCreds.nonce,
+          signatureExpirationLedger: addressCreds.signatureExpirationLedger,
+          invocation: params.entry.rootInvocation,
+        }),
+      )
   return Buffer.from(hash(preimage.toXdr()))
 }
 
@@ -77,12 +92,21 @@ export function buildOzAuthPayloadScVal(
   ])
 }
 
+function authContextCount(invocation: xdr.SorobanAuthorizedInvocation): number {
+  let count = 1
+  for (const sub of invocation.subInvocations) {
+    count += authContextCount(sub)
+  }
+  return count
+}
+
 /**
  * Rule IDs for wallets deployed via deployOzSmartAccountForUser (Default rule id 0).
- * One id per Soroban auth context; a single USDC transfer uses one context → [0].
+ * OZ requires one id per auth context. A plain USDC transfer is one context → [0].
  */
 export function defaultContextRuleIdsForEntry(
-  _entry: xdr.SorobanAuthorizationEntry,
+  entry: xdr.SorobanAuthorizationEntry,
 ): number[] {
-  return [0]
+  const count = Math.max(1, authContextCount(entry.rootInvocation))
+  return Array.from({ length: count }, () => 0)
 }
