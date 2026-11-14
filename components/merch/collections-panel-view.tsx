@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
+import { FindCollectibles, type FindCityDot, type FindCollectibleCard } from "@/components/merch/find-collectibles"
 import { useHorizontalPanelSwipe } from "@/hooks/use-horizontal-panel-swipe"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 import { stepReceipt } from "@/lib/merch/collections"
@@ -14,9 +15,10 @@ export type CollectionCard = {
 
 export function CollectionsPanelView({
   title,
-  emptyLabel,
-  dropHref,
-  dropLabel,
+  nearLabel,
+  cityLabel,
+  findItems,
+  cityDots,
   previousLabel,
   nextLabel,
   cards,
@@ -25,9 +27,10 @@ export function CollectionsPanelView({
   onLeavePrevious,
 }: {
   title: string
-  emptyLabel: string
-  dropHref: string
-  dropLabel: string
+  nearLabel: string
+  cityLabel: string
+  findItems: FindCollectibleCard[]
+  cityDots: FindCityDot[]
   previousLabel: string
   nextLabel: string
   cards: CollectionCard[]
@@ -106,12 +109,7 @@ export function CollectionsPanelView({
           ) : null}
         </div>
       ) : (
-        <div className="mt-10">
-          <p>{emptyLabel}</p>
-          <a href={dropHref} className="mt-3 inline-block underline underline-offset-4">
-            {dropLabel}
-          </a>
-        </div>
+        <FindCollectibles nearLabel={nearLabel} cityLabel={cityLabel} items={findItems} dots={cityDots} />
       )}
     </section>
   )

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { CollectionsPanelView, type CollectionCard } from "@/components/merch/collections-panel-view"
-import { listMerchItems, merchItemPath } from "@/lib/merch/catalog"
+import { CITY_SPOTS, projectCityDots } from "@/lib/city/spots"
+import { listMerchItems, merchItemPath, UNRECORDED_PRICE_USDC } from "@/lib/merch/catalog"
 import { receiptsForHoldings, type HeldOrder } from "@/lib/merch/collections"
 import { merchCopy } from "@/lib/merch/copy"
 import type { MerchOrderStatus } from "@/lib/merch/order"
@@ -43,7 +44,6 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
   const { language } = useWalletLanguage()
   const lang = language === "en" ? "en" : "es"
   const copy = merchCopy(lang)
-  const drop = listMerchItems()[0]
   const [slugs, setSlugs] = useState<string[]>([])
   const [orders, setOrders] = useState<HeldOrder[]>([])
 
@@ -67,14 +67,26 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
     }
   }, [])
 
-  const cards: CollectionCard[] = receiptsForHoldings(listMerchItems(), slugs, orders, lang)
+  const catalog = listMerchItems()
+  const cards: CollectionCard[] = receiptsForHoldings(catalog, slugs, orders, lang)
+  const findItems = catalog.map((item) => ({
+    href: merchItemPath(item.slug),
+    name: item.name,
+    drop: item.drop,
+    imageUrl: item.imagePath,
+    priceLabel: item.priceUsdc && item.priceUsdc !== UNRECORDED_PRICE_USDC ? `${item.priceUsdc} USDC` : null,
+    excerpt: copy.receiptLine,
+    tags: [copy.testnet],
+    actionLabel: copy.findOpen,
+  }))
 
   return (
     <CollectionsPanelView
       title={copy.collections}
-      emptyLabel={copy.emptyCollections}
-      dropHref={drop ? merchItemPath(drop.slug) : "/item/liquid-society"}
-      dropLabel={drop?.name ?? "Liquid Society"}
+      nearLabel={copy.findNear}
+      cityLabel={copy.findCity}
+      findItems={findItems}
+      cityDots={projectCityDots(CITY_SPOTS)}
       previousLabel={copy.previousReceipt}
       nextLabel={copy.nextReceipt}
       cards={cards}
