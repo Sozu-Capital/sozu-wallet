@@ -3,6 +3,8 @@ export const SOZU_CONNECT_ORIGIN = "https://dev.sozu.capital"
 const POPUP_NAME = "sozu-connect"
 const POPUP_FEATURES = "popup,width=420,height=720"
 const MESSAGE_TYPE = "sozu-connect"
+const USDC_AMOUNT = /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/
+const STELLAR_ADDRESS = /^[GC][A-Z0-9]{55}$/
 
 export type SozuLoginResult = {
   username: string
@@ -30,6 +32,18 @@ export type SozuPayParams = {
   amount: string
   to: string
   origin?: string
+}
+
+function payParamsError(amount: string, to: string): string | null {
+  const value = amount.trim()
+  const parsed = Number(value)
+  if (!USDC_AMOUNT.test(value) || !Number.isFinite(parsed) || parsed <= 0) {
+    return "Sozu Connect amount must be a positive USDC amount with at most 7 decimals"
+  }
+  if (!STELLAR_ADDRESS.test(to.trim().toUpperCase())) {
+    return "Sozu Connect destination must be a Stellar G or C address"
+  }
+  return null
 }
 
 function connectOrigin(origin?: string): string {
@@ -152,6 +166,9 @@ export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> 
  * screen is shown in that case.
  */
 export function pay(params: SozuPayParams): Promise<SozuPayResult> {
+  const invalid = payParamsError(params.amount, params.to)
+  if (invalid) return Promise.reject(new Error(invalid))
+
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Sozu Connect pay runs in the browser"))
   }

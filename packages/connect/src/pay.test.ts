@@ -64,6 +64,14 @@ describe("pay", () => {
     })
   })
 
+  it("rejects a bad amount or destination before opening the popup", async () => {
+    const { open } = installWindow()
+    await expect(pay({ amount: "1.12345678", to: DEST })).rejects.toThrow(/7 decimals/)
+    await expect(pay({ amount: "0", to: DEST })).rejects.toThrow(/positive/)
+    await expect(pay({ amount: "5", to: "ada" })).rejects.toThrow(/G or C/)
+    expect(open).not.toHaveBeenCalled()
+  })
+
   it("resolves a short Circle balance without a transaction", async () => {
     const { post } = installWindow()
     const pending = pay({ amount: "5", to: DEST })
