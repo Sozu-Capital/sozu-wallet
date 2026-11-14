@@ -2,6 +2,17 @@ export const SOZU_CONNECT_ORIGIN = "https://dev.sozu.capital"
 
 const POPUP_NAME = "sozu-connect"
 const POPUP_FEATURES = "popup,width=420,height=720"
+let popupBusy = false
+
+function claimPopup(): boolean {
+  if (popupBusy) return false
+  popupBusy = true
+  return true
+}
+
+function releasePopup() {
+  popupBusy = false
+}
 const MESSAGE_TYPE = "sozu-connect"
 const USDC_AMOUNT = /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/
 const STELLAR_ADDRESS = /^[GC][A-Z0-9]{55}$/
@@ -119,8 +130,12 @@ export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> 
   }
 
   const origin = connectOrigin(options.origin)
+  if (!claimPopup()) {
+    return Promise.reject(new Error("Sozu Connect already has a popup open"))
+  }
   const popup = window.open(`${origin}/auth?connect=1`, POPUP_NAME, POPUP_FEATURES)
   if (!popup) {
+    releasePopup()
     return Promise.reject(new Error("Sozu Connect popup was blocked"))
   }
 
@@ -131,6 +146,7 @@ export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> 
     function stop() {
       if (settled) return false
       settled = true
+      releasePopup()
       window.removeEventListener("message", onMessage)
       clearInterval(timer)
       return true
@@ -174,12 +190,16 @@ export function pay(params: SozuPayParams): Promise<SozuPayResult> {
   }
 
   const origin = connectOrigin(params.origin)
+  if (!claimPopup()) {
+    return Promise.reject(new Error("Sozu Connect already has a popup open"))
+  }
   const url = new URL("/auth", origin)
   url.searchParams.set("connect", "1")
   url.searchParams.set("amount", params.amount.trim())
   url.searchParams.set("to", params.to.trim())
   const popup = window.open(url.toString(), POPUP_NAME, POPUP_FEATURES)
   if (!popup) {
+    releasePopup()
     return Promise.reject(new Error("Sozu Connect popup was blocked"))
   }
 
@@ -190,6 +210,7 @@ export function pay(params: SozuPayParams): Promise<SozuPayResult> {
     function stop() {
       if (settled) return false
       settled = true
+      releasePopup()
       window.removeEventListener("message", onMessage)
       clearInterval(timer)
       return true

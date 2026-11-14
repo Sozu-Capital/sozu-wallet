@@ -64,6 +64,19 @@ describe("pay", () => {
     })
   })
 
+  it("rejects a second pay while the first popup is still open", async () => {
+    const { post } = installWindow()
+    const first = pay({ amount: "5", to: DEST })
+    await expect(pay({ amount: "9", to: DEST })).rejects.toThrow(/already has a popup open/)
+    post({
+      type: "sozu-connect",
+      txHash: HASH,
+      username: "ada",
+      accountId: ACCOUNT,
+    })
+    await expect(first).resolves.toMatchObject({ txHash: HASH, username: "ada" })
+  })
+
   it("rejects a bad amount or destination before opening the popup", async () => {
     const { open } = installWindow()
     await expect(pay({ amount: "1.12345678", to: DEST })).rejects.toThrow(/7 decimals/)
