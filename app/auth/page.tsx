@@ -210,26 +210,10 @@ function AuthPageContent() {
           return
         }
         if (connectMode) {
-          let accountId = session.publicKey
-          const storedUsername =
-            sessionStorage.getItem("dev_username_display") ??
-            localStorage.getItem("sozu_username")
-          if (!sozuConnectSuccess(storedUsername, accountId) && session.credentialId) {
-            try {
-              const { alignWalletMaterialAfterLogin } = await import(
-                "@/lib/storage/post-login-wallet"
-              )
-              const aligned = await alignWalletMaterialAfterLogin(
-                session.userId,
-                session.credentialId,
-              )
-              accountId = !aligned.needsWalletSync && aligned.publicKey ? aligned.publicKey : null
-            } catch {
-              accountId = null
-            }
-          }
-          if (cancelled) return
-          completeConnect(storedUsername, accountId)
+          // A cookie is not the passkey check. Stay on this page until they sign.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalBootstrapReady())
+          })
           return
         }
         if (stayOnAuthForPizza) {
@@ -1001,6 +985,10 @@ function AuthPageContent() {
         }
       }
 
+      if (connectMode) {
+        completeConnect(null, null)
+        return
+      }
       setIsAuthenticating(false)
       toast.error(t.authFailed)
       console.log("[Auth] Authentication failed - setting isAuthenticating to false")
