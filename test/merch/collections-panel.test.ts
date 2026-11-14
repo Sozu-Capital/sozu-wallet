@@ -68,7 +68,7 @@ describe("collections panel", () => {
         cards: [{ slug: item.slug, receipt }],
       }),
     )
-    expect(html).toContain("Liquid Society")
+    expect(html).toContain("Shirt")
     expect(html).toContain("12 USDC")
     expect(html).toContain("Red de pruebas")
     expect(html).toContain("Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.")
