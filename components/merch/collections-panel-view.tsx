@@ -7,6 +7,7 @@ import { FindCollectibles, type FindCityDot, type FindCollectibleCard } from "@/
 import { useHorizontalPanelSwipe } from "@/hooks/use-horizontal-panel-swipe"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 import { stepReceipt } from "@/lib/merch/collections"
+import { COMMIT_FRACTION, FLICK_PX_PER_MS } from "@/lib/shell/panel-motion"
 
 export type CollectionCard = {
   slug: string
@@ -56,9 +57,17 @@ export function CollectionsPanelView({
   }
 
   const swipe = useHorizontalPanelSwipe({
-    onSwipeLeft: () => move("next", "leave"),
-    onSwipeRight: () => move("previous", "leave"),
     disabled: !swipeable,
+    onDrag: () => {},
+    onRelease: ({ dx, velocity }) => {
+      const width = window.innerWidth || 1
+      const distanceCommit = Math.abs(dx) >= width * COMMIT_FRACTION
+      const flickCommit = Math.abs(velocity) >= FLICK_PX_PER_MS
+      if (!distanceCommit && !flickCommit) return
+      const signed = distanceCommit ? Math.sign(dx) : Math.sign(velocity)
+      if (signed < 0) move("next", "leave")
+      else if (signed > 0) move("previous", "leave")
+    },
   })
 
   function capture<E extends { stopPropagation: () => void }>(handler: (event: E) => void) {

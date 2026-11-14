@@ -209,6 +209,10 @@ function MobileAppShellPanels() {
     [fadeTo, place, springTo],
   )
 
+  const goLeft = useCallback(() => {
+    moveTo(Math.max(0, indexRef.current - 1), shownRef.current)
+  }, [moveTo])
+
   const swipeHandlers = useHorizontalPanelSwipe({
     disabled: isSendModalOpen || isDepositModalOpen || isOnboardingOverlayOpen,
     onDrag: (dx) => {
