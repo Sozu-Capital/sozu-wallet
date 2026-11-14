@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
 import { FindCollectibles, type FindCityDot, type FindCollectibleCard } from "@/components/merch/find-collectibles"
 import { useHorizontalPanelSwipe } from "@/hooks/use-horizontal-panel-swipe"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 import { stepReceipt } from "@/lib/merch/collections"
+import { COMMIT_FRACTION, FLICK_PX_PER_MS, nextPanelIndex } from "@/lib/shell/panel-motion"
 
 export type CollectionCard = {
   slug: string
@@ -38,6 +39,7 @@ export function CollectionsPanelView({
   onActiveIndexChange?: (index: number) => void
   onLeavePrevious?: () => void
 }) {
+  const frame = useRef<HTMLDivElement>(null)
   const [uncontrolledIndex, setUncontrolledIndex] = useState(0)
   const controlled = activeIndex != null
   const index = cards.length === 0 ? 0 : Math.min(controlled ? activeIndex : uncontrolledIndex, cards.length - 1)
@@ -56,9 +58,23 @@ export function CollectionsPanelView({
   }
 
   const swipe = useHorizontalPanelSwipe({
-    onSwipeLeft: () => move("next", "leave"),
-    onSwipeRight: () => move("previous", "leave"),
     disabled: !swipeable,
+    onDrag: () => {},
+    onRelease: ({ dx, velocity }) => {
+      const width = frame.current?.clientWidth || 320
+      const next = nextPanelIndex({ index, count: cards.length, dx, velocity, width })
+      if (next > index) {
+        move("next", "leave")
+        return
+      }
+      if (next < index) {
+        move("previous", "leave")
+        return
+      }
+      const commit = Math.abs(dx) >= width * COMMIT_FRACTION || Math.abs(velocity) >= FLICK_PX_PER_MS
+      const signed = Math.abs(dx) >= width * COMMIT_FRACTION ? Math.sign(dx) : Math.sign(velocity)
+      if (commit && signed > 0) move("previous", "leave")
+    },
   })
 
   function capture<E extends { stopPropagation: () => void }>(handler: (event: E) => void) {
@@ -73,6 +89,7 @@ export function CollectionsPanelView({
       <h1 className="text-xs font-medium uppercase tracking-[0.2em] text-white/50">{title}</h1>
       {card ? (
         <div
+          ref={frame}
           className="mt-6"
           data-receipt-index={index}
           data-receipt-slug={card.slug}
