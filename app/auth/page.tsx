@@ -79,7 +79,8 @@ function AuthPageContent() {
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
   const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
-  const [payCheck, setPayCheck] = useState<"idle" | "checking">("idle")
+  const [payAccount, setPayAccount] = useState<{ username: string; accountId: string } | null>(null)
+  const [payCheck, setPayCheck] = useState<"idle" | "checking" | "unavailable">("idle")
   const router = useRouter()
   const searchParams = useSearchParams()
   const connectMode = isSozuConnectSearch(searchParams)
@@ -175,17 +176,20 @@ function AuthPageContent() {
         setIsAuthenticated(true)
         setIsAuthenticating(false)
         setIsExiting(false)
+        setPayAccount(success)
         setPayCheck("checking")
-        const request = payRequest
-        const account = success
-        void circleSacCover(account.accountId, request.amount).then((cover) => {
+        void circleSacCover(success.accountId, payRequest.amount).then((cover) => {
           if (cover === "no") {
-            const short = sozuConnectInsufficient(account.username, account.accountId)
+            const short = sozuConnectInsufficient(success.username, success.accountId)
             deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
             return
           }
+          if (cover !== "yes") {
+            setPayCheck("unavailable")
+            return
+          }
           setPayCheck("idle")
-          setPaySession({ username: account.username, accountId: account.accountId })
+          setPaySession({ username: success.username, accountId: success.accountId })
         })
         return
       }
@@ -1030,6 +1034,41 @@ function AuthPageContent() {
     return (
       <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] items-center justify-center px-6 text-center text-sm text-muted-foreground">
         Checking Circle USDC…
+      </div>
+    )
+  }
+
+  if (payRequest && payCheck === "unavailable" && payAccount) {
+    const account = payAccount
+    const request = payRequest
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-sm text-muted-foreground">Couldn’t check the Circle USDC balance. Try again before sending.</p>
+        <button
+          type="button"
+          className="h-11 rounded-full bg-foreground px-5 text-sm text-background"
+          onClick={() => {
+            setPayCheck("checking")
+            void circleSacCover(account.accountId, request.amount).then((cover) => {
+              if (cover === "no") {
+                const short = sozuConnectInsufficient(account.username, account.accountId)
+                deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+                return
+              }
+              if (cover !== "yes") {
+                setPayCheck("unavailable")
+                return
+              }
+              setPayCheck("idle")
+              setPaySession(account)
+            })
+          }}
+        >
+          Try again
+        </button>
+        <button type="button" className="text-sm text-muted-foreground" onClick={() => window.close()}>
+          Cancel
+        </button>
       </div>
     )
   }
