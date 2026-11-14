@@ -1,5 +1,9 @@
 # @sozu/connect
 
+```bash
+npm install @sozu/connect
+```
+
 `login()` and `pay()` open a popup on `https://dev.sozu.capital`. The user approves with their passkey. You receive a username and a Stellar smart account (`C…`). `pay()` sends Circle testnet USDC that account already holds. You never receive a key.
 
 ```ts

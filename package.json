@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "start": "next start",
     "test": "vitest run",
+    "connect:publish": "cd packages/connect && npm publish --access public",
     "auto-deposit": "pnpm exec tsx scripts/auto-deposit-cron.ts",
     "auto-deposit:cron": "pnpm exec tsx scripts/auto-deposit-cron.ts",
     "backfill:ledger-merchant": "pnpm exec tsx scripts/backfill-ledger-email-merchant.ts"
