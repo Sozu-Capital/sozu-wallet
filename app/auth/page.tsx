@@ -43,7 +43,9 @@ import { itemAuthReturnPath } from "@/lib/merch/buy-gate"
 import { panelAuthReturnPath } from "@/lib/shell/panels"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
+import { ConnectPayConfirm } from "@/components/connect/connect-pay-confirm"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
+import { readSozuPayRequest, sozuConnectPayment } from "@/lib/connect/pay-request"
 import {
   deliverSozuConnectResult,
   isSozuConnectSearch,
@@ -75,9 +77,11 @@ function AuthPageContent() {
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
+  const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const connectMode = isSozuConnectSearch(searchParams)
+  const payRequest = connectMode ? readSozuPayRequest(searchParams) : null
   const redirectingRef = useRef(false)
   const { canInstall, triggerInstall, isIos, isInstalled } = usePwaInstall()
   const { t } = useWalletLanguage()
@@ -160,7 +164,19 @@ function AuthPageContent() {
 
   const completeConnect = useCallback(
     (username: string | null | undefined, accountId: string | null | undefined) => {
-      const message = sozuConnectSuccess(username, accountId) ?? sozuConnectSignupFailed()
+      const success = sozuConnectSuccess(username, accountId)
+      if (payRequest && success) {
+        redirectingRef.current = true
+        setShowTagModal(false)
+        setResumeLoginTag(null)
+        setTagModalPrefill(null)
+        setIsAuthenticated(true)
+        setIsAuthenticating(false)
+        setIsExiting(false)
+        setPaySession({ username: success.username, accountId: success.accountId })
+        return
+      }
+      const message = success ?? sozuConnectSignupFailed()
       redirectingRef.current = true
       setShowTagModal(false)
       setResumeLoginTag(null)
@@ -170,7 +186,7 @@ function AuthPageContent() {
       setIsExiting(true)
       deliverSozuConnectResult(message)
     },
-    [],
+    [payRequest],
   )
 
   useEffect(() => {
@@ -995,6 +1011,26 @@ function AuthPageContent() {
     } finally {
       console.log("[Auth] ====== Authentication flow complete ======")
     }
+  }
+
+  if (paySession && payRequest) {
+    return (
+      <ConnectPayConfirm
+        amount={payRequest.amount}
+        to={payRequest.to}
+        username={paySession.username}
+        accountId={paySession.accountId}
+        onSigned={(txHash) => {
+          const message = sozuConnectPayment(paySession.username, paySession.accountId, txHash)
+          if (!message) {
+            deliverSozuConnectResult(sozuConnectSignupFailed())
+            return
+          }
+          deliverSozuConnectResult(message)
+        }}
+        onCancel={() => window.close()}
+      />
+    )
   }
 
   return (
