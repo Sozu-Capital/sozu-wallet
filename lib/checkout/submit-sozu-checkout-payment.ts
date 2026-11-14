@@ -2,6 +2,7 @@ import { getUserId } from "@/lib/wallet-utils";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { getSenderDisplayLabel } from "@/lib/payment/payment-receipt";
 import { getStellarConfig } from "@/lib/turnkey/config";
+import { checkoutBuildSigner } from "@/lib/checkout/checkout-build-signer";
 
 const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital";
 
@@ -101,18 +102,25 @@ export async function submitSozuCheckoutPayment({
     }
 
     const signMethod = build.signMethod as string | undefined;
-    const signerPublicKey = typeof build.signerPublicKey === "string" ? build.signerPublicKey : null;
-    const walletContractId = typeof build.walletAddress === "string" ? build.walletAddress : senderC;
-
-    if (!signerPublicKey) {
-      return { success: false, error: "Smart wallet signer (G…) missing. Sign out, sign in with passkey again, then retry." };
+    const resolvedSigner = checkoutBuildSigner({
+      signMethod,
+      signerPublicKey: build.signerPublicKey,
+    });
+    if (resolvedSigner.error) {
+      return { success: false, error: resolvedSigner.error };
     }
+    const signerPublicKey = resolvedSigner.signerPublicKey;
+    const walletContractId =
+      typeof build.walletAddress === "string" && build.walletAddress.startsWith("C")
+        ? build.walletAddress
+        : senderC;
 
-    // Step 2: Get credential ID
+    // Passkey accounts sign with the credential. A G key is only required for the factory path.
     const { getCurrentCredentialId, storeCredentialIdInSession } = await import("@/lib/storage/key-utils");
     const credentialId =
-      (typeof build.ozCredentialId === "string" ? build.ozCredentialId : null) ||
-      (await getCurrentCredentialId(signerPublicKey));
+      (typeof build.ozCredentialId === "string" && build.ozCredentialId.trim()
+        ? build.ozCredentialId.trim()
+        : null) || (await getCurrentCredentialId(signerPublicKey ?? undefined));
 
     if (!credentialId) {
       return { success: false, error: "Credential ID not found. Please log in again." };
@@ -147,7 +155,7 @@ export async function submitSozuCheckoutPayment({
         supportsOzKitApi: build.supportsOzKitApi === true,
         signMethod: signMethod ?? "oz_passkey",
       });
-    } else if (signMethod === "smart_g_signer") {
+    } else if (signMethod === "smart_g_signer" && signerPublicKey) {
       const { signSorobanUsdcWithGSigner } = await import("@/lib/stellar/smartAccounts/signSorobanTransferG");
       signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
         unsignedXdr,
