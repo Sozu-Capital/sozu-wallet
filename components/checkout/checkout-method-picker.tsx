@@ -11,7 +11,7 @@ export function CheckoutMethodPicker({
   onPayWithSozu,
   disabled,
   sozuSubtitle = "One-tap passkey payment",
-  sozuBadge = "3% cashback instantly",
+  sozuBadge = null,
 }: {
   allowDebit: boolean;
   allowCredit: boolean;

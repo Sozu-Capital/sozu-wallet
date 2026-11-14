@@ -35,7 +35,16 @@ export async function submitSozuCheckoutPayment({
       return { success: false, error: "Not authenticated" };
     }
 
-    const senderC = walletAddress.trim().toUpperCase();
+    let senderC = walletAddress.trim().toUpperCase();
+    let sessionCredentialId: string | undefined;
+    try {
+      const { alignWalletForSendFast } = await import("@/lib/wallet/align-send-wallet");
+      const aligned = await alignWalletForSendFast(userId, senderC);
+      if (aligned.contractId.startsWith("C")) senderC = aligned.contractId;
+      if (aligned.credentialId) sessionCredentialId = aligned.credentialId;
+    } catch (err) {
+      console.warn("[Checkout Payment] Wallet align skipped:", err);
+    }
 
     // Fetch organization's treasury smart account address dynamically
     let actualDestination = destination;
@@ -118,9 +127,11 @@ export async function submitSozuCheckoutPayment({
     // Passkey accounts sign with the credential. A G key is only required for the factory path.
     const { getCurrentCredentialId, storeCredentialIdInSession } = await import("@/lib/storage/key-utils");
     const credentialId =
+      sessionCredentialId ||
       (typeof build.ozCredentialId === "string" && build.ozCredentialId.trim()
         ? build.ozCredentialId.trim()
-        : null) || (await getCurrentCredentialId(signerPublicKey ?? undefined));
+        : null) ||
+      (await getCurrentCredentialId(signerPublicKey ?? undefined));
 
     if (!credentialId) {
       return { success: false, error: "Credential ID not found. Please log in again." };

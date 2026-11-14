@@ -342,8 +342,9 @@ async function webAuthnSignSorobanPreimage(
   rpId: string
 }> {
   const rpId =
+    (typeof window !== "undefined" ? window.location.hostname : "") ||
     process.env.NEXT_PUBLIC_RP_ID?.trim() ||
-    (typeof window !== "undefined" ? window.location.hostname : "localhost")
+    "localhost"
   console.log("[signSorobanWebAuthnAuth] startAuthentication", {
     rpId,
     credentialIdPrefix: credentialId.slice(0, 8),
@@ -482,15 +483,14 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   // Only hit `getLatestLedger` if it's missing or zero — skipping the RPC call
   // means the passkey prompt can appear as soon as the challenge is ready.
   const entryExpiration = Number(preparedCredentials.signatureExpirationLedger)
-  let expiration: number
-  if (entryExpiration > 0 && (!params.expiration || params.expiration <= 0)) {
-    expiration = entryExpiration
-  } else if (params.expiration && params.expiration > 0) {
-    expiration = params.expiration
-  } else {
-    // Fallback: must hit RPC to get current ledger.
-    expiration = await resolveSignatureExpirationLedger(undefined, preparedCredentials)
-  }
+  const preferred =
+    params.expiration && params.expiration > 0
+      ? params.expiration
+      : entryExpiration > 0
+        ? entryExpiration
+        : undefined
+  // A prepare from a few ledgers ago fails __check_auth once Touch ID returns.
+  const expiration = await resolveSignatureExpirationLedger(preferred, preparedCredentials)
   const entryForChallenge = entryWithAddressCredentials(
     normalizedEntry,
     credentialsWithExpiration(preparedCredentials, expiration),

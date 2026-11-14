@@ -171,6 +171,7 @@ export async function signSorobanPreparedTxWithPasskey(params: {
         fee: tx.fee,
         networkPassphrase: params.networkPassphrase,
         sorobanData,
+        timebounds: { minTime: 0, maxTime: Math.floor(Date.now() / 1000) + 300 },
       })
       builder.clearOperations()
       builder.addOperation(signedInvoke)
@@ -180,8 +181,9 @@ export async function signSorobanPreparedTxWithPasskey(params: {
       if (Api.isSimulationError(sim)) {
         const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
         if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
+          const host = typeof window !== "undefined" ? window.location.host : "this site"
           throw new Error(
-            "Soroban auth rejected after signing (__check_auth). Sign out, sign in at http://localhost:3001, and retry.",
+            `The smart account rejected this passkey signature. Refresh the checkout on ${host} and tap Pay with SOZU again.`,
           )
         }
         throw new Error(`Post-sign simulation failed: ${detail.slice(0, 800)}`)
@@ -214,7 +216,7 @@ export async function signSorobanPreparedTxWithPasskey(params: {
     networkPassphrase: params.networkPassphrase,
   })
     .addOperation(signedInvoke)
-    .setTimeout(60)
+    .setTimeout(300)
     .build()
 
   const { Api } = await import("@stellar/stellar-sdk/rpc")
@@ -225,16 +227,9 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   if (Api.isSimulationError(sim)) {
     const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
     if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
-      const hint =
-        process.env.NODE_ENV === "development"
-          ? ` Simulation: ${detail.slice(0, 280)}`
-          : ""
+      const host = typeof window !== "undefined" ? window.location.host : "this site"
       throw new Error(
-        "Soroban auth rejected (__check_auth). Common causes: (1) passkey registered on a different URL than you use now (rpID mismatch — always use the same host, e.g. only localhost:3001), " +
-          "(2) smart wallet deployed before the pubkey fix (sign out, register again, complete wallet setup, fund the new C), " +
-          "(3) prepared transaction expired — refresh and send again. " +
-          "If Touch ID succeeded but you still see this, restart the dev server and retry on one canonical URL." +
-          hint,
+        `The smart account rejected this passkey signature. Refresh the checkout on ${host} and tap Pay with SOZU again.`,
       )
     }
     throw new Error(`Simulation failed: ${detail.slice(0, 800)}`)
