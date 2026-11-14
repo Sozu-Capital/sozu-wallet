@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { NFC_USDC_DROP_PATH } from "@/lib/faucet/nfc-usdc-drop"
+import { isSozuConnectSearch } from "@/lib/connect/popup-result"
 import { hasSupabaseAuthCookies } from "@/lib/supabase/authCookies"
 
 export async function updateSession(request: NextRequest) {
@@ -235,6 +236,10 @@ export async function updateSession(request: NextRequest) {
         return supabaseResponse
       }
       if (request.nextUrl.searchParams.get("faucet") === "1") {
+        return supabaseResponse
+      }
+      // Sozu Connect: the popup must stay on /auth until the passkey posts the account.
+      if (isSozuConnectSearch(request.nextUrl.searchParams)) {
         return supabaseResponse
       }
       if (request.nextUrl.searchParams.get("redirect") === NFC_USDC_DROP_PATH) {

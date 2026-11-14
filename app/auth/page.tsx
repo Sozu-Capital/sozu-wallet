@@ -44,6 +44,12 @@ import { panelAuthReturnPath } from "@/lib/shell/panels"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
+import {
+  deliverSozuConnectResult,
+  isSozuConnectSearch,
+  sozuConnectSignupFailed,
+  sozuConnectSuccess,
+} from "@/lib/connect/popup-result"
 
 function navigatePostAuth(
   path: string,
@@ -71,6 +77,7 @@ function AuthPageContent() {
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const connectMode = isSozuConnectSearch(searchParams)
   const redirectingRef = useRef(false)
   const { canInstall, triggerInstall, isIos, isInstalled } = usePwaInstall()
   const { t } = useWalletLanguage()
@@ -151,6 +158,21 @@ function AuthPageContent() {
   const stayOnAuthForPizza = pizzaAuth.kind !== "none"
   const pizzaHopReturnTo = pizzaAuth.kind === "hop" ? pizzaAuth.returnTo : null
 
+  const completeConnect = useCallback(
+    (username: string | null | undefined, accountId: string | null | undefined) => {
+      const message = sozuConnectSuccess(username, accountId) ?? sozuConnectSignupFailed()
+      redirectingRef.current = true
+      setShowTagModal(false)
+      setResumeLoginTag(null)
+      setTagModalPrefill(null)
+      setIsAuthenticated(true)
+      setIsAuthenticating(false)
+      setIsExiting(true)
+      deliverSozuConnectResult(message)
+    },
+    [],
+  )
+
   useEffect(() => {
     if (pizzaHopReturnTo) stashPizzaHopReturn(pizzaHopReturnTo)
   }, [pizzaHopReturnTo])
@@ -187,6 +209,13 @@ function AuthPageContent() {
           })
           return
         }
+        if (connectMode) {
+          // A cookie is not the passkey check. Stay on this page until they sign.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalBootstrapReady())
+          })
+          return
+        }
         if (stayOnAuthForPizza) {
           setIsAuthenticated(true)
           requestAnimationFrame(() => {
@@ -212,7 +241,7 @@ function AuthPageContent() {
     return () => {
       cancelled = true
     }
-  }, [searchParams, router, finalPostAuthPath, stayOnAuthForPizza, isAuthenticating, isAuthenticated])
+  }, [searchParams, router, finalPostAuthPath, stayOnAuthForPizza, isAuthenticating, isAuthenticated, connectMode, completeConnect])
 
   const finalizePasskeyLoginSuccess = useCallback(
     async (userId: string, username: string | undefined, credential: { id: string }) => {
@@ -226,6 +255,7 @@ function AuthPageContent() {
         username: displayUsername,
       })
 
+      let connectAccountId: string | null = null
       try {
         const { alignWalletMaterialAfterLogin } = await import("@/lib/storage/post-login-wallet")
         const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
@@ -235,6 +265,7 @@ function AuthPageContent() {
         if (needsWalletSync) {
           console.warn("[Auth] Wallet sync may be required for this passkey on this device.")
         } else {
+          connectAccountId = publicKey
           persistClientWalletSession({
             userId,
             publicKey,
@@ -247,6 +278,10 @@ function AuthPageContent() {
         if (typeof window !== "undefined") {
           sessionStorage.setItem("wallet_sync_pending", "1")
         }
+      }
+      if (connectMode) {
+        completeConnect(displayUsername, connectAccountId)
+        return
       }
       setShowTagModal(false)
       setResumeLoginTag(null)
@@ -265,18 +300,20 @@ function AuthPageContent() {
         300,
       )
     },
-    [router, finalPostAuthPath, stayOnAuthForPizza]
+    [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
 
   const finalizePinLoginSuccess = useCallback(
     async (userId: string, username: string) => {
       sessionStorage.removeItem("credential_id")
       persistAuthIdentitySession({ userId, credentialId: "", username })
+      let connectAccountId: string | null = null
       try {
         const res = await fetch("/api/wallet/stellar/address")
         const data = (await res.json()) as { publicKey?: string | null }
         const pk = data.publicKey?.trim().toUpperCase()
         if (pk && (pk.startsWith("C") || pk.startsWith("G")) && pk.length === 56) {
+          connectAccountId = pk
           const { getCurrentCredentialId } = await import("@/lib/storage/key-utils")
           const credentialId = (await getCurrentCredentialId(pk)) ?? ""
           persistClientWalletSession({
@@ -295,6 +332,10 @@ function AuthPageContent() {
       } catch (e) {
         console.warn("[Auth] PIN login: could not load wallet address", e)
       }
+      if (connectMode) {
+        completeConnect(username, connectAccountId)
+        return
+      }
       setShowTagModal(false)
       setResumeLoginTag(null)
       setTagModalPrefill(null)
@@ -312,7 +353,7 @@ function AuthPageContent() {
         300,
       )
     },
-    [router, finalPostAuthPath, stayOnAuthForPizza]
+    [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
 
   const attemptLoginWithTag = useCallback(
@@ -723,6 +764,33 @@ function AuthPageContent() {
             console.warn("[Auth] kit.credentials.save after register:", kitSaveErr)
           }
 
+          if (connectMode) {
+            let connectAccountId: string | null = null
+            try {
+              const { alignWalletMaterialAfterLogin } = await import(
+                "@/lib/storage/post-login-wallet"
+              )
+              const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
+                finalUserId,
+                credential.id,
+              )
+              if (!needsWalletSync && publicKey) {
+                connectAccountId = publicKey
+                persistClientWalletSession({
+                  userId: finalUserId,
+                  publicKey,
+                  credentialId: credential.id,
+                  username: registeredUsername,
+                })
+              }
+            } catch (walletError) {
+              console.error("[Auth] Smart wallet provisioning failed:", walletError)
+              sessionStorage.setItem("wallet_sync_pending", "1")
+            }
+            completeConnect(registeredUsername, connectAccountId)
+            return
+          }
+
           // Kick off Wallet Provisioning without blocking redirect — Home shows
           // welcome slides in parallel so deploy latency is hidden behind onboarding.
           sessionStorage.setItem("wallet_sync_pending", "1")
@@ -758,6 +826,9 @@ function AuthPageContent() {
               sessionStorage.setItem("wallet_sync_pending", "1")
             }
           })()
+        } else if (connectMode) {
+          completeConnect(registeredUsername, null)
+          return
         } else {
           console.warn("[Auth] ⚠️ Skipping smart wallet setup — no credential id")
         }
@@ -896,6 +967,13 @@ function AuthPageContent() {
 
         if (isAuth) {
           console.log("[Auth] Found auth state after error, redirecting anyway...")
+          if (connectMode) {
+            completeConnect(
+              localStorage.getItem("sozu_username"),
+              localStorage.getItem("stellar_public_key"),
+            )
+            return
+          }
           if (stayOnAuthForPizza) {
             setIsAuthenticated(true)
             return
@@ -907,6 +985,10 @@ function AuthPageContent() {
         }
       }
 
+      if (connectMode) {
+        completeConnect(null, null)
+        return
+      }
       setIsAuthenticating(false)
       toast.error(t.authFailed)
       console.log("[Auth] Authentication failed - setting isAuthenticating to false")
@@ -1108,6 +1190,31 @@ function AuthPageContent() {
             }
             setIsAuthenticated(true)
             setIsAuthenticating(false)
+            if (connectMode) {
+              let connectAccountId: string | null = null
+              try {
+                const { alignWalletMaterialAfterLogin } = await import(
+                  "@/lib/storage/post-login-wallet"
+                )
+                const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
+                  userId,
+                  credentialId,
+                )
+                if (!needsWalletSync && publicKey) {
+                  connectAccountId = publicKey
+                  persistClientWalletSession({
+                    userId,
+                    publicKey,
+                    credentialId,
+                    username,
+                  })
+                }
+              } catch (walletError) {
+                console.error("[Auth] Connect still waiting on wallet after QR signup:", walletError)
+              }
+              completeConnect(username, connectAccountId)
+              return
+            }
             if (stayOnAuthForPizza) {
               try {
                 const { alignWalletMaterialAfterLogin } = await import(
