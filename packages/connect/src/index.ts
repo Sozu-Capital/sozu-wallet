@@ -14,11 +14,17 @@ export type SozuLoginOptions = {
   origin?: string
 }
 
-export type SozuPayResult = {
-  txHash: string
-  username: string
-  accountId: string
-}
+export type SozuPayResult =
+  | {
+      txHash: string
+      username: string
+      accountId: string
+    }
+  | {
+      username: string
+      accountId: string
+      error: "insufficient_funds"
+    }
 
 export type SozuPayParams = {
   amount: string
@@ -46,7 +52,7 @@ function isLoginResult(
   data: unknown,
 ): data is { type: typeof MESSAGE_TYPE; username: string; accountId: string } {
   const message = messageRecord(data)
-  if (!message || typeof message.txHash === "string") return false
+  if (!message || typeof message.txHash === "string" || typeof message.error === "string") return false
   return (
     typeof message.username === "string" &&
     message.username.trim() !== "" &&
@@ -67,6 +73,19 @@ function isPayResult(
     /^C[A-Z0-9]{55}$/.test(message.accountId.trim().toUpperCase()) &&
     typeof message.txHash === "string" &&
     /^[a-f0-9]{64}$/i.test(message.txHash)
+  )
+}
+
+function isInsufficientFunds(
+  data: unknown,
+): data is { type: typeof MESSAGE_TYPE; username: string; accountId: string; error: "insufficient_funds" } {
+  const message = messageRecord(data)
+  if (!message || message.error !== "insufficient_funds") return false
+  return (
+    typeof message.username === "string" &&
+    message.username.trim() !== "" &&
+    typeof message.accountId === "string" &&
+    /^C[A-Z0-9]{55}$/.test(message.accountId.trim().toUpperCase())
   )
 }
 
@@ -128,7 +147,9 @@ export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> 
 
 /**
  * Opens the Sozu popup for a Circle testnet USDC send.
- * Resolves with the transaction, username, and C account after the user signs.
+ * Resolves with the transaction after the user signs, or with
+ * insufficient_funds when the Circle SAC balance is short. No payment
+ * screen is shown in that case.
  */
 export function pay(params: SozuPayParams): Promise<SozuPayResult> {
   if (typeof window === "undefined") {
@@ -159,6 +180,15 @@ export function pay(params: SozuPayParams): Promise<SozuPayResult> {
 
     function onMessage(event: MessageEvent) {
       if (event.origin !== origin || event.source !== popup) return
+      if (isInsufficientFunds(event.data)) {
+        if (!stop()) return
+        resolve({
+          username: event.data.username.trim(),
+          accountId: event.data.accountId.trim().toUpperCase(),
+          error: "insufficient_funds",
+        })
+        return
+      }
       if (isSignupFailed(event.data)) {
         if (stop()) reject(new Error("Sozu Connect signup failed"))
         return

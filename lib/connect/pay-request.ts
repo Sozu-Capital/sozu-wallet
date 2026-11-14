@@ -16,6 +16,18 @@ export type SozuConnectPayment = {
   accountId: string
 }
 
+export type SozuConnectInsufficient = {
+  type: typeof SOZU_CONNECT_MESSAGE_TYPE
+  username: string
+  accountId: string
+  error: "insufficient_funds"
+}
+
+export type CircleBalancePayload = {
+  tokenBalances?: { assetId?: string; balance?: number }[]
+  sorobanSacUsdcBalance?: number
+}
+
 /** Circle USDC amount: a positive decimal string with at most 7 decimal places. */
 export function isCircleUsdcAmount(value: string): boolean {
   const amount = value.trim()
@@ -32,6 +44,35 @@ export function readSozuPayRequest(params: {
   if (!isCircleUsdcAmount(amount)) return null
   if (!isValidStellarReceiveAddress(to)) return null
   return { amount, to }
+}
+
+export function circleSacBalance(payload: CircleBalancePayload): number {
+  const row = payload.tokenBalances?.find((item) => item.assetId === "circle_usdc_sac")
+  if (row && typeof row.balance === "number" && Number.isFinite(row.balance)) return row.balance
+  if (typeof payload.sorobanSacUsdcBalance === "number" && Number.isFinite(payload.sorobanSacUsdcBalance)) {
+    return payload.sorobanSacUsdcBalance
+  }
+  return 0
+}
+
+/** Circle SAC only. Blend and Sozu Test balances do not count. */
+export function circleSacCoversAmount(balance: number, amount: string): boolean {
+  const need = Number(amount)
+  return Number.isFinite(balance) && Number.isFinite(need) && balance >= need
+}
+
+export function sozuConnectInsufficient(
+  username: string,
+  accountId: string,
+): SozuConnectInsufficient | null {
+  const account = sozuConnectSuccess(username, accountId)
+  if (!account) return null
+  return {
+    type: SOZU_CONNECT_MESSAGE_TYPE,
+    username: account.username,
+    accountId: account.accountId,
+    error: "insufficient_funds",
+  }
 }
 
 export function sozuConnectPayment(

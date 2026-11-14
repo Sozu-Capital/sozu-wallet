@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { isCircleUsdcAmount, readSozuPayRequest, sozuConnectPayment } from "./pay-request"
+import {
+  circleSacBalance,
+  circleSacCoversAmount,
+  isCircleUsdcAmount,
+  readSozuPayRequest,
+  sozuConnectInsufficient,
+  sozuConnectPayment,
+} from "./pay-request"
 
 const ACCOUNT = "CAMVPBC6XL42KGHQPOLBBZ5EKIHER3DCNY2FRZH677JS2KWH4RNILEJH"
 const CLASSIC = "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"
@@ -34,6 +41,36 @@ describe("readSozuPayRequest", () => {
 
   it("ignores a username destination", () => {
     expect(readSozuPayRequest(new URLSearchParams("amount=5&to=ada"))).toBeNull()
+  })
+})
+
+describe("circleSacCoversAmount", () => {
+  it("uses only the Circle SAC balance", () => {
+    const payload = {
+      tokenBalances: [
+        { assetId: "blend_usdc", balance: 100 },
+        { assetId: "sozu_internal_usdc", balance: 100 },
+        { assetId: "circle_usdc_sac", balance: 4 },
+      ],
+    }
+    expect(circleSacBalance(payload)).toBe(4)
+    expect(circleSacCoversAmount(circleSacBalance(payload), "5")).toBe(false)
+    expect(circleSacCoversAmount(circleSacBalance(payload), "4")).toBe(true)
+  })
+
+  it("is short when a new account has no Circle balance yet", () => {
+    expect(circleSacCoversAmount(circleSacBalance({}), "1")).toBe(false)
+  })
+})
+
+describe("sozuConnectInsufficient", () => {
+  it("returns the account and does not include a transaction", () => {
+    expect(sozuConnectInsufficient("ada", ACCOUNT)).toEqual({
+      type: "sozu-connect",
+      username: "ada",
+      accountId: ACCOUNT,
+      error: "insufficient_funds",
+    })
   })
 })
 

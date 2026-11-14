@@ -64,6 +64,22 @@ describe("pay", () => {
     })
   })
 
+  it("resolves a short Circle balance without a transaction", async () => {
+    const { post } = installWindow()
+    const pending = pay({ amount: "5", to: DEST })
+    post({
+      type: "sozu-connect",
+      username: "ada",
+      accountId: ACCOUNT,
+      error: "insufficient_funds",
+    })
+    await expect(pending).resolves.toEqual({
+      username: "ada",
+      accountId: ACCOUNT,
+      error: "insufficient_funds",
+    })
+  })
+
   it("does not resolve login() from a payment message", async () => {
     const { post } = installWindow()
     const pending = login()

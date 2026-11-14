@@ -53,6 +53,12 @@ export function deliverSozuConnectResult(
         username: string
         accountId: string
         txHash: string
+      }
+    | {
+        type: typeof SOZU_CONNECT_MESSAGE_TYPE
+        username: string
+        accountId: string
+        error: "insufficient_funds"
       },
 ): void {
   if (typeof window === "undefined") return

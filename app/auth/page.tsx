@@ -45,7 +45,8 @@ import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
 import { ConnectPayConfirm } from "@/components/connect/connect-pay-confirm"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
-import { readSozuPayRequest, sozuConnectPayment } from "@/lib/connect/pay-request"
+import { circleSacCover } from "@/lib/connect/circle-balance"
+import { readSozuPayRequest, sozuConnectInsufficient, sozuConnectPayment } from "@/lib/connect/pay-request"
 import {
   deliverSozuConnectResult,
   isSozuConnectSearch,
@@ -78,6 +79,7 @@ function AuthPageContent() {
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
   const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
+  const [payCheck, setPayCheck] = useState<"idle" | "checking">("idle")
   const router = useRouter()
   const searchParams = useSearchParams()
   const connectMode = isSozuConnectSearch(searchParams)
@@ -173,7 +175,18 @@ function AuthPageContent() {
         setIsAuthenticated(true)
         setIsAuthenticating(false)
         setIsExiting(false)
-        setPaySession({ username: success.username, accountId: success.accountId })
+        setPayCheck("checking")
+        const request = payRequest
+        const account = success
+        void circleSacCover(account.accountId, request.amount).then((cover) => {
+          if (cover === "no") {
+            const short = sozuConnectInsufficient(account.username, account.accountId)
+            deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+            return
+          }
+          setPayCheck("idle")
+          setPaySession({ username: account.username, accountId: account.accountId })
+        })
         return
       }
       const message = success ?? sozuConnectSignupFailed()
@@ -1011,6 +1024,14 @@ function AuthPageContent() {
     } finally {
       console.log("[Auth] ====== Authentication flow complete ======")
     }
+  }
+
+  if (payRequest && payCheck === "checking") {
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        Checking Circle USDC…
+      </div>
+    )
   }
 
   if (paySession && payRequest) {
