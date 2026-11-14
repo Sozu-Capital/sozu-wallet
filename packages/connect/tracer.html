@@ -39,16 +39,18 @@
       const originInput = document.getElementById("origin")
       const out = document.getElementById("out")
       let popup = null
+      let sawResult = false
 
       window.addEventListener("message", (event) => {
         const walletOrigin = originInput.value.trim().replace(/\/$/, "")
         if (event.origin !== walletOrigin) return
         const data = event.data
         if (!data || data.type !== "sozu-connect") return
+        sawResult = true
         out.textContent = JSON.stringify(
-          data.username
-            ? { username: data.username, accountId: data.accountId }
-            : { error: data.error },
+          data.error
+            ? { error: data.error }
+            : { username: data.username, accountId: data.accountId },
           null,
           2,
         )
@@ -56,12 +58,18 @@
 
       document.getElementById("login").addEventListener("click", () => {
         const walletOrigin = originInput.value.trim().replace(/\/$/, "")
+        sawResult = false
         popup = window.open(
           walletOrigin + "/auth?connect=1",
           "sozu-connect",
           "popup,width=420,height=720",
         )
         out.textContent = popup ? "popup opened" : "popup blocked"
+        const timer = setInterval(() => {
+          if (!popup || !popup.closed) return
+          clearInterval(timer)
+          if (!sawResult) out.textContent = JSON.stringify({ error: "popup_closed" }, null, 2)
+        }, 300)
       })
     </script>
   </body>

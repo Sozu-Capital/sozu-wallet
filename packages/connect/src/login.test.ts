@@ -72,6 +72,28 @@ describe("login", () => {
     await expect(pending).resolves.toEqual({ username: "ada", accountId: ACCOUNT })
   })
 
+  it("rejects when signup fails and does not return an account", async () => {
+    const { post } = installWindow()
+    const pending = login()
+    const rejected = expect(pending).rejects.toThrow(/signup failed/)
+    post({ type: "sozu-connect", error: "signup_failed", username: "ada", accountId: ACCOUNT })
+    await rejected
+  })
+
+  it("rejects when the popup closes", async () => {
+    vi.useFakeTimers()
+    try {
+      const { popup } = installWindow()
+      const pending = login()
+      const rejected = expect(pending).rejects.toThrow(/closed/)
+      popup.closed = true
+      await vi.advanceTimersByTimeAsync(300)
+      await rejected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("rejects when the browser blocks the popup", async () => {
     installWindow()
     vi.stubGlobal("window", {

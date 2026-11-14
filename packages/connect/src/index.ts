@@ -23,13 +23,19 @@ function connectOrigin(origin?: string): string {
   return url.origin
 }
 
+function messageRecord(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null
+  const message = data as Record<string, unknown>
+  if (message.type !== MESSAGE_TYPE) return null
+  return message
+}
+
 function isLoginResult(
   data: unknown,
 ): data is { type: typeof MESSAGE_TYPE; username: string; accountId: string } {
-  if (!data || typeof data !== "object") return false
-  const message = data as Record<string, unknown>
+  const message = messageRecord(data)
+  if (!message) return false
   return (
-    message.type === MESSAGE_TYPE &&
     typeof message.username === "string" &&
     message.username.trim() !== "" &&
     typeof message.accountId === "string" &&
@@ -37,9 +43,15 @@ function isLoginResult(
   )
 }
 
+function isSignupFailed(data: unknown): boolean {
+  const message = messageRecord(data)
+  return message?.error === "signup_failed"
+}
+
 /**
  * Opens the Sozu auth page in a popup. Resolves with the username and C account
- * the popup posts back. The merchant page stays put.
+ * the popup posts back. Rejects when the popup closes or signup fails.
+ * The merchant page stays put.
  */
 export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> {
   if (typeof window === "undefined") {
@@ -52,16 +64,36 @@ export function login(options: SozuLoginOptions = {}): Promise<SozuLoginResult> 
     return Promise.reject(new Error("Sozu Connect popup was blocked"))
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let timer: ReturnType<typeof setInterval> | undefined
+
+    function stop() {
+      if (settled) return false
+      settled = true
+      window.removeEventListener("message", onMessage)
+      clearInterval(timer)
+      return true
+    }
+
     function onMessage(event: MessageEvent) {
       if (event.origin !== origin || event.source !== popup) return
+      if (isSignupFailed(event.data)) {
+        if (stop()) reject(new Error("Sozu Connect signup failed"))
+        return
+      }
       if (!isLoginResult(event.data)) return
-      window.removeEventListener("message", onMessage)
+      if (!stop()) return
       resolve({
         username: event.data.username.trim(),
         accountId: event.data.accountId.trim().toUpperCase(),
       })
     }
+
+    timer = setInterval(() => {
+      if (!popup.closed) return
+      if (stop()) reject(new Error("Sozu Connect popup was closed"))
+    }, 300)
 
     window.addEventListener("message", onMessage)
   })
