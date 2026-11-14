@@ -43,7 +43,10 @@ import { itemAuthReturnPath } from "@/lib/merch/buy-gate"
 import { panelAuthReturnPath } from "@/lib/shell/panels"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
+import { ConnectPayConfirm } from "@/components/connect/connect-pay-confirm"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
+import { circleSacCover } from "@/lib/connect/circle-balance"
+import { readSozuPayRequest, sozuConnectInsufficient, sozuConnectPayment } from "@/lib/connect/pay-request"
 import {
   deliverSozuConnectResult,
   isSozuConnectSearch,
@@ -75,9 +78,13 @@ function AuthPageContent() {
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
+  const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
+  const [payAccount, setPayAccount] = useState<{ username: string; accountId: string } | null>(null)
+  const [payCheck, setPayCheck] = useState<"idle" | "checking" | "unavailable">("idle")
   const router = useRouter()
   const searchParams = useSearchParams()
   const connectMode = isSozuConnectSearch(searchParams)
+  const payRequest = connectMode ? readSozuPayRequest(searchParams) : null
   const redirectingRef = useRef(false)
   const { canInstall, triggerInstall, isIos, isInstalled } = usePwaInstall()
   const { t } = useWalletLanguage()
@@ -160,7 +167,33 @@ function AuthPageContent() {
 
   const completeConnect = useCallback(
     (username: string | null | undefined, accountId: string | null | undefined) => {
-      const message = sozuConnectSuccess(username, accountId) ?? sozuConnectSignupFailed()
+      const success = sozuConnectSuccess(username, accountId)
+      if (payRequest && success) {
+        redirectingRef.current = true
+        setShowTagModal(false)
+        setResumeLoginTag(null)
+        setTagModalPrefill(null)
+        setIsAuthenticated(true)
+        setIsAuthenticating(false)
+        setIsExiting(false)
+        setPayAccount(success)
+        setPayCheck("checking")
+        void circleSacCover(success.accountId, payRequest.amount).then((cover) => {
+          if (cover === "no") {
+            const short = sozuConnectInsufficient(success.username, success.accountId)
+            deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+            return
+          }
+          if (cover !== "yes") {
+            setPayCheck("unavailable")
+            return
+          }
+          setPayCheck("idle")
+          setPaySession({ username: success.username, accountId: success.accountId })
+        })
+        return
+      }
+      const message = success ?? sozuConnectSignupFailed()
       redirectingRef.current = true
       setShowTagModal(false)
       setResumeLoginTag(null)
@@ -170,7 +203,7 @@ function AuthPageContent() {
       setIsExiting(true)
       deliverSozuConnectResult(message)
     },
-    [],
+    [payRequest],
   )
 
   useEffect(() => {
@@ -995,6 +1028,69 @@ function AuthPageContent() {
     } finally {
       console.log("[Auth] ====== Authentication flow complete ======")
     }
+  }
+
+  if (payRequest && payCheck === "checking") {
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        Checking Circle USDC…
+      </div>
+    )
+  }
+
+  if (payRequest && payCheck === "unavailable" && payAccount) {
+    const account = payAccount
+    const request = payRequest
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-sm text-muted-foreground">Couldn’t check the Circle USDC balance. Try again before sending.</p>
+        <button
+          type="button"
+          className="h-11 rounded-full bg-foreground px-5 text-sm text-background"
+          onClick={() => {
+            setPayCheck("checking")
+            void circleSacCover(account.accountId, request.amount).then((cover) => {
+              if (cover === "no") {
+                const short = sozuConnectInsufficient(account.username, account.accountId)
+                deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+                return
+              }
+              if (cover !== "yes") {
+                setPayCheck("unavailable")
+                return
+              }
+              setPayCheck("idle")
+              setPaySession(account)
+            })
+          }}
+        >
+          Try again
+        </button>
+        <button type="button" className="text-sm text-muted-foreground" onClick={() => window.close()}>
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  if (paySession && payRequest) {
+    return (
+      <ConnectPayConfirm
+        amount={payRequest.amount}
+        to={payRequest.to}
+        username={paySession.username}
+        accountId={paySession.accountId}
+        onSigned={(txHash) => {
+          const message = sozuConnectPayment(paySession.username, paySession.accountId, txHash)
+          if (!message) {
+            deliverSozuConnectResult(sozuConnectSignupFailed())
+            return
+          }
+          deliverSozuConnectResult(message)
+        }}
+        onCancel={() => window.close()}
+      />
+    )
   }
 
   return (

@@ -45,7 +45,22 @@ export function sozuConnectSignupFailed(): SozuConnectFailure {
  * Any site may open the popup, so the target origin is `*`.
  * The payload is only the public fields from `sozuConnectSuccess` or a signup failure.
  */
-export function deliverSozuConnectResult(message: SozuConnectMessage): void {
+export function deliverSozuConnectResult(
+  message:
+    | SozuConnectMessage
+    | {
+        type: typeof SOZU_CONNECT_MESSAGE_TYPE
+        username: string
+        accountId: string
+        txHash: string
+      }
+    | {
+        type: typeof SOZU_CONNECT_MESSAGE_TYPE
+        username: string
+        accountId: string
+        error: "insufficient_funds"
+      },
+): void {
   if (typeof window === "undefined") return
   const opener = window.opener as Window | null
   if (opener && !opener.closed) {

@@ -1,9 +1,39 @@
 {
   "name": "@sozu/connect",
   "version": "0.1.0",
-  "private": true,
+  "description": "Login and pay with Sozu. Opens a popup on dev.sozu.capital for a username, a C account, and a user-approved Circle testnet USDC send.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "sozu",
+    "stellar",
+    "usdc",
+    "connect"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sozu-Capital/sozu-wallet.git",
+    "directory": "packages/connect"
+  },
+  "homepage": "https://dev.sozu.capital",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
   }
 }

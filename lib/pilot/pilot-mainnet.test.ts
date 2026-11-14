@@ -23,6 +23,7 @@ const REQUIRED_DISABLED = [
   "/api/debug/passkeys",
   "/test-keys",
   "/dev/cleanup",
+  "/connect-demo",
   // Credit
   "/api/wallet/credits",
   "/api/wallet/credit-eligibility",
