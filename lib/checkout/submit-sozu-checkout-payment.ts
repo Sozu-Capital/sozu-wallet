@@ -20,6 +20,7 @@ export async function submitSozuCheckoutPayment({
   destination,
   amountUsd,
   merchantName,
+  itemName,
   organizationId,
 }: {
   sessionId: string;
@@ -27,6 +28,7 @@ export async function submitSozuCheckoutPayment({
   destination: string;
   amountUsd: string;
   merchantName: string;
+  itemName?: string | null;
   organizationId?: string | null;
 }): Promise<CheckoutPaymentResult> {
   try {
@@ -246,6 +248,15 @@ export async function submitSozuCheckoutPayment({
       memo: sessionId,
       completedAt: new Date().toISOString(),
     };
+
+    const { rememberCheckoutPurchase } = await import("@/lib/checkout/saved-purchases");
+    rememberCheckoutPurchase({
+      hash: result.transactionHash,
+      merchantName,
+      itemName: itemName?.trim() || merchantName,
+      amount: amountUsd,
+      createdAt: new Date().toISOString(),
+    });
 
     return {
       success: true,

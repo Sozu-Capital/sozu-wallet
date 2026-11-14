@@ -3,13 +3,15 @@ import "server-only"
 import { Address, xdr } from "@stellar/stellar-sdk"
 import * as rpc from "@stellar/stellar-sdk/rpc"
 import { getAssetRegistry } from "@/lib/stellar/asset-registry"
+import { transferEventFilters } from "@/lib/stellar/soroban-event-filter"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
 const STROOPS_PER_UNIT = 10_000_000
 const EVENTS_PAGE_SIZE = 100
-const MAX_EVENT_PAGES = 24
+const MAX_EVENT_PAGES = 5
 const LEDGER_LOOKBACK = 12_000
+const LEDGER_WINDOW = 2_000
 
 export type SorobanWalletTransaction = {
   id: string
@@ -100,87 +102,92 @@ export async function getSorobanWalletTransactions(
   const byHash = new Map<string, SorobanWalletTransaction>()
   const seen = new Set<string>()
 
-  for (const contractId of contractIds) {
-    let cursor: string | undefined
+  const absorb = (contractId: string, events: rpc.Api.EventResponse[]) => {
+    for (const ev of events) {
+      if (!ev?.txHash || typeof ev.txHash !== "string") continue
+      const topic = ev.topic
+      if (!topic || !Array.isArray(topic) || topic.length < 3) continue
 
-    for (let page = 0; page < MAX_EVENT_PAGES; page++) {
-      const res = cursor
-        ? await server.getEvents({
-            filters: [{ type: "contract", contractIds: [contractId] }],
-            cursor,
-            limit: EVENTS_PAGE_SIZE,
-          })
-        : await server.getEvents({
-            startLedger,
-            endLedger,
-            filters: [{ type: "contract", contractIds: [contractId] }],
-            limit: EVENTS_PAGE_SIZE,
-          })
-
-      const events = res?.events ?? []
-      if (events.length === 0) break
-
-      for (const ev of events) {
-        if (!ev?.txHash || typeof ev.txHash !== "string") continue
-        const topic = ev.topic
-        if (!topic || !Array.isArray(topic) || topic.length < 3) continue
-
-        let t0: xdr.ScVal | null = null
-        let from: string | null = null
-        let to: string | null = null
-        try {
-          t0 = coerceScVal(topic[0])
-          const t1 = coerceScVal(topic[1])
-          const t2 = coerceScVal(topic[2])
-          if (t1?.type === "scvAddress") {
-            from = Address.fromScVal(t1).toString().toUpperCase()
-          }
-          if (t2?.type === "scvAddress") {
-            to = Address.fromScVal(t2).toString().toUpperCase()
-          }
-        } catch {
-          continue
+      let t0: xdr.ScVal | null = null
+      let from: string | null = null
+      let to: string | null = null
+      try {
+        t0 = coerceScVal(topic[0])
+        const t1 = coerceScVal(topic[1])
+        const t2 = coerceScVal(topic[2])
+        if (t1?.type === "scvAddress") {
+          from = Address.fromScVal(t1).toString().toUpperCase()
         }
-
-        if (!t0 || scValSymbolText(t0) !== "transfer") continue
-        if (!from || !to) continue
-        if (from !== holder && to !== holder) continue
-
-        const dedupeKey = `${ev.txHash}:${from}:${to}:${contractId}`
-        if (seen.has(dedupeKey)) continue
-        seen.add(dedupeKey)
-
-        const val = coerceScVal(ev.value)
-        const amount = val ? stroopsToAmount(scValI128ToBigInt(val)) : 0
-        const asset = assetByContract.get(contractId) ?? "USDC"
-        const createdAt =
-          typeof ev.ledgerClosedAt === "string" && ev.ledgerClosedAt
-            ? ev.ledgerClosedAt
-            : new Date().toISOString()
-
-        const existing = byHash.get(ev.txHash)
-        if (existing) {
-          existing.operations.push({ type: "payment", from, to, amount, asset })
-          continue
+        if (t2?.type === "scvAddress") {
+          to = Address.fromScVal(t2).toString().toUpperCase()
         }
-
-        byHash.set(ev.txHash, {
-          id: ev.txHash,
-          hash: ev.txHash,
-          createdAt,
-          successful: true,
-          memo: null,
-          operations: [{ type: "payment", from, to, amount, asset }],
-        })
+      } catch {
+        continue
       }
 
-      if (byHash.size >= limit) break
+      if (!t0 || scValSymbolText(t0) !== "transfer") continue
+      if (!from || !to) continue
+      if (from !== holder && to !== holder) continue
 
-      cursor = typeof res.cursor === "string" && res.cursor.length > 0 ? res.cursor : undefined
-      if (!cursor) break
+      const dedupeKey = `${ev.txHash}:${from}:${to}:${contractId}`
+      if (seen.has(dedupeKey)) continue
+      seen.add(dedupeKey)
+
+      const val = coerceScVal(ev.value)
+      const amount = val ? stroopsToAmount(scValI128ToBigInt(val)) : 0
+      const asset = assetByContract.get(contractId) ?? "USDC"
+      const createdAt =
+        typeof ev.ledgerClosedAt === "string" && ev.ledgerClosedAt
+          ? ev.ledgerClosedAt
+          : new Date().toISOString()
+
+      const existing = byHash.get(ev.txHash)
+      if (existing) {
+        existing.operations.push({ type: "payment", from, to, amount, asset })
+        continue
+      }
+
+      byHash.set(ev.txHash, {
+        id: ev.txHash,
+        hash: ev.txHash,
+        createdAt,
+        successful: true,
+        memo: null,
+        operations: [{ type: "payment", from, to, amount, asset }],
+      })
     }
+  }
 
-    if (byHash.size >= limit) break
+  // Newest windows first. An unfiltered scan starts at the oldest ledger and never reaches a payment from the last few minutes.
+  for (let windowEnd = endLedger; windowEnd >= startLedger && byHash.size < limit; windowEnd -= LEDGER_WINDOW) {
+    const windowStart = Math.max(startLedger, windowEnd - LEDGER_WINDOW + 1)
+    for (const contractId of contractIds) {
+      if (byHash.size >= limit) break
+      let cursor: string | undefined
+      try {
+        for (let page = 0; page < MAX_EVENT_PAGES && byHash.size < limit; page++) {
+          const res = cursor
+            ? await server.getEvents({
+                filters: transferEventFilters(contractId, holder),
+                cursor,
+                limit: EVENTS_PAGE_SIZE,
+              })
+            : await server.getEvents({
+                startLedger: windowStart,
+                endLedger: windowEnd,
+                filters: transferEventFilters(contractId, holder),
+                limit: EVENTS_PAGE_SIZE,
+              })
+          const events = res?.events ?? []
+          absorb(contractId, events)
+          if (events.length < EVENTS_PAGE_SIZE) break
+          cursor = typeof res.cursor === "string" && res.cursor.length > 0 ? res.cursor : undefined
+          if (!cursor) break
+        }
+      } catch (error) {
+        console.warn("[soroban-transfer-history] event window skipped:", contractId.slice(0, 8), error)
+      }
+    }
   }
 
   return Array.from(byHash.values())

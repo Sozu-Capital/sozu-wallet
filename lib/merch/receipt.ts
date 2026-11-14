@@ -1,4 +1,3 @@
-import type { MerchItemRecord } from "@/lib/merch/catalog"
 import { merchCopy, type MerchLanguage } from "@/lib/merch/copy"
 import type { MerchOrderStatus } from "@/lib/merch/order"
 
@@ -35,7 +34,7 @@ export function formatReceiptTime(iso: string | null | undefined): string {
 }
 
 export function buildCollectibleReceipt(input: {
-  item: Pick<MerchItemRecord, "name" | "drop" | "network">
+  item: { name: string; drop: string; network: "testnet" | "mainnet" }
   language: MerchLanguage
   status: MerchOrderStatus
   priceUsdc: string

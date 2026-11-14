@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
 import type { Transaction } from "@/hooks/use-wallet-data"
 
@@ -36,6 +37,7 @@ function chainItemsFromTransactions(
   walletAddress: string,
   currencyDisplay: string,
   addressToTagMap: Record<string, string>,
+  purchaseLabels: Record<string, string> = {},
 ): WalletActivityItem[] {
   const wallet = walletAddress.trim().toUpperCase()
   const out: WalletActivityItem[] = []
@@ -53,6 +55,7 @@ function chainItemsFromTransactions(
     const other = isSent ? to : from
     const tag = addressToTagMap[other] ?? addressToTagMap[paymentOp.from] ?? addressToTagMap[paymentOp.to]
     const counterparty = tag ? `$${tag.replace(/^\$+/, "")}` : `${other.slice(0, 6)}…${other.slice(-4)}`
+    const purchaseLabel = purchaseLabels[tx.hash?.toLowerCase()] ?? purchaseLabels[tx.id?.toLowerCase()]
 
     const sortAt = Date.parse(tx.createdAt)
     out.push({
@@ -61,7 +64,7 @@ function chainItemsFromTransactions(
       kind: "chain",
       direction: isReceived ? "in" : "out",
       amountLabel: `${isReceived ? "+" : "−"}${paymentOp.amount.toFixed(2)} ${currencyDisplay}`,
-      subtitle: isSent ? `To ${counterparty}` : `From ${counterparty}`,
+      subtitle: purchaseLabel ?? (isSent ? `To ${counterparty}` : `From ${counterparty}`),
       chainTx: tx,
     })
   }
@@ -136,14 +139,33 @@ export function useWalletActivity(params: {
   }, [enabled, refresh])
 
   const items = useMemo(() => {
+    const saved = readSavedPurchases()
+    const purchaseLabels = Object.fromEntries(
+      saved.map((purchase) => {
+        const label = [purchase.merchantName, purchase.itemName].filter(Boolean).join(" · ")
+        return [purchase.hash.toLowerCase(), label]
+      }),
+    )
     const chain = chainItemsFromTransactions(
       chainTransactions,
       walletAddress,
       currencyDisplay,
       addressToTagMap,
+      purchaseLabels,
     )
+    const seen = new Set(chainTransactions.map((tx) => tx.hash?.toLowerCase()).filter(Boolean))
+    const pending = saved
+      .filter((purchase) => !seen.has(purchase.hash.toLowerCase()))
+      .map((purchase) => ({
+        id: `purchase:${purchase.hash}`,
+        sortAt: Date.parse(purchase.createdAt) || 0,
+        kind: "chain" as const,
+        direction: "out" as const,
+        amountLabel: `−${purchase.amount} ${currencyDisplay}`,
+        subtitle: [purchase.merchantName, purchase.itemName].filter(Boolean).join(" · "),
+      }))
     const ledger = ledgerItemsFromRows(ledgerRows)
-    return [...chain, ...ledger].sort((a, b) => b.sortAt - a.sortAt)
+    return [...chain, ...pending, ...ledger].sort((a, b) => b.sortAt - a.sortAt)
   }, [chainTransactions, walletAddress, currencyDisplay, ledgerRows, addressToTagMap])
 
   return {

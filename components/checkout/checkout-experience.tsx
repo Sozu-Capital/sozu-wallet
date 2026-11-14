@@ -113,6 +113,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       destination: session.destinationStellarAddress,
       amountUsd: session.amountUsd,
       merchantName: session.merchantName,
+      itemName: session.reference,
       organizationId: session.organizationId,
     });
 
