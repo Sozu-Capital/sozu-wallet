@@ -19,7 +19,7 @@ function markup(language: "es" | "en", remaining: number | null) {
 describe("item page", () => {
   it("shows the name, image, price, receipt line, and testnet label", () => {
     const { html } = markup("es", 4)
-    expect(html).toContain("Liquid Society")
+    expect(html).toContain("Shirt")
     expect(html).toContain("/merch/liquid-society.svg")
     expect(html).toContain("12 USDC")
     expect(html).toContain("Recibirás un coleccionable digital como comprobante de compra.")

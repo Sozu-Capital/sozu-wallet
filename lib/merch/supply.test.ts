@@ -15,6 +15,7 @@ describe("remaining supply", () => {
   it("does not read the chain when the contract is not recorded", async () => {
     const item = getMerchItem(LIQUID_SOCIETY_SLUG)
     if (!item) throw new Error("missing seed")
+    expect(item.preMintSupply).toBe(10)
     const read = vi.fn()
     await expect(remainingSupply(item, read)).resolves.toBeNull()
     expect(read).not.toHaveBeenCalled()
