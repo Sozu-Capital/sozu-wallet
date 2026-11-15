@@ -3,6 +3,8 @@
 import { WelcomeModal } from "@/components/welcome-modal"
 import { TagInputModal } from "@/components/tag-input-modal"
 import { AuthDeviceChoiceModal } from "@/components/auth-device-choice-modal"
+import { RecoverAccountScreen } from "@/components/auth/recover-account-screen"
+import { SignupEmailScreen } from "@/components/auth/signup-email-screen"
 import { QRCodeRegistrationModal } from "@/components/qr-code-registration-modal"
 import { WalletSkeleton } from "@/components/ui/wallet-skeleton"
 import { Button } from "@/components/ui/button"
@@ -78,6 +80,10 @@ function AuthPageContent() {
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
+  const [showSignup, setShowSignup] = useState(false)
+  const [signupTag, setSignupTag] = useState<string | null>(null)
+  const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(null)
+  const [showRecover, setShowRecover] = useState(false)
   const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
   const [payAccount, setPayAccount] = useState<{ username: string; accountId: string } | null>(null)
   const [payCheck, setPayCheck] = useState<"idle" | "checking" | "unavailable">("idle")
@@ -87,7 +93,7 @@ function AuthPageContent() {
   const payRequest = connectMode ? readSozuPayRequest(searchParams) : null
   const redirectingRef = useRef(false)
   const { canInstall, triggerInstall, isIos, isInstalled } = usePwaInstall()
-  const { t } = useWalletLanguage()
+  const { t, language } = useWalletLanguage()
   // Stores a passkey credential captured during discovery-mode auth that failed
   // (credential not in DB). Passed to proceedWithRegistration so the user isn't
   // prompted for a second biometric after entering their SozuTag.
@@ -572,12 +578,18 @@ function AuthPageContent() {
     setShowTagModal(false)
     setResumeLoginTag(null)
     setTagModalPrefill(null)
+    setSignupTag(tag)
+    setShowSignup(true)
+  }
+
+  const handleSignupContinue = (email: string) => {
+    if (!signupTag) return
+    setShowSignup(false)
+    setPendingRecoveryEmail(email)
     setIsAuthenticating(true)
-    // Consume any credential captured during a failed discovery-mode auth so that
-    // proceedWithRegistration can skip the second biometric prompt.
     const captured = pendingCredentialRef.current
     pendingCredentialRef.current = null
-    void proceedWithRegistration(tag, captured)
+    void proceedWithRegistration(signupTag, captured, email)
   }
 
   const handleLoginPasskeyFromModal = async (tag: string) => {
@@ -618,6 +630,7 @@ function AuthPageContent() {
     /** Credential already captured from a prior (failed) discovery-mode auth.
      *  When provided the browser biometric prompt is skipped entirely. */
     existingCredential?: Awaited<ReturnType<typeof getPasskey>> | null,
+    recoveryEmail?: string,
   ) => {
     console.log("[Auth] ====== Starting registration with tag:", tag, existingCredential ? "(reusing captured credential)" : "")
 
@@ -730,7 +743,13 @@ function AuthPageContent() {
       console.log("[Auth] Reg Step 4: Verifying registration...")
 
       // Pass the challenge and referral code to verifyRegistration
-      const regResult = await verifyRegistration(usernameToRegister, credential, challenge.challenge, referralCode)
+      const regResult = await verifyRegistration(
+        usernameToRegister,
+        credential,
+        challenge.challenge,
+        referralCode,
+        recoveryEmail,
+      )
       console.log("[Auth] Reg Step 5: Verification result:", regResult)
       console.log("[Auth] Registration success:", regResult.success)
       console.log("[Auth] Registration userId:", regResult.userId)
@@ -1223,15 +1242,28 @@ function AuthPageContent() {
         <p className="max-w-sm px-2 text-center text-[10px] font-extralight tracking-[0.12em] text-white">
           {t.authPasskeyCaption}
         </p>
-        <a
-          href="/offline"
+        <button
+          type="button"
+          onClick={() => setShowRecover(true)}
           className="pointer-events-auto text-[10px] font-extralight tracking-[0.12em] text-white/55 underline-offset-4 hover:text-white hover:underline"
         >
-          Audit offline payments
-        </a>
+          {language === "en" ? "Recover my account" : "Recuperar mi cuenta"}
+        </button>
 
         {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
       </div>
+
+      {showSignup && signupTag ? (
+        <SignupEmailScreen
+          onContinue={handleSignupContinue}
+          onBack={() => {
+            setShowSignup(false)
+            setTagModalPrefill(signupTag)
+            setShowTagModal(true)
+          }}
+        />
+      ) : null}
+      {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
 
       {/* Welcome Modal - Shows on first visit */}
       <WelcomeModal />
@@ -1272,6 +1304,7 @@ function AuthPageContent() {
         <QRCodeRegistrationModal
           isOpen={showQRModal}
           username={qrUsername}
+          recoveryEmail={pendingRecoveryEmail}
           onComplete={async (userId, username, credentialId) => {
             console.log("[Auth] QR flow completed:", { userId, username, credentialId })
             setShowQRModal(false)

@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { setSessionCookie } from "@/lib/auth/session"
+import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -12,8 +13,9 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, credential, challenge, referralCode, clientPublicKey65b } =
+    const { username, credential, challenge, referralCode, clientPublicKey65b, recoveryEmail: recoveryEmailRaw } =
       await request.json()
+    const recoveryEmail = normalizeRecoveryEmail(recoveryEmailRaw)
     
     // Log referral code for debugging
     console.log("[Register] Referral code received:", referralCode || "none")
@@ -96,6 +98,27 @@ export async function POST(request: NextRequest) {
         )
       }
       
+      if (recoveryEmail) {
+        const { data: emailOwner, error: emailCheckError } = await serviceClient
+          .from("profiles")
+          .select("id")
+          .eq("recovery_email", recoveryEmail)
+          .maybeSingle()
+        if (emailCheckError && emailCheckError.code !== "PGRST116") {
+          console.error("[Register] Error checking recovery email:", emailCheckError)
+          return NextResponse.json(
+            { error: "No pudimos guardar el correo de recuperación." },
+            { status: 500, headers: corsHeaders(request) },
+          )
+        }
+        if (emailOwner) {
+          return NextResponse.json(
+            { error: "Ese correo ya recupera otra cuenta. Usá Recuperar mi cuenta." },
+            { status: 409, headers: corsHeaders(request) },
+          )
+        }
+      }
+
       if (existingProfile) {
         console.log("[Register] Username already exists:", username)
         return NextResponse.json(
@@ -408,7 +431,27 @@ export async function POST(request: NextRequest) {
     }
     
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
-    
+
+    if (recoveryEmail) {
+      const { error: recoveryEmailError } = await serviceClient
+        .from("profiles")
+        .update({ recovery_email: recoveryEmail })
+        .eq("id", authData.user.id)
+      if (recoveryEmailError) {
+        console.error("[Register] Could not store recovery email:", recoveryEmailError)
+        if (recoveryEmailError.code === "23505") {
+          return NextResponse.json(
+            { error: "Ese correo ya recupera otra cuenta. Usá Recuperar mi cuenta." },
+            { status: 409, headers: corsHeaders(request) },
+          )
+        }
+        return NextResponse.json(
+          { error: "No pudimos guardar el correo de recuperación." },
+          { status: 500, headers: corsHeaders(request) },
+        )
+      }
+    }
+
     // Normalize credential ID - remove whitespace and ensure consistent format
     const normalizeCredentialId = (id: string): string => {
       if (!id) return ""

@@ -11,6 +11,11 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   "/api/auth/login/verify": { reason: "verifies the passkey assertion and issues the session cookie" },
   "/api/auth/register/challenge": { reason: "registration challenge for a new account" },
   "/api/auth/register/verify": { reason: "creates a new account and issues its session cookie" },
+  "/api/auth/recovery/start": {
+    reason: "sends a recovery link when the email matches an account; the response does not say which",
+  },
+  "/api/auth/recovery/challenge": { reason: "issues a passkey challenge for a valid recovery link" },
+  "/api/auth/recovery/verify": { reason: "stores the new passkey and issues the session cookie" },
   "/api/auth/username/check": { reason: "tag availability check during sign-up" },
   "/api/auth/pin/login": { reason: "backup PIN sign-in (removed under PILOT_MAINNET by szc #36)" },
   "/api/auth/logout": { reason: "clears the caller's own cookie" },
