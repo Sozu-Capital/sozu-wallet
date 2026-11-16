@@ -56,7 +56,8 @@ export function Preloader() {
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "#000",
+        background:
+          "radial-gradient(120% 70% at 50% -10%, #1d1c19 0%, transparent 55%), linear-gradient(180deg, #1d1c19 0%, #161513 42%, #131210 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -67,11 +68,11 @@ export function Preloader() {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/icons/sozu_icon_192.png"
+        src="/brand/november-2026/mark.png"
         alt=""
-        width={64}
-        height={64}
-        style={{ borderRadius: "22%", opacity: 0.92 }}
+        width={384}
+        height={384}
+        style={{ width: 384, height: 384, objectFit: "contain", opacity: 0.16, filter: "blur(12px)" }}
       />
     </div>
   )

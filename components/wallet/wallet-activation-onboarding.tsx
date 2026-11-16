@@ -1,8 +1,11 @@
 "use client"
 
-import Image from "next/image"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { cn } from "@/lib/utils"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { SozuTagScreen } from "@/components/onboarding/sozu-tag-screen"
+import { ProgressPills } from "@/components/onboarding/progress-pills"
+import { BackgroundMark, DeviceKeyIcon, SlideIcons, sentenceLines } from "@/components/onboarding/slide-art"
+import { SozuButton } from "@/components/ui/sozu-button"
 import { resolveActivationGesture } from "@/lib/onboarding/gesture"
 import {
   WALLET_ACTIVATION_SLIDE_COUNT,
@@ -11,6 +14,7 @@ import {
   activationSlides,
   type ActivationSlide,
 } from "@/lib/onboarding/slides"
+import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
 import { useWalletLanguage } from "@/lib/wallet-language"
 
 const SLIDE_MS = 420
@@ -19,12 +23,17 @@ const BLACK_FADE_MS = 650
 const WALLET_REVEAL_MS = 750
 const DRAG_ARM_PX = 10
 
-type Phase = "slides" | "black" | "done"
+type Phase = "tag" | "slides" | "black" | "done"
 
 type WalletActivationOnboardingProps = {
   open: boolean
   activationSettled: boolean
   onExitComplete: () => void
+  /** Welcome is the home recap. Signup starts with the tag and ends with the recovery email. */
+  intent?: "welcome" | "signup"
+  initialTag?: string
+  onCreateAccount?: (tag: string, email: string) => void
+  onSignIn?: (tag: string) => void
 }
 
 function prefersReducedMotion(): boolean {
@@ -39,17 +48,67 @@ function placeTrack(el: HTMLDivElement, index: number, offsetPx: number, animate
   el.style.transform = `translate3d(calc(${-index * 100}% + ${offsetPx}px), 0, 0)`
 }
 
-function SlideCopy({ slide }: { slide: ActivationSlide }) {
+function SlideCopy({
+  slide,
+  index,
+  recovery,
+}: {
+  slide: ActivationSlide
+  index: number
+  recovery?: {
+    hint: string
+    placeholder: string
+    value: string
+    error?: string
+    onChange: (value: string) => void
+  }
+}) {
+  const lines = sentenceLines(slide.body)
+
   return (
-    <div className="flex min-h-full w-full shrink-0 flex-col items-center justify-center px-8 py-6 text-center">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/45">{slide.step}</p>
-      <h1 className="mt-3 max-w-[18rem] text-[1.75rem] font-semibold leading-tight tracking-tight">
-        {slide.title}
-      </h1>
-      <p className="mt-4 max-w-[20rem] text-base leading-relaxed text-white/70">{slide.body}</p>
-      {slide.note ? (
-        <p className="mt-6 max-w-[18rem] text-sm leading-relaxed text-white/45">{slide.note}</p>
-      ) : null}
+    <div className="relative flex min-h-full w-full shrink-0 flex-col items-center justify-center overflow-hidden px-3 py-8 text-center">
+      {index === 0 ? <BackgroundMark /> : null}
+      <div className="relative z-10 flex w-full flex-col items-center">
+        <SlideIcons index={index} />
+        <h1
+          className="sozu-serif w-full max-w-[366px] space-y-1 text-[18px] font-normal leading-6 tracking-[-0.02em] text-[var(--sozu-text-primary)]"
+          style={{ textShadow: "0 1px 16px rgba(19, 18, 16, 0.92)" }}
+        >
+          <span className="sr-only">{slide.title}. </span>
+          {lines.map((line) => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        </h1>
+        {slide.note ? (
+          <p className="mt-14 flex max-w-[300px] items-center justify-center gap-2.5 text-[15px] leading-5 text-[var(--sozu-text-secondary)]">
+            {index === 0 ? <DeviceKeyIcon /> : null}
+            <span>{slide.note}</span>
+          </p>
+        ) : null}
+        {recovery ? (
+          <div className="mt-8 w-full max-w-[342px]">
+            <p className="text-pretty text-[14px] leading-5 text-[var(--sozu-text-secondary)]">{recovery.hint}</p>
+            <label className="sr-only" htmlFor="sozu-recovery-email">
+              {recovery.placeholder}
+            </label>
+            <input
+              id="sozu-recovery-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={recovery.value}
+              placeholder={recovery.placeholder}
+              onChange={(event) => recovery.onChange(event.target.value)}
+              className="sozu-field mt-3 h-[54px] w-full rounded-2xl px-4 text-[16px] text-[var(--sozu-text-primary)] outline-none placeholder:text-[var(--sozu-text-subtle)]"
+            />
+            {recovery.error ? (
+              <p className="mt-2 text-[13px] leading-[18px] text-[var(--sozu-text-danger)]">{recovery.error}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -66,12 +125,20 @@ export function WalletActivationOnboarding({
   open,
   activationSettled,
   onExitComplete,
+  intent = "welcome",
+  initialTag = "",
+  onCreateAccount,
+  onSignIn,
 }: WalletActivationOnboardingProps) {
-  const { language } = useWalletLanguage()
+  const { language, t } = useWalletLanguage()
   const slides = activationSlides(language)
-  const [phase, setPhase] = useState<Phase>("slides")
+  const [phase, setPhase] = useState<Phase>(intent === "signup" ? "tag" : "slides")
+  const [chosenTag, setChosenTag] = useState(initialTag)
+  const [recoveryEmail, setRecoveryEmail] = useState("")
+  const [recoveryError, setRecoveryError] = useState("")
   const [slideIndex, setSlideIndex] = useState(0)
   const [exitPending, setExitPending] = useState(false)
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null)
 
   const exitStartedRef = useRef(false)
   const indexRef = useRef(0)
@@ -105,13 +172,14 @@ export function WalletActivationOnboarding({
     (next: number) => {
       if (exitStartedRef.current) return
       if (next >= WALLET_ACTIVATION_SLIDE_COUNT) {
+        if (intent === "signup") return
         setExitPending(true)
         return
       }
       if (next < 0 || next === indexRef.current) return
       commitIndex(next)
     },
-    [commitIndex],
+    [commitIndex, intent],
   )
 
   const startExit = useCallback(() => {
@@ -128,7 +196,10 @@ export function WalletActivationOnboarding({
 
   useEffect(() => {
     if (!open) return
-    setPhase("slides")
+    setPhase(intent === "signup" ? "tag" : "slides")
+    setChosenTag(initialTag)
+    setRecoveryEmail("")
+    setRecoveryError("")
     indexRef.current = 0
     setSlideIndex(0)
     setExitPending(false)
@@ -136,11 +207,17 @@ export function WalletActivationOnboarding({
     pointerRef.current.active = false
     syncTrack(0, 0, false)
     dialogRef.current?.focus()
-  }, [open, syncTrack])
+  }, [open, syncTrack, intent, initialTag])
 
   useEffect(() => {
     if (exitPending && activationSettled) startExit()
   }, [exitPending, activationSettled, startExit])
+
+  useLayoutEffect(() => {
+    if (phase !== "slides") return
+    syncTrack(indexRef.current, 0, false)
+    dialogRef.current?.focus()
+  }, [phase, syncTrack])
 
   const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -222,17 +299,47 @@ export function WalletActivationOnboarding({
     [goToSlide],
   )
 
-  if (!open || phase === "done") return null
+  useLayoutEffect(() => {
+    setPortalNode(document.body)
+  }, [])
+
+  if (!open || phase === "done" || !portalNode) return null
+
+  if (phase === "tag") {
+    return createPortal(
+      <div className="sozu-night fixed inset-0 z-[200] flex justify-center overflow-x-hidden">
+        <SozuTagScreen
+          initialTag={chosenTag}
+          onContinue={(tag) => {
+            setChosenTag(tag)
+            setPhase("slides")
+          }}
+          onHaveTag={(tag) => {
+            if (tag) onSignIn?.(tag)
+          }}
+          onSignIn={(tag) => {
+            if (tag) onSignIn?.(tag)
+          }}
+        />
+      </div>,
+      portalNode,
+    )
+  }
 
   const waitingForActivation = exitPending && !activationSettled
   const safeIndex = Math.min(slideIndex, slides.length - 1)
-  const cta = activationCta(language, safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1)
+  const finishingSignup = intent === "signup" && safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1
+  const cta = finishingSignup
+    ? t.onbRecoveryCta
+    : activationCta(language, safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1)
+  const recoveryReady = normalizeRecoveryEmail(recoveryEmail) !== null
   const fadeMs = BLACK_FADE_MS
+  const current = slides[safeIndex]
 
-  return (
+  return createPortal(
     <>
       <div
-        className="pointer-events-none fixed inset-0 bg-black ease-in-out motion-reduce:transition-none"
+        className="pointer-events-none fixed inset-0 bg-[#131210] ease-in-out motion-reduce:transition-none"
         style={{
           opacity: phase === "black" ? 1 : 0,
           transitionProperty: "opacity",
@@ -243,7 +350,7 @@ export function WalletActivationOnboarding({
 
       <div
         ref={dialogRef}
-        className="fixed inset-0 z-[200] flex touch-manipulation select-none justify-center outline-none"
+        className="sozu-night fixed inset-0 z-[200] flex w-full touch-manipulation justify-center overflow-x-hidden select-none outline-none"
         role="dialog"
         aria-modal
         aria-label={activationDialogLabel(language)}
@@ -253,85 +360,81 @@ export function WalletActivationOnboarding({
         onTouchMove={(event) => event.stopPropagation()}
         onTouchEnd={(event) => event.stopPropagation()}
       >
-        <div
-          ref={frameRef}
-          className="flex h-dvh w-full max-w-[430px] flex-col bg-black text-white"
-        >
-          <div className="flex justify-center pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <Image
-              src="/brand/november-2026/mark.png"
-              alt=""
-              width={72}
-              height={72}
-              priority
-              className="h-[72px] w-[72px] object-contain"
-            />
-          </div>
+        <p className="sr-only" aria-live="polite">
+          {current?.step}. {current?.title}
+        </p>
+        <div ref={frameRef} className="flex h-dvh w-full min-w-0 max-w-[430px] flex-col overflow-x-hidden">
+          <header className="px-6" style={{ paddingTop: "calc(env(safe-area-inset-top) + 18px)" }}>
+            <ProgressPills count={WALLET_ACTIVATION_SLIDE_COUNT} current={safeIndex} label={current?.step} />
+          </header>
 
           <div
-            className="relative min-h-0 flex-1 overflow-hidden"
+            className="relative min-h-0 w-full min-w-0 flex-1 overflow-hidden"
             style={{ touchAction: "pan-y" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={finishPointer}
             onPointerCancel={finishPointer}
           >
-            <div ref={trackRef} className="flex h-full will-change-transform">
+            <div ref={trackRef} className="flex h-full w-full will-change-transform">
               {slides.map((slide, index) => (
                 <section
                   key={slide.step}
-                  className="h-full w-full shrink-0 overflow-y-auto"
+                  className="h-full w-full min-w-0 shrink-0 basis-full overflow-y-auto"
                   aria-hidden={index !== safeIndex}
                   inert={index !== safeIndex}
                 >
-                  <SlideCopy slide={slide} />
+                  <SlideCopy
+                    slide={slide}
+                    index={index}
+                    recovery={
+                      intent === "signup" && index === WALLET_ACTIVATION_SLIDE_COUNT - 1
+                        ? {
+                            hint: t.onbRecoveryHint,
+                            placeholder: t.onbRecoveryPlaceholder,
+                            value: recoveryEmail,
+                            error:
+                              recoveryError ||
+                              (recoveryEmail.includes("@") && !recoveryReady ? t.onbRecoveryInvalid : ""),
+                            onChange: (value) => {
+                              setRecoveryEmail(value)
+                              setRecoveryError("")
+                            },
+                          }
+                        : undefined
+                    }
+                  />
                 </section>
               ))}
             </div>
           </div>
 
-          <p className="sr-only" aria-live="polite">
-            {slides[safeIndex]?.step}. {slides[safeIndex]?.title}
-          </p>
-
-          <div
-            className="px-6"
-            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
-          >
-            <div className="mb-5 flex justify-center gap-2" aria-hidden>
-              {slides.map((slide, dot) => (
-                <span
-                  key={slide.step}
-                  className="h-1.5 w-1.5 rounded-full bg-white motion-reduce:transition-none"
-                  style={{
-                    opacity: dot === safeIndex ? 1 : 0.28,
-                    transform: dot === safeIndex ? "scale(1.35)" : "scale(1)",
-                    transitionProperty: "transform, opacity",
-                    transitionDuration: `${SLIDE_MS}ms`,
-                    transitionTimingFunction: EASE,
-                  }}
-                />
-              ))}
+          <footer className="px-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)" }}>
+            <div className="mx-auto w-full max-w-[342px]">
+              <SozuButton
+                aria-label={cta}
+                aria-busy={waitingForActivation}
+                disabled={waitingForActivation || (finishingSignup && !recoveryReady)}
+                onClick={() => {
+                  if (!finishingSignup) {
+                    goToSlide(safeIndex + 1)
+                    return
+                  }
+                  const email = normalizeRecoveryEmail(recoveryEmail)
+                  if (!email || !chosenTag) {
+                    setRecoveryError(t.onbRecoveryInvalid)
+                    return
+                  }
+                  onCreateAccount?.(chosenTag, email)
+                }}
+              >
+                {cta}
+              </SozuButton>
             </div>
-            <button
-              type="button"
-              onClick={() => goToSlide(safeIndex + 1)}
-              aria-label={cta}
-              aria-busy={waitingForActivation}
-              disabled={waitingForActivation}
-              className={cn(
-                "h-14 w-full rounded-full bg-white text-base font-semibold text-black",
-                "transition-transform duration-150 ease-out active:scale-[0.98]",
-                "motion-reduce:transition-none motion-reduce:active:scale-100",
-                "disabled:opacity-80",
-                waitingForActivation && "animate-pulse",
-              )}
-            >
-              {cta}
-            </button>
-          </div>
+          </footer>
         </div>
       </div>
-    </>
+    </>,
+    portalNode,
   )
 }

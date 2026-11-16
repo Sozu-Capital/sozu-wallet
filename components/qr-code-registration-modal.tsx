@@ -10,6 +10,7 @@ import Image from "next/image"
 interface QRCodeRegistrationModalProps {
   isOpen: boolean
   username: string
+  recoveryEmail?: string | null
   onComplete: (userId: string, username: string, credentialId: string) => void
   onCancel: () => void
 }
@@ -17,6 +18,7 @@ interface QRCodeRegistrationModalProps {
 export function QRCodeRegistrationModal({
   isOpen,
   username,
+  recoveryEmail,
   onComplete,
   onCancel
 }: QRCodeRegistrationModalProps) {
@@ -51,7 +53,9 @@ export function QRCodeRegistrationModal({
         
         // Generate QR code with session info
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-        const mobileUrl = `${appUrl}/auth/cross-device?sid=${data.sessionId}&u=${encodeURIComponent(username)}`
+        const params = new URLSearchParams({ sid: data.sessionId, u: username })
+        if (recoveryEmail) params.set("e", recoveryEmail)
+        const mobileUrl = `${appUrl}/auth/cross-device?${params.toString()}`
         
         const qr = await import('qrcode')
         const qrCode = await qr.toDataURL(mobileUrl, {
@@ -74,7 +78,7 @@ export function QRCodeRegistrationModal({
     }
 
     initSession()
-  }, [isOpen, username])
+  }, [isOpen, username, recoveryEmail])
 
   // Start polling when QR is ready
   useEffect(() => {

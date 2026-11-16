@@ -1,5 +1,5 @@
 /* Inter: load before tailwind so @import ordering stays valid. Replaces next/font/google (Turbopack bug on Next 16). */
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @font-face {
@@ -459,4 +459,110 @@
   border-radius: inherit;
   pointer-events: none;
   background: radial-gradient(circle, transparent 58%, rgba(0, 0, 0, 0.35) 78%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* Direction D — Paper & Warmth, Night. Scoped so the rest of the app stays put. */
+.sozu-night {
+  --sozu-bg: #161513;
+  --sozu-surface-1: #22211e;
+  --sozu-surface-2: #2a2926;
+  --sozu-surface-field: #1e1d1a;
+  --sozu-surface-disabled: #2e2d29;
+  --sozu-line: #8f8d85;
+  --sozu-line-strong: #a8a69e;
+  --sozu-line-field: #b7b3a8;
+  --sozu-text-primary: #f2f0e8;
+  --sozu-text-secondary: #e8e6de;
+  --sozu-text-italic: #c9c6bc;
+  --sozu-text-body: #bdbab0;
+  --sozu-text-muted: #a8a69e;
+  --sozu-text-subtle: #8f8d85;
+  --sozu-text-decor: #6e6c65;
+  --sozu-text-danger: #ee7a55;
+  --sozu-paper: #edeae1;
+  --sozu-ink: #1a1917;
+  --sozu-ember: #e0603a;
+  color: var(--sozu-text-primary);
+  background:
+    radial-gradient(120% 70% at 50% -10%, #1d1c19 0%, transparent 55%),
+    linear-gradient(180deg, #1d1c19 0%, #161513 42%, #131210 100%);
+  color-scheme: dark;
+}
+
+.sozu-serif {
+  font-family: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+.sozu-mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.sozu-obsidian {
+  background:
+    radial-gradient(62% 62% at 30% 8%, rgba(255, 244, 228, 0.17), rgba(255, 244, 228, 0.04) 55%, transparent 70%),
+    linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.32)),
+    linear-gradient(135deg, #4c4842 0%, #312e2a 38%, #201e1b 78%, #181715 100%);
+  box-shadow:
+    0 12px 22px -6px rgba(0, 0, 0, 0.7),
+    0 4px 6px -1px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 238, 215, 0.28),
+    inset 0 0 0 1px rgba(255, 176, 120, 0.16);
+}
+
+.sozu-paper-button {
+  background: linear-gradient(180deg, #f7f5ee 0%, #e9e6dc 100%);
+  color: var(--sozu-ink);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 rgba(120, 100, 70, 0.18),
+    0 10px 26px -12px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.sozu-paper-button:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #e9e6dc 100%);
+}
+
+.sozu-field {
+  background: var(--sozu-surface-field);
+  border: 1.5px solid var(--sozu-line-field);
+}
+
+.sozu-field-focus {
+  border-color: var(--sozu-text-primary);
+}
+
+.sozu-field-error {
+  border-color: var(--sozu-text-danger);
+}
+
+@keyframes sozu-shake {
+  0%,
+  100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.sozu-shake {
+  animation: sozu-shake 300ms linear;
+}
+
+@keyframes sozu-check-draw {
+  from { stroke-dashoffset: 16; }
+  to { stroke-dashoffset: 0; }
+}
+
+.sozu-check-draw {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 0;
+  animation: sozu-check-draw 320ms ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sozu-shake,
+  .sozu-check-draw {
+    animation: none;
+  }
 }
