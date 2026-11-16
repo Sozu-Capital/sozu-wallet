@@ -37,13 +37,13 @@ function signedLookingTransfer(sequence: string) {
       subInvocations: [],
     }),
   })
-  const body = op.body()
-  if (body.switch().name !== "invokeHostFunction") throw new Error("expected invoke host function")
-  const host = body.invokeHostFunctionOp()
+  const body = xdrField<object>(op, "body")
+  if (xdrType(body) !== "invokeHostFunction") throw new Error("expected invoke host function")
+  const host = xdrField<object>(body, "invokeHostFunctionOp")
   const withAuth = new xdr.Operation({
-    sourceAccount: op.sourceAccount(),
+    sourceAccount: xdrField(op, "sourceAccount"),
     body: xdr.OperationBody.invokeHostFunction(
-      new xdr.InvokeHostFunctionOp({ hostFunction: host.hostFunction(), auth: [auth] }),
+      new xdr.InvokeHostFunctionOp({ hostFunction: xdrField(host, "hostFunction"), auth: [auth] }),
     ),
   })
   return new TransactionBuilder(new Account(funder.publicKey(), sequence), {
@@ -91,7 +91,7 @@ describe("isBadSequenceResult", () => {
       new xdr.TransactionResult({
         feeCharged: BigInt(100),
         result: xdr.TransactionResultResult[name](),
-        ext: new xdr.TransactionResultExt(0),
+        ext: xdr.TransactionResultExt.v0(),
       }).toXDR(),
     )
 

@@ -87,7 +87,7 @@ export async function contractInstanceExists(contractId: string, network: Stella
     new xdr.LedgerKeyContractData({
       contract: Address.fromString(contractId).toScAddress(),
       key: xdr.ScVal.scvLedgerKeyContractInstance(),
-      durability: xdr.ContractDataDurability.persistent(),
+      durability: xdr.ContractDataDurability.persistent,
     }),
   )
   const res = await server.getLedgerEntries(key)
