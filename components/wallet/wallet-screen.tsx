@@ -43,7 +43,7 @@ import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indi
 import { WalletActivityList } from "@/components/wallet/wallet-activity-list"
 import { HomeDiscoverGrid } from "@/components/home/home-discover-grid"
 import { UniversalCommandBar } from "@/components/home/universal-command-bar"
-import { WithdrawDestinationSheet } from "@/components/home/withdraw-destination-sheet"
+import { P2pWithdrawSheet } from "@/components/home/p2p-withdraw-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
 import { transactionToPaymentReceipt } from "@/lib/payment/transaction-to-receipt"
@@ -54,7 +54,6 @@ import type { ReceiptModalVariant } from "@/components/wallet/success-modal"
 import { WalletSwitcherModal } from "@/components/wallet/wallet-switcher-modal"
 const SendPaymentModal = lazy(() => import("@/components/wallet/send-payment-modal").then(mod => ({ default: mod.SendPaymentModal })))
 const DepositModal = lazy(() => import("@/components/home/deposit-modal").then(mod => ({ default: mod.DepositModal })))
-const OfframpModal = lazy(() => import("@/components/home/offramp-modal").then(mod => ({ default: mod.OfframpModal })))
 const ProfileSheet = lazy(() => import("@/components/wallet/profile-sheet").then(mod => ({ default: mod.ProfileSheet })))
 const TrustPointsModal = lazy(() => import("@/components/wallet/trust-points-modal").then(mod => ({ default: mod.TrustPointsModal })))
 const BalanceAuditModal = lazy(() => import("@/components/wallet/balance-audit-modal").then(mod => ({ default: mod.BalanceAuditModal })))
@@ -162,8 +161,7 @@ export function WalletScreen({
     },
     [onDepositModalOpenChange],
   )
-  const [isOfframpOpen, setIsOfframpOpen] = useState(false)
-  const [isWithdrawDestOpen, setIsWithdrawDestOpen] = useState(false)
+  const [isP2pWithdrawOpen, setIsP2pWithdrawOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
@@ -408,23 +406,8 @@ export function WalletScreen({
   }, [setIsDepositOpen])
 
   const handleWithdraw = useCallback(() => {
-    setIsWithdrawDestOpen(true)
+    setIsP2pWithdrawOpen(true)
   }, [])
-
-  const handleWithdrawToWallet = useCallback(() => {
-    setIsWithdrawDestOpen(false)
-    setSendModalOpen(true)
-  }, [setSendModalOpen])
-
-  const handleWithdrawToBank = useCallback(() => {
-    setIsWithdrawDestOpen(false)
-    setIsOfframpOpen(true)
-  }, [])
-
-  const handleOfframpClose = useCallback(() => {
-    setIsOfframpOpen(false)
-    void refreshWalletData({ pollSoroban: true })
-  }, [refreshWalletData])
 
   const refreshOnboardingState = useCallback(async () => {
     if (walletNetwork !== "testnet") {
@@ -717,16 +700,10 @@ export function WalletScreen({
         />
       </Suspense>
 
-      <WithdrawDestinationSheet
-        open={isWithdrawDestOpen}
-        onClose={() => setIsWithdrawDestOpen(false)}
-        onSozuWallet={handleWithdrawToWallet}
-        onBank={handleWithdrawToBank}
+      <P2pWithdrawSheet
+        open={isP2pWithdrawOpen}
+        onClose={() => setIsP2pWithdrawOpen(false)}
       />
-
-      <Suspense fallback={null}>
-        <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
-      </Suspense>
 
       <Suspense fallback={null}>
         <SuccessModal
@@ -894,7 +871,7 @@ export function WalletScreen({
               </div>
             ) : (
               <>
-                <div className="pt-6">
+                <div className="pt-1">
                   <PullToRefreshIndicator pull={pull} progress={progress} refreshing={refreshing} />
                 </div>
 
@@ -902,7 +879,7 @@ export function WalletScreen({
                   className="flex min-h-0 flex-1 flex-col px-6 transition-transform duration-150 ease-out"
                   style={{ transform: pull > 0 ? `translateY(${pull * 0.35}px)` : undefined }}
                 >
-                  <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-y-contain pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                  <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-hidden pt-1 pb-[max(2.75rem,env(safe-area-inset-bottom)+2.25rem)]">
                     <div className="flex w-full max-w-md flex-col">
                       {isBalanceLoading ? (
                         <BalanceCardSkeleton compact className="mb-8" />
@@ -920,9 +897,10 @@ export function WalletScreen({
                           <UniversalCommandBar
                             className="mt-2"
                             onDepositClick={handleDeposit}
+                            onSendClick={() => setSendModalOpen(true)}
                             onWithdrawClick={handleWithdraw}
                           />
-                          <HomeDiscoverGrid className="mt-8" />
+                          <HomeDiscoverGrid className="mt-4" />
                         </>
                       )}
                     </div>

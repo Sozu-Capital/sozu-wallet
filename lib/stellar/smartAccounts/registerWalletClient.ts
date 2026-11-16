@@ -8,7 +8,7 @@ export async function registerOzSmartAccount(params: {
   credentialId: string
   publicKey: Uint8Array
   signerPublicKey?: string
-}): Promise<void> {
+}): Promise<{ contractId: string; unchanged: boolean }> {
   const userId = getUserId()
   if (!userId) throw new Error("Not authenticated")
 
@@ -27,10 +27,16 @@ export async function registerOzSmartAccount(params: {
       ...(signer?.startsWith("G") ? { signerPublicKey: signer } : {}),
     }),
   })
-  const data = await res.json().catch(() => ({}))
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string
+    contractId?: string
+    unchanged?: boolean
+  }
   if (!res.ok) {
     throw new Error(typeof data.error === "string" ? data.error : "Failed to save smart wallet")
   }
+  const contractId = data.contractId?.trim().toUpperCase() || params.contractId.trim().toUpperCase()
+  return { contractId, unchanged: data.unchanged === true }
 }
 
 export async function resolvePublicKeyFromServer(params: {

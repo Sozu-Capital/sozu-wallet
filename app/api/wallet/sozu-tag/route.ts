@@ -9,6 +9,8 @@ import {
   normalizeStellarAddressInput,
 } from "@/lib/payment/stellar-address"
 import { getSessionUserId } from "@/lib/auth/session"
+import { CANONICAL_SMART_ACCOUNT_IMMUTABLE, canonicalWriteDecision } from "@/lib/wallet/canonical-smart-account"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -145,21 +147,7 @@ export async function POST(request: NextRequest) {
     }
 
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
-    const { data: profiles, error: profileError } = await serviceClient
-      .from("profiles")
-      .select("id, username")
-      .ilike("username", tag)
-      .limit(10)
-
-    if (profileError) {
-      console.error("[Sozu Tag API] claim lookup:", profileError)
-      return NextResponse.json({ error: "Failed to check tag" }, { status: 500, headers })
-    }
-
-    const owner =
-      profiles?.find((p) => p.username === tag) ??
-      profiles?.find((p) => p.username?.toLowerCase() === tag.toLowerCase()) ??
-      null
+    const owner = await findCanonicalTagOwner(serviceClient, tag)
 
     if (owner) {
       const { data: wallets } = await serviceClient
@@ -238,6 +226,27 @@ export async function POST(request: NextRequest) {
         console.error("[Sozu Tag API] profile retry:", retry.error)
         return NextResponse.json({ error: "Could not save this tag." }, { status: 500, headers })
       }
+    }
+
+    const { data: existingWallet } = await serviceClient
+      .from("stellar_wallets")
+      .select("public_key")
+      .eq("user_id", userId)
+      .maybeSingle()
+    const decision = canonicalWriteDecision(existingWallet?.public_key, stellarAddress)
+    if (decision.action === "reject" || decision.action === "keep") {
+      if (decision.action === "reject") {
+        return NextResponse.json(
+          {
+            error: "This Sozu account already has a smart account. That address cannot be changed.",
+            code: CANONICAL_SMART_ACCOUNT_IMMUTABLE,
+            contractId: decision.contractId,
+            tag,
+          },
+          { status: 409, headers },
+        )
+      }
+      return NextResponse.json({ tag, stellarAddress: decision.contractId, network: "testnet", unchanged: true }, { headers })
     }
 
     const walletType = stellarAddress.startsWith("C") ? "oz" : "legacy"

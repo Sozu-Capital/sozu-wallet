@@ -206,13 +206,27 @@ export type WalletTexts = {
   cmdBatch: string;
   cmdOfframp: string;
   cmdDeposit: string;
+  cmdSend: string;
   cmdWithdraw: string;
+  cmdEarn: string;
   withdrawDestinationTitle: string;
   withdrawToSozuWallet: string;
   withdrawToSozuWalletHint: string;
   withdrawToBank: string;
   withdrawToBankHint: string;
   withdrawBankUnavailable: string;
+  p2pWithdrawTitle: string;
+  p2pWithdrawBody: string;
+  p2pWithdrawName: string;
+  p2pWithdrawNamePlaceholder: string;
+  p2pWithdrawBank: string;
+  p2pWithdrawBankPlaceholder: string;
+  p2pWithdrawAccount: string;
+  p2pWithdrawAccountPlaceholder: string;
+  p2pWithdrawAmount: string;
+  p2pWithdrawSubmit: string;
+  p2pWithdrawSuccess: string;
+  p2pWithdrawInvalid: string;
   offlineWindowTitle: string;
   offlineWindowAvailable: string;
   offlineWindowSaved: string;
@@ -221,6 +235,8 @@ export type WalletTexts = {
   homeDollarsEyebrow: string;
   homeDollarsTitle: string;
   homeDollarsBody: string;
+  homePayStoreTitle: string;
+  homePayStoreBody: string;
   homeInviteTitle: string;
   homeInviteBody: string;
   homeInviteShare: string;
@@ -271,6 +287,7 @@ export type WalletTexts = {
   openCashflow: string;
   // Deposit modal
   depositTitle: string;
+  depositPesosTag: string;
   depositClose: string;
   depositQrTypeLabel: string;
   depositQrTag: string;
@@ -779,13 +796,27 @@ export const walletTexts = {
     cmdBatch: "Lote",
     cmdOfframp: "Retiro",
     cmdDeposit: "Depositar",
+    cmdSend: "Enviar",
     cmdWithdraw: "Retirar",
+    cmdEarn: "Ganar",
     withdrawDestinationTitle: "Retirar",
     withdrawToSozuWallet: "Otra billetera Sozu",
     withdrawToSozuWalletHint: "Envía USDC a un $sozutag o una dirección.",
     withdrawToBank: "Cuenta bancaria",
     withdrawToBankHint: "Convierte USDC y retíralo a tu banco.",
     withdrawBankUnavailable: "El retiro a banco no está activo en este entorno.",
+    p2pWithdrawTitle: "Retiro P2P",
+    p2pWithdrawBody: "Dejá tus datos bancarios. Creamos un pedido para el mercado P2P.",
+    p2pWithdrawName: "Titular",
+    p2pWithdrawNamePlaceholder: "Nombre y apellido",
+    p2pWithdrawBank: "Banco",
+    p2pWithdrawBankPlaceholder: "Nombre del banco",
+    p2pWithdrawAccount: "CBU, CVU o alias",
+    p2pWithdrawAccountPlaceholder: "Tu cuenta",
+    p2pWithdrawAmount: "Monto en USDC",
+    p2pWithdrawSubmit: "Crear pedido",
+    p2pWithdrawSuccess: "Pedido creado. Queda en el mercado P2P.",
+    p2pWithdrawInvalid: "Completá titular, banco, cuenta y un monto para crear el pedido.",
     offlineWindowTitle: "Sin conexión",
     offlineWindowAvailable: "Disponible para pagos offline",
     offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
@@ -795,6 +826,8 @@ export const walletTexts = {
     homeDollarsTitle: "Conoce más",
     homeDollarsBody:
       "USDC es un dólar digital. En Sozu está en tu cuenta y lo puedes enviar a otra persona con un toque.",
+    homePayStoreTitle: "Pagar a un local",
+    homePayStoreBody: "Buscá la tienda por nombre",
     homeInviteTitle: "Invita a alguien",
     homeInviteBody: "A probar la app",
     homeInviteShare: "Prueba Sozu, dólares digitales en el teléfono.",
@@ -843,6 +876,7 @@ export const walletTexts = {
     activating: "Activando…",
     openCashflow: "Abrir cashflow",
     depositTitle: "Depositar",
+    depositPesosTag: "Depositar pesos con SumUp",
     depositClose: "Cerrar depósito",
     depositQrTypeLabel: "Tipo de código QR",
     depositQrTag: "Sozu",
@@ -1319,13 +1353,27 @@ export const walletTexts = {
     cmdBatch: "Batch",
     cmdOfframp: "Offramp",
     cmdDeposit: "Deposit",
+    cmdSend: "Send",
     cmdWithdraw: "Withdraw",
+    cmdEarn: "Earn",
     withdrawDestinationTitle: "Withdraw",
     withdrawToSozuWallet: "Another Sozu wallet",
     withdrawToSozuWalletHint: "Send USDC to a $sozutag or an address.",
     withdrawToBank: "Bank account",
     withdrawToBankHint: "Convert USDC and withdraw it to your bank.",
     withdrawBankUnavailable: "Bank withdrawal isn't turned on in this environment.",
+    p2pWithdrawTitle: "P2P withdraw",
+    p2pWithdrawBody: "Enter your bank details. We create a request on the P2P marketplace.",
+    p2pWithdrawName: "Account holder",
+    p2pWithdrawNamePlaceholder: "Full name",
+    p2pWithdrawBank: "Bank",
+    p2pWithdrawBankPlaceholder: "Bank name",
+    p2pWithdrawAccount: "CBU, CVU, or alias",
+    p2pWithdrawAccountPlaceholder: "Your account",
+    p2pWithdrawAmount: "Amount in USDC",
+    p2pWithdrawSubmit: "Create request",
+    p2pWithdrawSuccess: "Request created. It is on the P2P marketplace.",
+    p2pWithdrawInvalid: "Add the holder, bank, account, and an amount to create the request.",
     offlineWindowTitle: "No connection",
     offlineWindowAvailable: "Available for offline payments",
     offlineWindowSaved: "Balance saved on this phone the last time it was online.",
@@ -1335,6 +1383,8 @@ export const walletTexts = {
     homeDollarsTitle: "Learn more",
     homeDollarsBody:
       "USDC is a digital dollar. In Sozu it sits in your account, and you can send it to someone with a tap.",
+    homePayStoreTitle: "Pay a store",
+    homePayStoreBody: "Find it by name",
     homeInviteTitle: "Invite someone",
     homeInviteBody: "To try the app",
     homeInviteShare: "Try Sozu, digital dollars on your phone.",
@@ -1383,6 +1433,7 @@ export const walletTexts = {
     activating: "Activating…",
     openCashflow: "Open cashflow",
     depositTitle: "Deposit",
+    depositPesosTag: "Deposit pesos with SumUp",
     depositClose: "Close deposit",
     depositQrTypeLabel: "QR code type",
     depositQrTag: "Sozu",

@@ -14,12 +14,12 @@ Who may move USDC on `CBNHZ…` is defined **on-chain** by the passkey signer ba
 
 ## When a “new smart account” appears
 
-`ensureSmartWallet()` / “re-link” may **deploy a new `C…`** via the OZ kit. That updates your profile to a **new** address. It does **not** move USDC from the old `C…`.
+The server refuses a second deploy and refuses to point the account at a different `C…`. See [ADR 0002](./adr/0002-one-canonical-smart-account.md). A contract that was already created on chain still exists, and its USDC stays there. Signing in with a different passkey does not move that balance and does not become the receive address.
 
 | Goal | What works |
 |------|------------|
 | Keep balance on **same** `CBNHZ…` | Fix signing on that contract (passkey alignment) |
-| New `C…` for future use | Re-link / deploy; fund the new `C` separately |
+| New `C…` for future use | Not allowed. The first smart account stays the receive address |
 | Move USDC off old `C` | Must **sign a transfer from `CBNHZ…`** (or social recovery if the contract supports it — ours does not) |
 
 There is **no** backend shortcut using `STELLAR_FUNDER_SECRET` to pull user USDC off a passkey smart account without a valid user signature.

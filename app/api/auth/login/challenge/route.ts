@@ -5,6 +5,7 @@ import { getRpID, rpName } from "@/lib/webauthn/config"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -24,16 +25,26 @@ export async function POST(request: NextRequest) {
     if (username && typeof username === "string" && username !== "") {
       console.log("[Login Challenge] Username provided:", username)
       
-      // Verify user exists
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
       const supabase = await createClient()
-      const { data: profile } = await supabase.from("profiles").select("id").eq("username", username).single()
+      let profileId: string | null = null
+      let reader = supabase
+      if (supabaseUrl && supabaseServiceKey) {
+        const { createClient: createServiceClient } = await import("@supabase/supabase-js")
+        reader = createServiceClient(supabaseUrl, supabaseServiceKey)
+        const owner = await findCanonicalTagOwner(reader, username)
+        profileId = owner?.id ?? null
+      } else {
+        const { data: profile } = await supabase.from("profiles").select("id").eq("username", username).maybeSingle()
+        profileId = profile?.id ?? null
+      }
 
-      if (profile) {
-        // Get user's passkeys with their transport information
-        const { data: passkeys } = await supabase
+      if (profileId) {
+        const { data: passkeys } = await reader
           .from("passkeys")
           .select("credential_id, transports")
-          .eq("user_id", profile.id)
+          .eq("user_id", profileId)
 
         if (passkeys && passkeys.length > 0) {
           console.log("[Login Challenge] Found", passkeys.length, "passkey(s) for user:", username)

@@ -4,6 +4,7 @@ import { challengeStore } from "@/lib/webauthn/config"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 import { setSessionCookie } from "@/lib/auth/session"
 import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
 
@@ -81,22 +82,7 @@ export async function POST(request: NextRequest) {
     
     if (supabaseServiceKey && supabaseUrl) {
       const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
-      const { data: existingProfile, error: checkError } = await serviceClient
-        .from("profiles")
-        .select("id, username")
-        .eq("username", username)
-        .maybeSingle()
-      
-      if (checkError && checkError.code !== "PGRST116") {
-        console.error("[Register] Error checking username availability:", checkError)
-        return NextResponse.json(
-          { 
-            error: "Failed to verify username availability",
-            details: checkError.message
-          },
-          { status: 500, headers: corsHeaders(request) }
-        )
-      }
+      const existingProfile = await findCanonicalTagOwner(serviceClient, username)
       
       if (recoveryEmail) {
         const { data: emailOwner, error: emailCheckError } = await serviceClient

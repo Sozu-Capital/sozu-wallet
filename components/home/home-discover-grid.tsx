@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { createPortal } from "react-dom"
 import { MessageSquare, UserPlus, X } from "lucide-react"
 import { toast } from "sonner"
@@ -68,7 +69,7 @@ export function HomeDiscoverGrid({ className }: { className?: string }) {
     <>
       <div
         data-home-discover
-        className={cn("grid w-full grid-cols-2 gap-3", className)}
+        className={cn("grid w-full grid-cols-2 gap-2", className)}
         onTouchStart={blockShellSwipe}
         onTouchMove={blockShellSwipe}
         onTouchEnd={blockShellSwipe}
@@ -76,35 +77,43 @@ export function HomeDiscoverGrid({ className }: { className?: string }) {
         <button
           type="button"
           onClick={() => setSheet("dollars")}
-          className={cn(tileClass, "col-span-2 min-h-[7.5rem] rounded-[1.75rem] px-5 py-5")}
+          className={cn(tileClass, "col-span-2 min-h-[3.75rem] rounded-2xl px-4 py-3")}
         >
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/45">
             {t.homeDollarsEyebrow}
           </p>
-          <p className="mt-2 text-[1.65rem] font-medium leading-none tracking-tight">{t.homeDollarsTitle}</p>
+          <p className="mt-1 text-lg font-medium leading-none tracking-tight">{t.homeDollarsTitle}</p>
         </button>
+
+        <Link
+          href="/stores"
+          className={cn(tileClass, "col-span-2 flex min-h-[3.25rem] flex-col justify-center rounded-2xl px-4 py-2.5")}
+        >
+          <span className="text-[14px] font-medium leading-tight">{t.homePayStoreTitle}</span>
+          <span className="mt-0.5 text-[11px] leading-snug text-white/50">{t.homePayStoreBody}</span>
+        </Link>
 
         <button
           type="button"
           onClick={() => void invite()}
-          className={cn(tileClass, "flex aspect-square flex-col justify-between rounded-[1.75rem] p-4")}
+          className={cn(tileClass, "flex min-h-[4.25rem] flex-col justify-between rounded-2xl p-3")}
         >
-          <UserPlus className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+          <UserPlus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
           <span>
-            <span className="block text-[15px] font-medium leading-tight">{t.homeInviteTitle}</span>
-            <span className="mt-1 block text-[12px] leading-snug text-white/50">{t.homeInviteBody}</span>
+            <span className="block text-[13px] font-medium leading-tight">{t.homeInviteTitle}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-white/50">{t.homeInviteBody}</span>
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => setSheet("feedback")}
-          className={cn(tileClass, "flex aspect-square flex-col justify-between rounded-[1.75rem] p-4")}
+          className={cn(tileClass, "flex min-h-[4.25rem] flex-col justify-between rounded-2xl p-3")}
         >
-          <MessageSquare className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+          <MessageSquare className="h-4 w-4" strokeWidth={1.75} aria-hidden />
           <span>
-            <span className="block text-[15px] font-medium leading-tight">{t.homeFeedbackTitle}</span>
-            <span className="mt-1 block text-[12px] leading-snug text-white/50">{t.homeFeedbackBody}</span>
+            <span className="block text-[13px] font-medium leading-tight">{t.homeFeedbackTitle}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-white/50">{t.homeFeedbackBody}</span>
           </span>
         </button>
       </div>

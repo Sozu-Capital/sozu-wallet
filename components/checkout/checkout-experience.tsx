@@ -234,6 +234,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       <CheckoutSuccessScreen
         merchantName={session.merchantName}
         amountUsd={session.amountUsd}
+        itemName={session.reference}
         showCashback={false}
         transactionHash={transactionHash}
         receipt={receipt}

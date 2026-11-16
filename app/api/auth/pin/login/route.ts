@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { verifyRecoveryPin, isValidPinFormat } from "@/lib/auth/pin-crypto"
 import { setSessionCookie } from "@/lib/auth/session"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -30,10 +31,15 @@ export async function POST(request: NextRequest) {
 
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
 
+    const owner = await findCanonicalTagOwner(serviceClient, clean)
+    if (!owner) {
+      return NextResponse.json({ error: "Could not sign in" }, { status: 401, headers: corsHeaders(request) })
+    }
+
     const { data: profile, error } = await serviceClient
       .from("profiles")
       .select("id, username, recovery_pin_hash")
-      .eq("username", clean)
+      .eq("id", owner.id)
       .maybeSingle()
 
     if (error || !profile) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getWalletTexts, type WalletLanguage } from "@/lib/wallet-texts"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -73,16 +74,24 @@ export async function POST(request: NextRequest) {
     
     const { createClient: createServiceClient } = await import("@supabase/supabase-js")
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
-    
-    let { data: existingProfile, error: checkError } = await serviceClient
-      .from("profiles")
-      .select("id, username, recovery_pin_hash")
-      .ilike("username", username)
-      .maybeSingle()
+    const owner = await findCanonicalTagOwner(serviceClient, username)
+    let existingProfile: { id: string; username: string; recovery_pin_hash?: string | null } | null = null
+    let checkError: { message?: string; code?: string } | null = null
+    if (owner) {
+      const loaded = await serviceClient
+        .from("profiles")
+        .select("id, username, recovery_pin_hash")
+        .eq("id", owner.id)
+        .maybeSingle()
+      existingProfile = loaded.data
+      checkError = loaded.error
+    }
 
-    if (checkError && (checkError.message?.includes("recovery_pin_hash") || checkError.code === "42703")) {
-      const retry = await serviceClient.from("profiles").select("id, username").ilike("username", username).maybeSingle()
-      existingProfile = retry.data as typeof existingProfile
+    if (checkError && (checkError.message?.includes("recovery_pin_hash") || checkError.code === "42703") && owner) {
+      const retry = await serviceClient.from("profiles").select("id, username").eq("id", owner.id).maybeSingle()
+      existingProfile = retry.data
+        ? { ...retry.data, recovery_pin_hash: null }
+        : null
       checkError = retry.error
     }
     

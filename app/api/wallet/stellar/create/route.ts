@@ -4,6 +4,8 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getSessionUserId } from "@/lib/auth/session"
+import { CANONICAL_SMART_ACCOUNT_IMMUTABLE, canonicalWriteDecision } from "@/lib/wallet/canonical-smart-account"
+import { assignCanonicalSmartAccount } from "@/lib/wallet/persist-canonical-smart-account"
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
 }
@@ -203,58 +205,65 @@ export async function POST(request: Request) {
         )
       }
 
-      const upsertRow: Record<string, string | null> = {
-        user_id: userId,
-        public_key: publicKey,
-        signer_public_key: signerPublicKey,
-        wallet_type: smartAccountProvisioned
-          ? "factory"
-          : publicKey.startsWith("C")
-            ? existingWallet?.wallet_type === "oz"
-              ? "oz"
-              : "factory"
-            : null,
-        turnkey_wallet_id: null,
-        network: stellarConfig.network,
-        updated_at: new Date().toISOString(),
-      }
-
-      let { data: updated, error } = await serviceClient
-        .from("stellar_wallets")
-        .upsert(upsertRow, { onConflict: "user_id" })
-        .select()
-        .single()
-
-      if (error?.message?.includes("signer_public_key")) {
-        const { signer_public_key: _s, ...withoutSigner } = upsertRow
-        const retry = await serviceClient
-          .from("stellar_wallets")
-          .upsert(withoutSigner, { onConflict: "user_id" })
-          .select()
-          .single()
-        updated = retry.data
-        error = retry.error
-      }
-
-      if (error) {
-        console.error("[Stellar Wallet API] Upsert error:", error)
+      const decision = canonicalWriteDecision(existingWallet?.public_key, publicKey)
+      if (decision.action === "reject" || decision.action === "keep") {
         return NextResponse.json(
-          { error: "Failed to register wallet" },
-          { status: 500, headers: corsHeaders(request as any) }
+          {
+            walletId: decision.contractId,
+            publicKey: decision.contractId,
+            signerPublicKey,
+            smartAccountProvisioned: false,
+            unchanged: true,
+            ...(decision.action === "reject" && { code: CANONICAL_SMART_ACCOUNT_IMMUTABLE }),
+            network: stellarConfig.network,
+            trustlineCreated: false,
+            trustlineError: null,
+            needsClientSigning: false,
+          },
+          { headers: corsHeaders(request as any) },
         )
+      }
+
+      const walletType = smartAccountProvisioned
+        ? "factory"
+        : existingWallet?.wallet_type === "oz"
+          ? "oz"
+          : "factory"
+      let assigned: { contractId: string; immutable: boolean }
+      try {
+        assigned = await assignCanonicalSmartAccount(userId, publicKey, {
+          signer_public_key: signerPublicKey,
+          wallet_type: walletType,
+          turnkey_wallet_id: null,
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!message.includes("signer_public_key")) {
+          console.error("[Stellar Wallet API] Upsert error:", message)
+          return NextResponse.json(
+            { error: "Failed to register wallet" },
+            { status: 500, headers: corsHeaders(request as any) },
+          )
+        }
+        assigned = await assignCanonicalSmartAccount(userId, publicKey, {
+          wallet_type: walletType,
+          turnkey_wallet_id: null,
+        })
       }
       return NextResponse.json(
         {
-          walletId: updated.public_key,
-          publicKey: updated.public_key,
-          signerPublicKey: signerPublicKey,
+          walletId: assigned.contractId,
+          publicKey: assigned.contractId,
+          signerPublicKey,
           smartAccountProvisioned,
-          network: updated.network,
+          unchanged: assigned.immutable,
+          ...(assigned.immutable && { code: CANONICAL_SMART_ACCOUNT_IMMUTABLE }),
+          network: stellarConfig.network,
           trustlineCreated: false,
           trustlineError: null,
           needsClientSigning: false,
         },
-        { headers: corsHeaders(request as any) }
+        { headers: corsHeaders(request as any) },
       )
     }
 
