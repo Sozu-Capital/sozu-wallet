@@ -30,6 +30,12 @@ export function xdrField<T>(value: object, name: string): T {
   return field as T
 }
 
+export function xdrBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value
+  if (typeof value === "number") return BigInt(value)
+  return BigInt(String(value))
+}
+
 /** Opaque XDR bytes. SDK 17 returns a Buffer; older builds exposed `.toBytes()`. */
 export function xdrBytes(value: unknown): Buffer {
   if (Buffer.isBuffer(value)) return value

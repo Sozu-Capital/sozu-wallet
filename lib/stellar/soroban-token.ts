@@ -19,6 +19,7 @@ import {
 import * as rpc from "@stellar/stellar-sdk/rpc"
 import { Api } from "@stellar/stellar-sdk/rpc"
 import { getBlendUsdcAsset } from "@/lib/stellar/asset-registry"
+import { xdrBigInt, xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 const DUMMY_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
 const DEFAULT_TOKEN_DECIMALS = 7
@@ -42,16 +43,25 @@ function getNetworkPassphrase(network: "testnet" | "mainnet"): string {
   return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
 }
 
+function scValWide(val: xdr.ScVal, arm: "i128" | "u128", signedHi: boolean): bigint {
+  const parts = xdrField<{ hi: unknown; lo: unknown }>(val, arm)
+  const hi = signedHi
+    ? BigInt.asIntN(64, xdrBigInt(xdrField(parts, "hi")))
+    : BigInt.asUintN(64, xdrBigInt(xdrField(parts, "hi")))
+  const lo = BigInt.asUintN(64, xdrBigInt(xdrField(parts, "lo")))
+  return (hi << BigInt(64)) + lo
+}
+
 function scValToBalanceStroops(val: xdr.ScVal): bigint {
-  switch (val.type) {
+  switch (xdrType(val)) {
     case "scvI128":
-      return (val.i128.hi << BigInt(64)) + val.i128.lo
+      return scValWide(val, "i128", true)
     case "scvU128":
-      return (val.u128.hi << BigInt(64)) + val.u128.lo
+      return scValWide(val, "u128", false)
     case "scvI64":
-      return val.i64
+      return xdrBigInt(xdrField(val, "i64"))
     case "scvU64":
-      return val.u64
+      return xdrBigInt(xdrField(val, "u64"))
     default:
       return BigInt(0)
   }

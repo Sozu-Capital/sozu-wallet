@@ -6,6 +6,7 @@ import { getAssetRegistry } from "@/lib/stellar/asset-registry"
 import { transferEventFilters } from "@/lib/stellar/soroban-event-filter"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
+import { xdrBigInt, xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 const STROOPS_PER_UNIT = 10_000_000
 const EVENTS_PAGE_SIZE = 100
@@ -31,28 +32,30 @@ export type SorobanWalletTransaction = {
 
 function coerceScVal(raw: unknown): xdr.ScVal | null {
   if (raw == null) return null
-  if (xdr.ScVal.is(raw)) return raw
+  if (typeof raw === "object" && raw !== null && typeof (raw as { switch?: unknown }).switch === "function") {
+    return raw as xdr.ScVal
+  }
   if (typeof raw === "string") {
     try {
-      return xdr.ScVal.fromXdr(raw, "base64")
+      return xdr.ScVal.fromXDR(raw, "base64")
     } catch {
       return null
     }
-  }
-  if (typeof raw === "object" && raw !== null && "type" in raw) {
-    return raw as xdr.ScVal
   }
   return null
 }
 
 function scValSymbolText(val: xdr.ScVal): string {
-  if (val.type !== "scvSymbol") return ""
-  return val.sym.toString()
+  if (xdrType(val) !== "scvSymbol") return ""
+  return xdrField<{ toString(): string }>(val, "sym").toString()
 }
 
 function scValI128ToBigInt(val: xdr.ScVal): bigint {
-  if (val.type !== "scvI128") return BigInt(0)
-  return (val.i128.hi << BigInt(64)) + val.i128.lo
+  if (xdrType(val) !== "scvI128") return BigInt(0)
+  const parts = xdrField<{ hi: unknown; lo: unknown }>(val, "i128")
+  const hi = BigInt.asIntN(64, xdrBigInt(xdrField(parts, "hi")))
+  const lo = BigInt.asUintN(64, xdrBigInt(xdrField(parts, "lo")))
+  return (hi << BigInt(64)) + lo
 }
 
 function stroopsToAmount(stroops: bigint): number {
@@ -115,10 +118,10 @@ export async function getSorobanWalletTransactions(
         t0 = coerceScVal(topic[0])
         const t1 = coerceScVal(topic[1])
         const t2 = coerceScVal(topic[2])
-        if (t1?.type === "scvAddress") {
+        if (t1 && xdrType(t1) === "scvAddress") {
           from = Address.fromScVal(t1).toString().toUpperCase()
         }
-        if (t2?.type === "scvAddress") {
+        if (t2 && xdrType(t2) === "scvAddress") {
           to = Address.fromScVal(t2).toString().toUpperCase()
         }
       } catch {

@@ -30,6 +30,7 @@ import { evaluateClassicDestination, fetchHorizonAccount } from "@/lib/withdraw/
 import { buildExactTokenTransfer, contractInstanceExists, readExactTokenBalance } from "@/lib/withdraw/exact-transfer"
 import { submitWithdraw } from "@/lib/withdraw/submit-withdraw"
 import { getWithdrawUsdcAsset, networkPassphraseFor } from "@/lib/withdraw/usdc-asset"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 const network = "testnet" as const
 const passphrase = networkPassphraseFor(network)
@@ -55,33 +56,38 @@ async function classicTx(kp: Keypair, ops: xdr.Operation[]) {
 
 async function signAuthAsHolder(unsignedXdr: string, holder: Keypair): Promise<string> {
   const latest = await sorobanRpc.getLatestLedger()
-  const env = xdr.TransactionEnvelope.fromXdr(unsignedXdr, "base64")
-  if (env.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
-  const tx = env.v1.tx
-  const op = tx.operations[0]
-  if (!op || op.body.type !== "invokeHostFunction") throw new Error("expected invoke host function")
-  const host = op.body.invokeHostFunctionOp
+  const env = xdr.TransactionEnvelope.fromXDR(unsignedXdr, "base64")
+  if (xdrType(env) !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+  const v1 = xdrField<object>(env, "v1")
+  const tx = xdrField<xdr.Transaction>(v1, "tx")
+  const operations = xdrField<xdr.Operation[]>(tx, "operations")
+  const op = operations[0]
+  const body = op ? xdrField<xdr.OperationBody>(op, "body") : undefined
+  if (!op || !body || xdrType(body) !== "invokeHostFunction") throw new Error("expected invoke host function")
+  const host = xdrField<xdr.InvokeHostFunctionOp>(body, "invokeHostFunctionOp")
   const signed = await Promise.all(
-    host.auth.map((entry) => authorizeEntry(entry, holder, latest.sequence + 60, passphrase)),
+    xdrField<xdr.SorobanAuthorizationEntry[]>(host, "auth").map((entry) =>
+      authorizeEntry(entry, holder, latest.sequence + 60, passphrase),
+    ),
   )
   const nextOp = new xdr.Operation({
-    sourceAccount: op.sourceAccount,
+    sourceAccount: xdrField(op, "sourceAccount"),
     body: xdr.OperationBody.invokeHostFunction(
-      new xdr.InvokeHostFunctionOp({ hostFunction: host.hostFunction, auth: signed }),
+      new xdr.InvokeHostFunctionOp({ hostFunction: xdrField(host, "hostFunction"), auth: signed }),
     ),
   })
   const nextTx = new xdr.Transaction({
-    sourceAccount: tx.sourceAccount,
-    fee: tx.fee,
-    seqNum: tx.seqNum,
-    cond: tx.cond,
-    memo: tx.memo,
-    operations: [nextOp, ...tx.operations.slice(1)],
-    ext: tx.ext,
+    sourceAccount: xdrField(tx, "sourceAccount"),
+    fee: xdrField(tx, "fee"),
+    seqNum: xdrField(tx, "seqNum"),
+    cond: xdrField(tx, "cond"),
+    memo: xdrField(tx, "memo"),
+    operations: [nextOp, ...operations.slice(1)],
+    ext: xdrField(tx, "ext"),
   })
   return xdr.TransactionEnvelope.envelopeTypeTx(
-    new xdr.TransactionV1Envelope({ tx: nextTx, signatures: env.v1.signatures }),
-  ).toXdr("base64")
+    new xdr.TransactionV1Envelope({ tx: nextTx, signatures: xdrField(v1, "signatures") }),
+  ).toXDR("base64")
 }
 
 async function checkDestination(address: string, memo: string, amountMinor: bigint) {
@@ -189,18 +195,28 @@ async function main() {
     if (tx.status === rpc.Api.GetTransactionStatus.SUCCESS) {
       const events = (tx as unknown as { events?: { contractEventsXdr?: xdr.ContractEvent[][] } }).events?.contractEventsXdr?.flat() ?? []
       muxedEvent = events.map((e) => {
-        const body = e.body.type === "v0" ? e.body.v0 : null
-        if (!body) return { topics: [], data: e.body.type }
+        const eventBody = xdrField<object>(e, "body")
+        const body = xdrType(eventBody) === "v0" ? xdrField<object>(eventBody, "v0") : null
+        if (!body) return { topics: [], data: xdrType(eventBody) }
+        const data = xdrField<xdr.ScVal>(body, "data")
         return {
-          topics: body.topics.map((t) => (t.type === "scvSymbol" ? t.sym.toString() : t.type)),
+          topics: xdrField<xdr.ScVal[]>(body, "topics").map((t) =>
+            xdrType(t) === "scvSymbol" ? xdrField<{ toString(): string }>(t, "sym").toString() : xdrType(t),
+          ),
           data:
-            body.data.type === "scvMap"
-              ? (body.data.map ?? []).map((m) => {
-                  const key = m.key.type === "scvSymbol" ? m.key.sym.toString() : m.key.type
-                  const value = m.val.type === "scvU64" ? m.val.u64.toString() : m.val.type
-                  return `${key}=${value}`
+            xdrType(data) === "scvMap"
+              ? (xdrField<xdr.ScMapEntry[] | null>(data, "map") ?? []).map((m) => {
+                  const key = xdrField<xdr.ScVal>(m, "key")
+                  const value = xdrField<xdr.ScVal>(m, "val")
+                  const keyText =
+                    xdrType(key) === "scvSymbol" ? xdrField<{ toString(): string }>(key, "sym").toString() : xdrType(key)
+                  const valueText =
+                    xdrType(value) === "scvU64"
+                      ? xdrField<{ toString(): string }>(value, "u64").toString()
+                      : xdrType(value)
+                  return `${keyText}=${valueText}`
                 })
-              : body.data.type,
+              : xdrType(data),
         }
       })
     }

@@ -4,6 +4,7 @@ import { startAuthentication } from "@simplewebauthn/browser"
 import type { SmartAccountKit } from "smart-account-kit"
 import base64url from "base64url"
 import { Address, hash, rpc, xdr } from "@stellar/stellar-sdk"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import {
   credentialIdToBuffer,
   extractPublicKeyFromKeyData,
@@ -44,7 +45,7 @@ async function resolveSignatureExpirationLedger(
 
   let expiration = preferred
   if (expiration == null || expiration <= 0) {
-    const fromEntry = credentials.signatureExpirationLedger
+    const fromEntry = xdrField<number>(credentials, "signatureExpirationLedger")
     const entryExp = fromEntry != null ? Number(fromEntry) : 0
     expiration = entryExp > 0 ? entryExp : ledger + AUTH_EXPIRATION_LEDGER_TTL
   }
@@ -180,38 +181,34 @@ function buildSignatureMapEntry(
   ])
   return new xdr.ScMapEntry({
     key: keyVal,
-    val: xdr.ScVal.scvBytes(sigDataScVal.toXdr()),
+    val: xdr.ScVal.scvBytes(sigDataScVal.toXDR()),
   })
 }
 
 function sortSignerMapEntries(sigMap: xdr.ScMapEntry[]): void {
   if (sigMap.length <= 1) return
   sigMap.sort((a, b) => {
-    const aKeyXdr = a.key.toXdr("hex")
-    const bKeyXdr = b.key.toXdr("hex")
+    const aKeyXdr = xdrField<{ toXDR: (encoding: string) => string }>(a, "key").toXDR("hex")
+    const bKeyXdr = xdrField<{ toXDR: (encoding: string) => string }>(b, "key").toXDR("hex")
     return aKeyXdr.localeCompare(bKeyXdr)
   })
 }
 
 function addressCredentialsOf(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
-  const credentials = entry.credentials
-  if (credentials.type === "sorobanCredentialsAddress") return credentials.address
-  if (credentials.type === "sorobanCredentialsAddressV2") return credentials.addressV2
-  throw new Error("Soroban auth entry is not address credentials")
+  const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
+  if (xdrType(credentials) !== "sorobanCredentialsAddress") {
+    throw new Error("Soroban auth entry is not address credentials")
+  }
+  return xdrField(credentials, "address")
 }
 
 function entryWithAddressCredentials(
   entry: xdr.SorobanAuthorizationEntry,
   next: xdr.SorobanAddressCredentials,
 ): xdr.SorobanAuthorizationEntry {
-  const current = entry.credentials
-  const credentials =
-    current.type === "sorobanCredentialsAddressV2"
-      ? xdr.SorobanCredentials.sorobanCredentialsAddressV2(next)
-      : xdr.SorobanCredentials.sorobanCredentialsAddress(next)
   return new xdr.SorobanAuthorizationEntry({
-    credentials,
-    rootInvocation: entry.rootInvocation,
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(next),
+    rootInvocation: xdrField(entry, "rootInvocation"),
   })
 }
 
@@ -220,10 +217,10 @@ function credentialsWithExpiration(
   expiration: number,
 ): xdr.SorobanAddressCredentials {
   return new xdr.SorobanAddressCredentials({
-    address: credentials.address,
-    nonce: credentials.nonce,
+    address: xdrField(credentials, "address"),
+    nonce: xdrField(credentials, "nonce"),
     signatureExpirationLedger: expiration,
-    signature: credentials.signature,
+    signature: xdrField(credentials, "signature"),
   })
 }
 
@@ -232,9 +229,9 @@ function credentialsWithSignature(
   signature: xdr.ScVal,
 ): xdr.SorobanAddressCredentials {
   return new xdr.SorobanAddressCredentials({
-    address: credentials.address,
-    nonce: credentials.nonce,
-    signatureExpirationLedger: credentials.signatureExpirationLedger,
+    address: xdrField(credentials, "address"),
+    nonce: xdrField(credentials, "nonce"),
+    signatureExpirationLedger: xdrField(credentials, "signatureExpirationLedger"),
     signature,
   })
 }
@@ -245,15 +242,18 @@ function nextOzAuthPayloadSignature(
   scMapEntry: xdr.ScMapEntry,
   contextRuleIds: number[],
 ): xdr.ScVal {
-  if (currentSig.type === "scvMap") {
-    for (const entry of currentSig.map ?? []) {
-      if (entry.key.type === "scvSymbol" && entry.key.sym.toString() === "signers" && entry.val.type === "scvMap") {
-        const signersMap = [...(entry.val.map ?? []), scMapEntry]
+  if (xdrType(currentSig) === "scvMap") {
+    const entries = xdrField<xdr.ScMapEntry[] | null>(currentSig, "map") ?? []
+    for (const entry of entries) {
+      const key = xdrField<xdr.ScVal>(entry, "key")
+      const val = xdrField<xdr.ScVal>(entry, "val")
+      if (xdrType(key) === "scvSymbol" && xdrField<{ toString(): string }>(key, "sym").toString() === "signers" && xdrType(val) === "scvMap") {
+        const signersMap = [...(xdrField<xdr.ScMapEntry[] | null>(val, "map") ?? []), scMapEntry]
         sortSignerMapEntries(signersMap)
         return xdr.ScVal.scvMap(
-          (currentSig.map ?? []).map((item) =>
+          entries.map((item) =>
             item === entry
-              ? new xdr.ScMapEntry({ key: item.key, val: xdr.ScVal.scvMap(signersMap) })
+              ? new xdr.ScMapEntry({ key: xdrField(item, "key"), val: xdr.ScVal.scvMap(signersMap) })
               : item,
           ),
         )
@@ -285,7 +285,7 @@ export async function resolveKeyDataFromChain(params: {
   const q = new URLSearchParams({
     contractId: params.contractId,
     credentialId: params.credentialId,
-    authEntryXdr: params.authEntry.toXdr("base64"),
+    authEntryXdr: params.authEntry.toXDR("base64"),
   })
   const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`)
   const data = (await res.json().catch(() => ({}))) as { keyDataBase64?: string }
@@ -476,13 +476,13 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   smartAccountContractId: string
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
-  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXdr(params.entry.toXdr())
+  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
   const preparedCredentials = addressCredentialsOf(normalizedEntry)
 
   // Use the server-prepared expiration directly when it looks valid (> 0).
   // Only hit `getLatestLedger` if it's missing or zero — skipping the RPC call
   // means the passkey prompt can appear as soon as the challenge is ready.
-  const entryExpiration = Number(preparedCredentials.signatureExpirationLedger)
+  const entryExpiration = Number(xdrField(preparedCredentials, "signatureExpirationLedger"))
   const preferred =
     params.expiration && params.expiration > 0
       ? params.expiration
@@ -558,7 +558,7 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   const signedCredentials = credentialsWithSignature(
     addressCredentialsOf(entryForChallenge),
     nextOzAuthPayloadSignature(
-      addressCredentialsOf(entryForChallenge).signature,
+      xdrField(addressCredentialsOf(entryForChallenge), "signature"),
       scMapEntry,
       contextRuleIds,
     ),
@@ -580,7 +580,7 @@ export async function signAuthEntryWithStoredPasskey(params: {
   kit?: SmartAccountKit
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
-  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXdr(params.entry.toXdr())
+  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
   const preparedCredentials = addressCredentialsOf(normalizedEntry)
   const expiration = await resolveSignatureExpirationLedger(params.expiration, preparedCredentials)
   const entryForChallenge = entryWithAddressCredentials(
@@ -644,13 +644,13 @@ export async function signAuthEntryWithStoredPasskey(params: {
   if (process.env.NODE_ENV === "development") {
     console.log("[signSorobanWebAuthnAuth] applying AuthPayload", {
       contextRuleIds,
-      priorSigType: addressCredentialsOf(entryForChallenge).signature.type,
+      priorSigType: xdrType(xdrField(addressCredentialsOf(entryForChallenge), "signature")),
     })
   }
   const signedCredentials = credentialsWithSignature(
     addressCredentialsOf(entryForChallenge),
     nextOzAuthPayloadSignature(
-      addressCredentialsOf(entryForChallenge).signature,
+      xdrField(addressCredentialsOf(entryForChallenge), "signature"),
       scMapEntry,
       contextRuleIds,
     ),

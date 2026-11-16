@@ -3,6 +3,7 @@
 import type { SmartAccountKit } from "smart-account-kit"
 import type { xdr } from "@stellar/stellar-sdk"
 import { ensureKitConnectedForSend } from "@/lib/stellar/smartAccounts/ensureKitConnected"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import {
   shouldFallbackPasskeySign,
   signAuthEntryWithResolvedKeyData,
@@ -107,14 +108,12 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   })
 
   const signOne = async (entry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry> => {
-    const credentials = entry.credentials
+    const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
     const creds =
-      credentials.type === "sorobanCredentialsAddress"
-        ? credentials.address
-        : credentials.type === "sorobanCredentialsAddressV2"
-          ? credentials.addressV2
-          : null
-    const fromEntry = creds?.signatureExpirationLedger
+      xdrType(credentials) === "sorobanCredentialsAddress"
+        ? xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
+        : null
+    const fromEntry = creds ? xdrField<number>(creds, "signatureExpirationLedger") : undefined
     const expirationFromPrepare =
       fromEntry != null && Number(fromEntry) > 0 ? Number(fromEntry) : undefined
 
