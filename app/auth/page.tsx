@@ -1,10 +1,10 @@
 "use client"
 
-import { WelcomeModal } from "@/components/welcome-modal"
 import { TagInputModal } from "@/components/tag-input-modal"
+import { BackgroundMark } from "@/components/onboarding/slide-art"
+import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { AuthDeviceChoiceModal } from "@/components/auth-device-choice-modal"
 import { RecoverAccountScreen } from "@/components/auth/recover-account-screen"
-import { SignupEmailScreen } from "@/components/auth/signup-email-screen"
 import { QRCodeRegistrationModal } from "@/components/qr-code-registration-modal"
 import { WalletSkeleton } from "@/components/ui/wallet-skeleton"
 import { Button } from "@/components/ui/button"
@@ -34,6 +34,7 @@ import {
 import { hasServerWalletSession } from "@/lib/auth/wallet-session-client"
 import { clearClientSession } from "@/lib/storage/clear-session"
 import { signalBootstrapReady } from "@/lib/app-ready"
+import { markWelcomeOnboardingComplete } from "@/lib/wallet/needs-activation-onboarding"
 import { peekFaucetHandoffReturn } from "@/lib/sozu-faucet/handoff-return-storage"
 import {
   parseAllowlistedFaucetReturnUrl,
@@ -72,6 +73,8 @@ function AuthPageContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
+  const [showSignup, setShowSignup] = useState(false)
+  const [signupPrefill, setSignupPrefill] = useState<string | null>(null)
   const [resumeLoginTag, setResumeLoginTag] = useState<string | null>(null)
   const [tagModalPrefill, setTagModalPrefill] = useState<string | null>(null)
   const [referralCode, setReferralCode] = useState<string | null>(null)
@@ -80,8 +83,6 @@ function AuthPageContent() {
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
-  const [showSignup, setShowSignup] = useState(false)
-  const [signupTag, setSignupTag] = useState<string | null>(null)
   const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(null)
   const [showRecover, setShowRecover] = useState(false)
   const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
@@ -227,7 +228,8 @@ function AuthPageContent() {
         method: "POST",
         credentials: "include",
       })
-      setShowTagModal(true)
+      setSignupPrefill(null)
+      setShowSignup(true)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => signalBootstrapReady())
       })
@@ -461,7 +463,8 @@ function AuthPageContent() {
   const attemptDiscoveryLogin = useCallback(async () => {
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
       setIsAuthenticating(false)
-      setShowTagModal(true)
+      setSignupPrefill(null)
+      setShowSignup(true)
       return
     }
 
@@ -475,7 +478,8 @@ function AuthPageContent() {
       if (!credential) {
         console.log("[Auth] No passkey selected or user cancelled discovery")
         setIsAuthenticating(false)
-        setShowTagModal(true)
+        setSignupPrefill(null)
+        setShowSignup(true)
         return
       }
 
@@ -506,7 +510,8 @@ function AuthPageContent() {
       const err = discoveryError as { name?: string; message?: string }
       console.log("[Auth] Passkey discovery failed:", err?.name, err?.message)
       setIsAuthenticating(false)
-      setShowTagModal(true)
+      setSignupPrefill(null)
+      setShowSignup(true)
     }
   }, [finalizePasskeyLoginSuccess])
 
@@ -545,11 +550,12 @@ function AuthPageContent() {
       setIsAuthenticating(false)
       if (result.cancelled) {
         setResumeLoginTag(storedUsername)
-      } else if (typeof window !== "undefined") {
-        localStorage.removeItem("sozu_username")
-        setTagModalPrefill(storedUsername)
+        setShowTagModal(true)
+      } else {
+        if (typeof window !== "undefined") localStorage.removeItem("sozu_username")
+        setSignupPrefill(storedUsername)
+        setShowSignup(true)
       }
-      setShowTagModal(true)
       return
     }
 
@@ -566,7 +572,8 @@ function AuthPageContent() {
     setIsAuthenticating(false)
 
     if (path.action === "create-or-login" || path.action === "unsupported") {
-      setShowTagModal(true)
+      setSignupPrefill(null)
+      setShowSignup(true)
       return
     }
 
@@ -574,22 +581,15 @@ function AuthPageContent() {
     setShowDeviceChoice(true)
   }
 
-  const handleRegisterFromModal = (tag: string) => {
+  const handleRegisterFromModal = (tag: string, email: string) => {
     setShowTagModal(false)
     setResumeLoginTag(null)
     setTagModalPrefill(null)
-    setSignupTag(tag)
-    setShowSignup(true)
-  }
-
-  const handleSignupContinue = (email: string) => {
-    if (!signupTag) return
-    setShowSignup(false)
     setPendingRecoveryEmail(email)
     setIsAuthenticating(true)
     const captured = pendingCredentialRef.current
     pendingCredentialRef.current = null
-    void proceedWithRegistration(signupTag, captured, email)
+    void proceedWithRegistration(tag, captured, email)
   }
 
   const handleLoginPasskeyFromModal = async (tag: string) => {
@@ -664,8 +664,8 @@ function AuthPageContent() {
             `Sozu Wallet requires ${capabilities.os === 'ios' ? 'Face ID or Touch ID' : 'fingerprint or face unlock'} for self-custody security.\n\n` +
             `Please use a device with biometric authentication.`
           )
-          setShowTagModal(true)
-          setTagModalPrefill(usernameToRegister)
+          setSignupPrefill(usernameToRegister)
+          setShowSignup(true)
           return
         }
         console.log("[Auth] Device supports passkeys - proceeding with registration")
@@ -726,8 +726,8 @@ function AuthPageContent() {
           )) {
             console.log("[Auth] User cancelled passkey registration")
             setIsAuthenticating(false)
-            setTagModalPrefill(usernameToRegister)
-            setShowTagModal(true)
+            setSignupPrefill(usernameToRegister)
+            setShowSignup(true)
             return
           }
           throw passkeyError // Re-throw other errors
@@ -785,6 +785,7 @@ function AuthPageContent() {
           console.error("[Auth] ERROR: No userId available from server!")
           throw new Error("No userId available. Cannot continue.")
         }
+        markWelcomeOnboardingComplete(finalUserId)
 
         if (typeof window !== "undefined" && credential?.id) {
           persistAuthIdentitySession({
@@ -986,9 +987,9 @@ function AuthPageContent() {
       )) {
         console.log("[Auth] User cancelled passkey authentication/registration")
         setIsAuthenticating(false)
-        const t = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        if (t) setTagModalPrefill(t)
-        setShowTagModal(true)
+        const stored = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
+        setSignupPrefill(stored)
+        setShowSignup(true)
         return
       }
 
@@ -999,8 +1000,8 @@ function AuthPageContent() {
         setIsAuthenticating(false)
         toast.message(t.authCancelledHint)
         const storedTag = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        if (storedTag) setTagModalPrefill(storedTag)
-        setShowTagModal(true)
+        setSignupPrefill(storedTag)
+        setShowSignup(true)
         return
       }
 
@@ -1113,7 +1114,7 @@ function AuthPageContent() {
   }
 
   return (
-    <div className="relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
+    <div className="sozu-night relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
       {isAuthenticated && pizzaAuth.kind !== "none" ? (
         <PizzaAuthContinuation continuation={pizzaAuth} />
       ) : null}
@@ -1194,7 +1195,8 @@ function AuthPageContent() {
       {/* Post-auth skeleton — full viewport */}
       <div className="relative z-[1] h-full overflow-hidden">
         {isAuthenticated ? (
-          <div className="z-10 h-full">
+          <div className="relative z-10 h-full">
+            <BackgroundMark />
             <WalletSkeleton isExiting={isExiting} layout="landing" />
           </div>
         ) : null}
@@ -1239,13 +1241,10 @@ function AuthPageContent() {
             )}
           </AnimatePresence>
         </Button>
-        <p className="max-w-sm px-2 text-center text-[10px] font-extralight tracking-[0.12em] text-white">
-          {t.authPasskeyCaption}
-        </p>
         <button
           type="button"
           onClick={() => setShowRecover(true)}
-          className="pointer-events-auto text-[10px] font-extralight tracking-[0.12em] text-white/55 underline-offset-4 hover:text-white hover:underline"
+          className="pointer-events-auto text-[11px] font-normal tracking-wide text-white/60 transition-colors hover:text-white"
         >
           {language === "en" ? "Recover my account" : "Recuperar mi cuenta"}
         </button>
@@ -1253,22 +1252,27 @@ function AuthPageContent() {
         {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
       </div>
 
-      {showSignup && signupTag ? (
-        <SignupEmailScreen
-          onContinue={handleSignupContinue}
-          onBack={() => {
-            setShowSignup(false)
-            setTagModalPrefill(signupTag)
-            setShowTagModal(true)
-          }}
-        />
-      ) : null}
       {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
 
-      {/* Welcome Modal - Shows on first visit */}
-      <WelcomeModal />
+      {showSignup ? (
+        <WalletActivationOnboarding
+          open
+          activationSettled
+          intent="signup"
+          initialTag={signupPrefill ?? ""}
+          onSignIn={(tag) => {
+            setShowSignup(false)
+            void handleLoginPasskeyFromModal(tag)
+          }}
+          onCreateAccount={(tag, email) => {
+            setShowSignup(false)
+            handleRegisterFromModal(tag, email)
+          }}
+          onExitComplete={() => setShowSignup(false)}
+        />
+      ) : null}
 
-      {/* Tag Input Modal - Shows when user needs to choose a tag */}
+      {/* Sign-in for an existing tag. New accounts use the night flow above. */}
       <TagInputModal
         isOpen={showTagModal}
         resumeWithTag={resumeLoginTag}
@@ -1296,7 +1300,8 @@ function AuthPageContent() {
         }}
         onCreateAccount={() => {
           setShowDeviceChoice(false)
-          setShowTagModal(true)
+          setSignupPrefill(null)
+          setShowSignup(true)
         }}
       />
 
@@ -1379,8 +1384,8 @@ function AuthPageContent() {
             setShowQRModal(false)
             setQRUsername(null)
             setIsAuthenticating(false)
-            setShowTagModal(true)
-            setTagModalPrefill(qrUsername)
+            setSignupPrefill(qrUsername)
+            setShowSignup(true)
           }}
         />
       )}

@@ -511,6 +511,28 @@ export type WalletTexts = {
   setupIncompleteBody: string;
   setupIncompleteCta: string;
   setupIncompleteBusy: string;
+  onbSetupLabel: string;
+  onbPickTagTitle: string;
+  onbPickTagBody: string;
+  onbTagContinue: string;
+  onbTagAvailable: string;
+  onbTagTaken: string;
+  onbTagSignIn: string;
+  onbTagPreview: string;
+  onbTagTry: string;
+  onbTagRules: string;
+  onbTagFilterHint: string;
+  onbTagTooShort: string;
+  onbTagCheckFailed: string;
+  onbTagRetry: string;
+  onbTagClear: string;
+  onbTagChecking: string;
+  onbTagHaveOne: string;
+  onbTagFieldLabel: string;
+  onbRecoveryHint: string;
+  onbRecoveryPlaceholder: string;
+  onbRecoveryInvalid: string;
+  onbRecoveryCta: string;
 };
 
 export type WalletLanguage = "en" | "es";
@@ -1066,6 +1088,28 @@ export const walletTexts = {
       "Tu passkey ya existe, pero aún no hay una cuenta inteligente (C…) en este dispositivo. Toca para crearla una vez.",
     setupIncompleteCta: "Terminar configuración",
     setupIncompleteBusy: "Creando billetera…",
+    onbSetupLabel: "CUENTA · {current} DE {count}",
+    onbPickTagTitle: "Elige tu SozuTag",
+    onbPickTagBody: "Así te encuentran y te envían USDC.",
+    onbTagContinue: "Continuar",
+    onbTagAvailable: "{tag} está disponible",
+    onbTagTaken: "{tag} está ocupado.",
+    onbTagSignIn: "¿Es tuyo? Inicia sesión",
+    onbTagPreview: "Así aparecerás cuando alguien te pague",
+    onbTagTry: "Prueba",
+    onbTagRules: "3–30 caracteres · letras, números y _",
+    onbTagFilterHint: "Espacios, puntos y guiones se quitan al escribir",
+    onbTagTooShort: "Mínimo 3 caracteres",
+    onbTagCheckFailed: "No se pudo revisar. Inténtalo de nuevo.",
+    onbTagRetry: "Reintentar",
+    onbTagClear: "Borrar",
+    onbTagChecking: "Revisando {tag}…",
+    onbTagHaveOne: "Ya tengo un SozuTag",
+    onbTagFieldLabel: "SozuTag",
+    onbRecoveryHint: "Este correo es la única forma de recuperar tu cuenta si perdés este dispositivo.",
+    onbRecoveryPlaceholder: "Correo",
+    onbRecoveryInvalid: "Escribí un correo válido.",
+    onbRecoveryCta: "Crear cuenta",
   },
   en: {
     // Profile
@@ -1583,6 +1627,28 @@ export const walletTexts = {
       "Your passkey is ready, but this device doesn’t have a smart account (C…) yet. Tap once to create it.",
     setupIncompleteCta: "Finish setup",
     setupIncompleteBusy: "Creating wallet…",
+    onbSetupLabel: "SETUP · {current} OF {count}",
+    onbPickTagTitle: "Pick your SozuTag",
+    onbPickTagBody: "It's how people find you and send you USDC.",
+    onbTagContinue: "Continue",
+    onbTagAvailable: "{tag} is available",
+    onbTagTaken: "{tag} is taken.",
+    onbTagSignIn: "Is it yours? Sign in",
+    onbTagPreview: "How you'll appear when someone pays you",
+    onbTagTry: "Try",
+    onbTagRules: "3–30 characters · letters, numbers and _",
+    onbTagFilterHint: "Spaces, dots and dashes are removed as you type",
+    onbTagTooShort: "At least 3 characters",
+    onbTagCheckFailed: "Couldn't check. Try again.",
+    onbTagRetry: "Retry",
+    onbTagClear: "Clear",
+    onbTagChecking: "Checking {tag}…",
+    onbTagHaveOne: "I already have a SozuTag",
+    onbTagFieldLabel: "SozuTag",
+    onbRecoveryHint: "This email is the only way to recover your account if you lose this device.",
+    onbRecoveryPlaceholder: "Email",
+    onbRecoveryInvalid: "Enter a valid email.",
+    onbRecoveryCta: "Create account",
   },
 } as const;
 

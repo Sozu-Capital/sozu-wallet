@@ -4,27 +4,21 @@ import { useEffect, useState } from "react"
 import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { WalletLanguageProvider, useWalletLanguage } from "@/lib/wallet-language"
 
-function Screens() {
+function Screen() {
   const { setLanguage } = useWalletLanguage()
   const [open, setOpen] = useState(true)
-  const [activationSettled, setActivationSettled] = useState(true)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const lang = params.get("lang")
+    const lang = new URLSearchParams(window.location.search).get("lang")
     if (lang === "en" || lang === "es") setLanguage(lang)
-    if (params.get("wait") !== "1") return
-    setActivationSettled(false)
-    const timer = window.setTimeout(() => setActivationSettled(true), 8000)
-    return () => window.clearTimeout(timer)
-  }, [setLanguage, open])
+  }, [setLanguage])
 
   if (!open) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-black">
+      <div className="sozu-night flex min-h-dvh items-center justify-center">
         <button
           type="button"
-          className="h-14 rounded-full bg-white px-8 text-base font-semibold text-black"
+          className="sozu-paper-button h-14 rounded-2xl px-8 text-base font-medium"
           onClick={() => setOpen(true)}
         >
           Ver de nuevo
@@ -36,17 +30,19 @@ function Screens() {
   return (
     <WalletActivationOnboarding
       open
-      activationSettled={activationSettled}
+      activationSettled
+      intent="signup"
       onExitComplete={() => setOpen(false)}
+      onCreateAccount={() => setOpen(false)}
     />
   )
 }
 
-/** Public copy QA for the activation screens. Middleware already allows /onboarding. */
+/** One onboarding flow: SozuTag, then the welcome slides. */
 export default function OnboardingPreviewPage() {
   return (
     <WalletLanguageProvider>
-      <Screens />
+      <Screen />
     </WalletLanguageProvider>
   )
 }

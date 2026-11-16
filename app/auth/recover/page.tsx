@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
-import { AccountAccessCard, accountButtonClass } from "@/components/auth/account-access-card"
+import { OnboardingForm } from "@/components/ui/onboarding-form"
 import { WalletLanguageProvider, useWalletLanguage } from "@/lib/wallet-language"
 import { createPasskey } from "@/lib/turnkey/passkeys"
 
@@ -91,19 +91,23 @@ function RecoverPasskey() {
   }
 
   return (
-    <AccountAccessCard
-      title={es ? "Nueva llave" : "New passkey"}
-      footer={
-        es
-          ? "Esta llave abre la cuenta que ya estaba vinculada a tu correo."
-          : "This passkey opens the account already linked to your email."
-      }
-    >
-      <button type="button" disabled={busy || done || !token} onClick={() => void createKey()} className={accountButtonClass}>
-        {busy ? (es ? "Creando…" : "Creating…") : es ? "Crear llave" : "Create passkey"}
-      </button>
-      {error ? <p className="px-1 text-sm text-red-300">{error}</p> : null}
-    </AccountAccessCard>
+    <div className="flex min-h-dvh items-center justify-center bg-black px-4">
+      <OnboardingForm
+        imageSrc="/onboarding/slide2.webp"
+        title={es ? "Nueva llave" : "New passkey"}
+        description={
+          es
+            ? "Esta llave abre la cuenta que ya estaba vinculada a tu correo."
+            : "This passkey opens the account already linked to your email."
+        }
+        buttonText={busy ? (es ? "Creando…" : "Creating…") : es ? "Crear llave" : "Create passkey"}
+        hideInput
+        isSubmitting={busy}
+        submitDisabled={done || !token}
+        onSubmit={() => void createKey()}
+        hint={error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
+      />
+    </div>
   )
 }
 
