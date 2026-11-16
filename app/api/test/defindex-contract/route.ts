@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getDeFindexConfig } from "@/lib/defindex/config"
 import { Contract, TransactionBuilder, Account, BASE_FEE, Networks } from "@stellar/stellar-sdk"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import { getSorobanRpc } from "@/lib/defindex/vault"
 import { Api } from "@stellar/stellar-sdk/rpc"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
@@ -113,19 +114,19 @@ export async function GET(request: NextRequest) {
         if (Api.isSimulationSuccess(result) && result.result) {
           try {
             const returnValue = result.result.retval
-            const nativeValue = returnValue ? returnValue.value : null
+            const nativeValue = returnValue ? xdrField(returnValue, "value") : null
 
             results.functionTests.push({
               function: functionName,
               status: "success",
               responseTime: endTime - startTime,
-              returnType: returnValue ? returnValue.type : "unknown",
+              returnType: returnValue ? xdrType(returnValue) ?? "unknown" : "unknown",
               rawValue: nativeValue,
               hasResult: true,
             })
 
             console.log(`[DeFindex Contract Test] ✅ ${functionName}:`, {
-              type: returnValue?.type,
+              type: returnValue ? xdrType(returnValue) : undefined,
               value: nativeValue,
               time: endTime - startTime + "ms"
             })

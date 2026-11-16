@@ -30,6 +30,7 @@ import { Api } from "@stellar/stellar-sdk/rpc";
 import { getAssetById, getBlendUsdcAsset } from "@/lib/stellar/asset-registry";
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder";
 import { ensureTestnetAccountFunded } from "@/lib/stellar/soroban-fee-payer";
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access";
 import { getStellarConfig } from "@/lib/turnkey/config";
 import {
   getFaucetVaultBalanceMinor,
@@ -148,7 +149,7 @@ async function submitTreasuryInvocation(params: {
   const sent = await server.sendTransaction(prepared);
   if (sent.status === "ERROR" || !sent.hash) {
     const detail = sent.errorResult
-      ? sent.errorResult.result.type
+      ? xdrType(xdrField(sent.errorResult, "result")) ?? "unknown"
       : "no hash";
     throw new Error(
       `Faucet payment rejected by Soroban RPC (${detail}) [faucet=${params.faucetSlug}]`,

@@ -144,7 +144,16 @@ export async function deployOzSmartAccountForUser(params: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signedXdr }),
       })
+      const sponsoredBody = (await sponsored.json().catch(() => ({}))) as {
+        alreadyDeployed?: boolean
+        contractId?: string
+      }
       if (sponsored.ok) {
+        const assigned = sponsoredBody.contractId?.trim().toUpperCase()
+        if (sponsoredBody.alreadyDeployed && assigned?.startsWith("C") && assigned.length === 56) {
+          activateKitWallet(kit, assigned, params.credentialId)
+          return { contractId: assigned }
+        }
         await waitForContractOnChain(kit.rpcUrl, derivedId)
         activateKitWallet(kit, derivedId, params.credentialId)
         return { contractId: derivedId }

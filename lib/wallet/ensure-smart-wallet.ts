@@ -52,13 +52,13 @@ export async function ensureSmartWallet(
       userId,
     })
 
-    await registerOzSmartAccount({
+    const saved = await registerOzSmartAccount({
       contractId: linked.contractId,
       credentialId: linked.credentialId,
       publicKey: linked.publicKey,
     })
 
-    const contractId = linked.contractId.trim().toUpperCase()
+    const contractId = saved.contractId.trim().toUpperCase()
     persistCanonicalWalletSession(contractId, "oz", linked.credentialId)
 
     return {

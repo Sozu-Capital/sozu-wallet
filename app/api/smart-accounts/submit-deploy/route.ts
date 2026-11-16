@@ -6,12 +6,19 @@ import { requireSession } from "@/lib/auth/session"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
 import { SponsoredDeployRejected, submitSponsoredDeploy } from "@/lib/stellar/deploy-fee-bump"
 import { ozDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
+import {
+  assignCanonicalSmartAccount,
+  resolveCanonicalSmartAccount,
+} from "@/lib/wallet/persist-canonical-smart-account"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
 }
 
-const inFlight = new Map<string, Promise<{ hash: string | null; alreadyDeployed: boolean }>>()
+const inFlight = new Map<
+  string,
+  Promise<{ hash: string | null; alreadyDeployed: boolean; contractId: string | null }>
+>()
 
 /** Sponsor an already deployer-signed smart-account deploy with the fee payer. */
 export async function POST(request: NextRequest) {
@@ -36,7 +43,10 @@ export async function POST(request: NextRequest) {
   if (existingFlight) {
     try {
       const submitted = await existingFlight
-      return NextResponse.json({ ok: true, hash: submitted.hash, alreadyDeployed: submitted.alreadyDeployed }, { headers })
+      return NextResponse.json(
+        { ok: true, hash: submitted.hash, alreadyDeployed: submitted.alreadyDeployed, contractId: submitted.contractId },
+        { headers },
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const status = err instanceof SponsoredDeployRejected ? 400 : 502
@@ -48,7 +58,10 @@ export async function POST(request: NextRequest) {
   inFlight.set(userId, work)
   try {
     const submitted = await work
-    return NextResponse.json({ ok: true, hash: submitted.hash, alreadyDeployed: submitted.alreadyDeployed }, { headers })
+    return NextResponse.json(
+      { ok: true, hash: submitted.hash, alreadyDeployed: submitted.alreadyDeployed, contractId: submitted.contractId },
+      { headers },
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const status = err instanceof SponsoredDeployRejected ? 400 : 502
@@ -63,17 +76,19 @@ async function sponsorForUser(
   signedXdr: string,
   supabaseUrl: string,
   supabaseServiceKey: string,
-): Promise<{ hash: string | null; alreadyDeployed: boolean }> {
+): Promise<{ hash: string | null; alreadyDeployed: boolean; contractId: string | null }> {
   const svc = createServiceClient(supabaseUrl, supabaseServiceKey)
+  const canonical = await resolveCanonicalSmartAccount(userId).catch(() => null)
+  if (canonical) {
+    return { hash: null, alreadyDeployed: true, contractId: canonical.contractId }
+  }
+
   const { data: wallet } = await svc
     .from("stellar_wallets")
     .select("public_key, wallet_type")
     .eq("user_id", userId)
     .maybeSingle()
   const existingPk = typeof wallet?.public_key === "string" ? wallet.public_key.trim().toUpperCase() : ""
-  if (existingPk.startsWith("C") && existingPk.length === 56) {
-    return { hash: null, alreadyDeployed: true }
-  }
   if (wallet?.wallet_type === "factory" || existingPk.startsWith("G")) {
     throw new SponsoredDeployRejected("Existing accounts are not redeployed.")
   }
@@ -86,5 +101,14 @@ async function sponsorForUser(
     .map((id) => ozDeploySalt(id, userId))
 
   const submitted = await submitSponsoredDeploy(signedXdr, salts)
-  return { hash: submitted.hash, alreadyDeployed: submitted.alreadyDeployed }
+  if (submitted.contractId) {
+    await assignCanonicalSmartAccount(userId, submitted.contractId, { wallet_type: "oz" }).catch((err) => {
+      console.error("[submit-deploy] canonical assign", err instanceof Error ? err.message : err)
+    })
+  }
+  return {
+    hash: submitted.hash,
+    alreadyDeployed: submitted.alreadyDeployed,
+    contractId: submitted.contractId,
+  }
 }

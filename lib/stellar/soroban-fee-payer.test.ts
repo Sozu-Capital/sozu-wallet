@@ -12,6 +12,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk"
 import { isBadSequenceResult, resequenceOnFeePayer, waitForSourceSequence, withFeePayerLock } from "./soroban-fee-payer"
+import { xdrField, xdrType } from "./xdr-access"
 
 const funder = Keypair.random()
 const usdc = new Asset("USDC", Keypair.random().publicKey()).contractId(Networks.TESTNET)
@@ -36,12 +37,13 @@ function signedLookingTransfer(sequence: string) {
       subInvocations: [],
     }),
   })
-  const host = op.body.type === "invokeHostFunction" ? op.body.invokeHostFunctionOp : null
-  if (!host) throw new Error("expected invoke host function")
+  const body = xdrField<object>(op, "body")
+  if (xdrType(body) !== "invokeHostFunction") throw new Error("expected invoke host function")
+  const host = xdrField<object>(body, "invokeHostFunctionOp")
   const withAuth = new xdr.Operation({
-    sourceAccount: op.sourceAccount,
+    sourceAccount: xdrField(op, "sourceAccount"),
     body: xdr.OperationBody.invokeHostFunction(
-      new xdr.InvokeHostFunctionOp({ hostFunction: host.hostFunction, auth: [auth] }),
+      new xdr.InvokeHostFunctionOp({ hostFunction: xdrField(host, "hostFunction"), auth: [auth] }),
     ),
   })
   return new TransactionBuilder(new Account(funder.publicKey(), sequence), {
@@ -68,26 +70,29 @@ describe("resequenceOnFeePayer", () => {
     expect(fresh.timeBounds).toEqual(stale.timeBounds)
     const opsXdr = (t: typeof stale) => {
       const envelope = t.toEnvelope()
-      if (envelope.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
-      return envelope.v1.tx.operations.map((o) => o.toXdr("base64"))
+      if (xdrType(envelope) !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+      const inner = xdrField<object>(xdrField(envelope, "v1"), "tx")
+      return xdrField<Array<{ toXDR: (encoding: string) => string }>>(inner, "operations").map((o) =>
+        o.toXDR("base64"),
+      )
     }
     expect(opsXdr(fresh)).toEqual(opsXdr(stale))
     const freshEnvelope = fresh.toEnvelope()
-    if (freshEnvelope.type !== "envelopeTypeTx") throw new Error("expected v1 envelope")
-    const ext = freshEnvelope.v1.tx.ext
-    if (ext.type !== "sorobanData") throw new Error("expected soroban data")
-    expect(ext.sorobanData.resourceFee.toString()).toBe("5000")
+    if (xdrType(freshEnvelope) !== "envelopeTypeTx") throw new Error("expected v1 envelope")
+    const ext = xdrField<object>(xdrField<object>(xdrField(freshEnvelope, "v1"), "tx"), "ext")
+    if (xdrType(ext) !== "sorobanData") throw new Error("expected soroban data")
+    expect(xdrField<{ toString(): string }>(xdrField(ext, "sorobanData"), "resourceFee").toString()).toBe("5000")
   })
 })
 
 describe("isBadSequenceResult", () => {
   const result = (name: "txBadSeq" | "txBadAuth") =>
-    xdr.TransactionResult.fromXdr(
+    xdr.TransactionResult.fromXDR(
       new xdr.TransactionResult({
         feeCharged: BigInt(100),
         result: xdr.TransactionResultResult[name](),
         ext: xdr.TransactionResultExt.v0(),
-      }).toXdr(),
+      }).toXDR(),
     )
 
   it("detects txBadSeq and nothing else", () => {

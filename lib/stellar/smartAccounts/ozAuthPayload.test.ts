@@ -16,39 +16,31 @@ function invocation(): xdr.SorobanAuthorizedInvocation {
   })
 }
 
-function entry(version: "v1" | "v2"): xdr.SorobanAuthorizationEntry {
+function entry(nonce: string): xdr.SorobanAuthorizationEntry {
   const credentials = new xdr.SorobanAddressCredentials({
     address: Address.fromString(Keypair.random().publicKey()).toScAddress(),
-    nonce: xdr.Int64.fromString("1"),
+    nonce: xdr.Int64.fromString(nonce),
     signatureExpirationLedger: 100,
     signature: xdr.ScVal.scvVoid(),
   })
   return new xdr.SorobanAuthorizationEntry({
-    credentials:
-      version === "v2"
-        ? xdr.SorobanCredentials.sorobanCredentialsAddressV2(credentials)
-        : xdr.SorobanCredentials.sorobanCredentialsAddress(credentials),
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(credentials),
     rootInvocation: invocation(),
   })
 }
 
 describe("sorobanSignaturePayloadFromEntry", () => {
-  it("binds the account address for v2 credentials", () => {
-    const v2 = entry("v2")
-    const v1 = new xdr.SorobanAuthorizationEntry({
-      credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(v2.credentials.addressV2),
-      rootInvocation: v2.rootInvocation,
-    })
-    const payloadV2 = sorobanSignaturePayloadFromEntry({
+  it("hashes address credentials into a 32-byte payload that changes with the nonce", () => {
+    const first = sorobanSignaturePayloadFromEntry({
       networkPassphrase: Networks.TESTNET,
-      entry: v2,
+      entry: entry("1"),
     })
-    const payloadV1 = sorobanSignaturePayloadFromEntry({
+    const second = sorobanSignaturePayloadFromEntry({
       networkPassphrase: Networks.TESTNET,
-      entry: v1,
+      entry: entry("2"),
     })
-    expect(payloadV2).toHaveLength(32)
-    expect(payloadV1).toHaveLength(32)
-    expect(Buffer.compare(payloadV2, payloadV1)).not.toBe(0)
+    expect(first).toHaveLength(32)
+    expect(second).toHaveLength(32)
+    expect(Buffer.compare(first, second)).not.toBe(0)
   })
 })

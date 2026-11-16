@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { getSessionUserId } from "@/lib/auth/session"
+import { adoptCanonicalSmartAccountIfUnassigned } from "@/lib/wallet/persist-canonical-smart-account"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -34,6 +35,14 @@ export async function GET(request: Request) {
     }
 
     console.log("[Stellar Address API] Getting wallet for userId:", userId)
+    try {
+      await adoptCanonicalSmartAccountIfUnassigned(userId)
+    } catch (adoptErr) {
+      console.warn(
+        "[Stellar Address API] canonical adopt skipped:",
+        adoptErr instanceof Error ? adoptErr.message : adoptErr,
+      )
+    }
     let wallet = await getStellarWallet(userId, fromWalletCookie)
 
     if (

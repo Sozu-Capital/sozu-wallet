@@ -5,6 +5,7 @@ import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
 /** Classic G that pays Soroban fees (STELLAR_FUNDER_SECRET). */
@@ -44,24 +45,24 @@ export async function resequenceOnFeePayer(
   // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
   // adds the Soroban resource fee a second time on the SDK that CI installs.
   const envelopeIn = tx.toEnvelope()
-  if (envelopeIn.type !== "envelopeTypeTx") {
+  if (xdrType(envelopeIn) !== "envelopeTypeTx") {
     throw new Error("Resequenced fee-payer envelope was not a v1 transaction.")
   }
-  const inner = envelopeIn.v1.tx
+  const inner = xdrField<xdr.Transaction>(xdrField(envelopeIn, "v1"), "tx")
   const next = BigInt(account.sequenceNumber()) + BigInt(1)
   const body = new xdr.Transaction({
-    sourceAccount: inner.sourceAccount,
-    fee: inner.fee,
-    seqNum: next,
-    cond: inner.cond,
-    memo: inner.memo,
-    operations: inner.operations,
-    ext: inner.ext,
+    sourceAccount: xdrField(inner, "sourceAccount"),
+    fee: xdrField(inner, "fee"),
+    seqNum: xdr.Int64.fromString(next.toString()),
+    cond: xdrField(inner, "cond"),
+    memo: xdrField(inner, "memo"),
+    operations: xdrField(inner, "operations"),
+    ext: xdrField(inner, "ext"),
   })
   const envelope = xdr.TransactionEnvelope.envelopeTypeTx(
     new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
   )
-  const rebuilt = TransactionBuilder.fromXDR(envelope.toXdr("base64"), networkPassphrase)
+  const rebuilt = TransactionBuilder.fromXDR(envelope.toXDR("base64"), networkPassphrase)
   if (!(rebuilt instanceof Transaction)) {
     throw new Error("Resequenced fee-payer envelope was not an inner transaction.")
   }
@@ -71,7 +72,7 @@ export async function resequenceOnFeePayer(
 export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
   if (result.status !== "ERROR" || !result.errorResult) return false
   try {
-    return result.errorResult.result.type === "txBadSeq"
+    return xdrType(xdrField(result.errorResult, "result")) === "txBadSeq"
   } catch {
     return false
   }

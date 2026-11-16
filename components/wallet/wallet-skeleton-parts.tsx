@@ -24,8 +24,8 @@ export function CommandBarSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn("grid w-full grid-cols-4", className)}>
       {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="flex flex-col items-center gap-2.5">
-          <Skeleton className="h-16 w-16 rounded-[1.35rem] bg-white/10" />
+        <div key={index} className="flex flex-col items-center gap-1.5">
+          <Skeleton className="h-12 w-12 rounded-2xl bg-white/10" />
           <Skeleton className="h-2.5 w-12 rounded bg-white/10" />
         </div>
       ))}

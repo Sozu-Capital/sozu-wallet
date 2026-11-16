@@ -15,6 +15,7 @@ import { getAssetByContractId } from "@/lib/stellar/asset-registry"
 import type { SozuAsset, StellarNetwork } from "@/lib/stellar/asset-types"
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder"
 import { getStellarConfig } from "@/lib/turnkey/config"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import {
   getConfiguredFunderPublicKey,
   getFunderKeypair,
@@ -137,8 +138,8 @@ function formatSorobanSubmitError(result: {
 }): string {
   if (result.errorResult) {
     try {
-      const txResult = result.errorResult.result
-      const txResultName = txResult.type
+      const txResult = xdrField<object>(result.errorResult, "result")
+      const txResultName = xdrType(txResult)
       if (txResultName === "txMalformed") {
         return "transaction envelope is invalid (missing Soroban data). Refresh and try send again."
       }
@@ -148,10 +149,10 @@ function formatSorobanSubmitError(result: {
       if (txResultName === "txInsufficientFee") {
         return "insufficient fee on the fee-payer account. Fund STELLAR_FUNDER_SECRET with XLM."
       }
+      const failedOps = txResultName === "txFailed" ? xdrField<object[]>(txResult, "results") : []
+      const firstOp = failedOps[0]
       const opName =
-        txResult.type === "txFailed" && txResult.results[0]?.type === "opInner"
-          ? txResult.results[0].tr.type
-          : undefined
+        firstOp && xdrType(firstOp) === "opInner" ? xdrType(xdrField(firstOp, "tr")) : undefined
       if (opName) return `transaction failed (${opName})`
       if (txResultName) return `transaction failed (${txResultName})`
     } catch {
@@ -320,7 +321,7 @@ function formatSorobanLedgerFailure(tx: Api.GetFailedTransactionResponse): strin
   const events = failed.diagnosticEventsXdr ?? []
   for (const ev of events) {
     try {
-      const text = ev.toXdr("base64")
+      const text = ev.toXDR("base64")
       if (text.includes("instructions exceeds amount")) {
         return "Soroban resource budget too low (retry send after refreshing the page)"
       }
@@ -332,10 +333,10 @@ function formatSorobanLedgerFailure(tx: Api.GetFailedTransactionResponse): strin
     }
   }
   try {
-    const result = failed.resultXdr?.result
-    if (result?.type === "txFailed") {
-      const first = result.results[0]
-      if (first?.type === "opInner") return first.tr.type
+    const result = failed.resultXdr ? xdrField<object | undefined>(failed.resultXdr, "result") : undefined
+    if (result && xdrType(result) === "txFailed") {
+      const first = xdrField<object[]>(result, "results")[0]
+      if (first && xdrType(first) === "opInner") return xdrType(xdrField(first, "tr")) ?? "on-chain execution failed"
     }
   } catch {
     /* ignore */

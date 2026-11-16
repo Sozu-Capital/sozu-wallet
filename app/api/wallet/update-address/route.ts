@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { requireSession } from "@/lib/auth/session"
 import { corsHeaders } from "@/lib/cors"
+import { CANONICAL_SMART_ACCOUNT_IMMUTABLE, canonicalWriteDecision } from "@/lib/wallet/canonical-smart-account"
 
 export async function OPTIONS(request: NextRequest) {
   return NextResponse.json({}, { headers: corsHeaders(request) })
@@ -98,6 +99,18 @@ export async function POST(request: NextRequest) {
         network: existingWallet.network,
         updatedAt: existingWallet.updated_at
       })
+    }
+
+    const decision = canonicalWriteDecision(existingWallet?.public_key, newPublicKey)
+    if (decision.action === "reject") {
+      return NextResponse.json(
+        {
+          error: "This Sozu account already has a smart account. That address cannot be changed.",
+          code: CANONICAL_SMART_ACCOUNT_IMMUTABLE,
+          contractId: decision.contractId,
+        },
+        { status: 409, headers: corsHeaders(request) },
+      )
     }
 
     // Update or insert wallet

@@ -1,16 +1,18 @@
 import { hash, xdr } from "@stellar/stellar-sdk"
 import base64url from "base64url"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 function addressCredentials(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
-  const credentials = entry.credentials
-  if (credentials.type === "sorobanCredentialsAddress") return credentials.address
-  if (credentials.type === "sorobanCredentialsAddressV2") return credentials.addressV2
-  throw new Error("Soroban auth entry is not address credentials")
+  const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
+  if (xdrType(credentials) !== "sorobanCredentialsAddress") {
+    throw new Error("Soroban auth entry is not address credentials")
+  }
+  return xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
 }
 
 /** XDR-encode Vec<u32> the same way Soroban `ToXdr` does for context_rule_ids. */
 export function contextRuleIdsToXdr(ruleIds: number[]): Buffer {
-  return Buffer.from(xdr.ScVal.scvVec(ruleIds.map((id) => xdr.ScVal.scvU32(id))).toXdr())
+  return Buffer.from(xdr.ScVal.scvVec(ruleIds.map((id) => xdr.ScVal.scvU32(id))).toXDR())
 }
 
 /**
@@ -27,36 +29,23 @@ export function computeOzAuthDigest(
 
 /**
  * Soroban host signature_payload for a SorobanAuthorizationEntry (32-byte hash).
- * Address v2 credentials bind the account address into the preimage. Signing the
- * v1 preimage makes __check_auth reject a passkey that is otherwise valid.
+ * This SDK's address credentials use the single Soroban authorization preimage.
  */
 export function sorobanSignaturePayloadFromEntry(params: {
   networkPassphrase: string
   entry: xdr.SorobanAuthorizationEntry
 }): Buffer {
-  const credentials = params.entry.credentials
-  const isV2 = credentials.type === "sorobanCredentialsAddressV2"
-  const addressCreds = isV2 ? credentials.addressV2 : addressCredentials(params.entry)
+  const addressCreds = addressCredentials(params.entry)
   const networkId = hash(Buffer.from(params.networkPassphrase))
-  const preimage = isV2
-    ? xdr.HashIdPreimage.envelopeTypeSorobanAuthorizationWithAddress(
-        new xdr.HashIdPreimageSorobanAuthorizationWithAddress({
-          networkId,
-          nonce: addressCreds.nonce,
-          signatureExpirationLedger: addressCreds.signatureExpirationLedger,
-          address: addressCreds.address,
-          invocation: params.entry.rootInvocation,
-        }),
-      )
-    : xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-        new xdr.HashIdPreimageSorobanAuthorization({
-          networkId,
-          nonce: addressCreds.nonce,
-          signatureExpirationLedger: addressCreds.signatureExpirationLedger,
-          invocation: params.entry.rootInvocation,
-        }),
-      )
-  return Buffer.from(hash(preimage.toXdr()))
+  const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+    new xdr.HashIdPreimageSorobanAuthorization({
+      networkId,
+      nonce: xdrField(addressCreds, "nonce"),
+      signatureExpirationLedger: xdrField(addressCreds, "signatureExpirationLedger"),
+      invocation: xdrField(params.entry, "rootInvocation"),
+    }),
+  )
+  return Buffer.from(hash(preimage.toXDR()))
 }
 
 /** WebAuthn challenge (base64url) for OZ passkey signing on new smart-account WASM. */
@@ -94,7 +83,7 @@ export function buildOzAuthPayloadScVal(
 
 function authContextCount(invocation: xdr.SorobanAuthorizedInvocation): number {
   let count = 1
-  for (const sub of invocation.subInvocations) {
+  for (const sub of xdrField<xdr.SorobanAuthorizedInvocation[]>(invocation, "subInvocations")) {
     count += authContextCount(sub)
   }
   return count
@@ -107,6 +96,6 @@ function authContextCount(invocation: xdr.SorobanAuthorizedInvocation): number {
 export function defaultContextRuleIdsForEntry(
   entry: xdr.SorobanAuthorizationEntry,
 ): number[] {
-  const count = Math.max(1, authContextCount(entry.rootInvocation))
+  const count = Math.max(1, authContextCount(xdrField(entry, "rootInvocation")))
   return Array.from({ length: count }, () => 0)
 }

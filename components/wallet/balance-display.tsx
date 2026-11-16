@@ -304,7 +304,7 @@ export const BalanceDisplay = memo(function BalanceDisplay({
       className={cn(
         "relative w-full",
         inlineAudit && "flex min-h-0 flex-1 flex-col",
-        !inlineAudit && "mb-8 lg:mb-0",
+        !inlineAudit && (usdcOnly ? "mb-3" : "mb-8 lg:mb-0"),
       )}
     >
       <div
@@ -323,7 +323,11 @@ export const BalanceDisplay = memo(function BalanceDisplay({
             "min-h-0 self-start transition-[max-height] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[max-height]",
           inlineAudit && !auditExpanded && "overflow-hidden",
           inlineAudit && auditExpanded && "flex min-h-0 flex-1 flex-col self-stretch overflow-hidden",
-          inlineAudit ? "p-5 sm:p-6" : "min-h-[11rem] p-6 sm:min-h-[12rem] sm:p-8 lg:min-h-[13.5rem] lg:p-7 lg:text-left xl:min-h-[14rem] xl:p-8",
+          inlineAudit
+            ? "p-5 sm:p-6"
+            : usdcOnly
+              ? "min-h-[8.25rem] p-5 sm:min-h-[8.75rem] sm:p-6"
+              : "min-h-[11rem] p-6 sm:min-h-[12rem] sm:p-8 lg:min-h-[13.5rem] lg:p-7 lg:text-left xl:min-h-[14rem] xl:p-8",
         )}
       >
         <div

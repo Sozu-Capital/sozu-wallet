@@ -10,6 +10,7 @@ export function CheckoutSuccessScreen({
   merchantName,
   amountUsd,
   amountDisplay,
+  itemName,
   assetLabel = "USD",
   showCashback = true,
   transactionHash,
@@ -18,6 +19,7 @@ export function CheckoutSuccessScreen({
   merchantName: string;
   amountUsd?: string;
   amountDisplay?: string;
+  itemName?: string | null;
   assetLabel?: string;
   showCashback?: boolean;
   transactionHash: string | null;
@@ -50,8 +52,10 @@ export function CheckoutSuccessScreen({
 
           {/* Success message */}
           <div>
-            <h1 className="mb-2 text-3xl font-bold text-white">Payment sent</h1>
-            <p className="text-white/60">Your payment has been confirmed</p>
+            <h1 className="mb-2 text-3xl font-bold text-white">Comprobante</h1>
+            <p className="text-white/60">
+              {itemName ? `${itemName} · pago confirmado` : "Pago confirmado"}
+            </p>
           </div>
 
           {/* Amount paid */}

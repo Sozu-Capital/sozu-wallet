@@ -222,6 +222,22 @@ export async function linkMemberWalletWithLoginPasskey(params: {
 
   if (!credentialId) throw new Error("PASSKEY_WALLET_NOT_LINKED")
 
+  const canonicalRes = await fetch("/api/wallet/stellar/address", { cache: "no-store" })
+  if (canonicalRes.ok) {
+    const canonicalBody = (await canonicalRes.json().catch(() => ({}))) as { publicKey?: string | null }
+    const canonical = canonicalBody.publicKey?.trim().toUpperCase() ?? ""
+    if (canonical.startsWith("C") && canonical.length === 56) {
+      try {
+        return await finishLink(await connect({ credentialId, contractId: canonical }))
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        throw new Error(
+          `This Sozu account already has smart account ${canonical}. Sign in with the passkey that created it. A second smart account was not created. ${msg}`,
+        )
+      }
+    }
+  }
+
   const { contractId: deployedContractId, publicKey } = await deployMemberContract(
     kit,
     credentialId,

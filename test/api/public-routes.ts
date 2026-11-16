@@ -52,6 +52,11 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   // Pass-through to SozuPay or on-chain artifacts that carry their own authorization.
   "/api/checkout/proxy": { reason: "reads a public SozuPay checkout session" },
   "/api/checkout/complete": { reason: "forwards a tx hash to SozuPay, which verifies it on-chain" },
+  "/api/stores": { reason: "public Sozu Pay store directory" },
+  "/api/stores/[id]": { reason: "public Sozu Pay store page" },
+  "/api/stores/[id]/pay": {
+    reason: "creates a Sozu Pay checkout; the payment is authorized by the signed transaction",
+  },
   "/api/pizza/redeems": { reason: "proxy to SozuPay; redeem is authorized by the signed transaction" },
   "/api/pizza/redeems/[id]": { reason: "proxy to SozuPay; redeem is authorized by the signed transaction" },
   "/api/offline/ledger": { reason: "public offline cheque ledger" },

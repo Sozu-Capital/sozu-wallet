@@ -1,4 +1,5 @@
 import { Address, xdr } from "@stellar/stellar-sdk"
+import { xdrBytes, xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 export type ContextRuleType =
   | { tag: "Default"; values: undefined }
@@ -28,37 +29,40 @@ export function buildContextRuleTypesFromAuthEntry(
   }
 
   const walk = (invocation: xdr.SorobanAuthorizedInvocation) => {
-    const fn = invocation.function
-    if (fn.type === "sorobanAuthorizedFunctionTypeContractFn") {
-      const contractAddress = Address.fromScAddress(fn.contractFn.contractAddress).toString()
+    const fn = xdrField<xdr.SorobanAuthorizedFunction>(invocation, "function")
+    const fnType = xdrType(fn)
+    if (fnType === "sorobanAuthorizedFunctionTypeContractFn") {
+      const contractFn = xdrField<object>(fn, "contractFn")
+      const contractAddress = Address.fromScAddress(xdrField(contractFn, "contractAddress")).toString()
       add({ tag: "CallContract", values: [contractAddress] })
-    } else if (fn.type.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
+    } else if (fnType?.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
       const wasmHash = extractCreateContractWasmHash(fn)
       if (wasmHash) {
         add({ tag: "CreateContract", values: [wasmHash] })
       }
     }
-    for (const sub of invocation.subInvocations) {
+    for (const sub of xdrField<xdr.SorobanAuthorizedInvocation[]>(invocation, "subInvocations")) {
       walk(sub)
     }
   }
 
-  walk(entry.rootInvocation)
+  walk(xdrField(entry, "rootInvocation"))
   add({ tag: "Default", values: undefined })
   return types
 }
 
 function wasmHashOf(executable: xdr.ContractExecutable): Buffer | null {
-  if (executable.type !== "contractExecutableWasm") return null
-  return Buffer.from(executable.wasmHash.toBytes())
+  if (xdrType(executable) !== "contractExecutableWasm") return null
+  return xdrBytes(xdrField(executable, "wasmHash"))
 }
 
 function extractCreateContractWasmHash(fn: xdr.SorobanAuthorizedFunction): Buffer | null {
-  if (fn.type === "sorobanAuthorizedFunctionTypeCreateContractHostFn") {
-    return wasmHashOf(fn.createContractHostFn.executable)
+  const fnType = xdrType(fn)
+  if (fnType === "sorobanAuthorizedFunctionTypeCreateContractHostFn") {
+    return wasmHashOf(xdrField(xdrField(fn, "createContractHostFn"), "executable"))
   }
-  if (fn.type === "sorobanAuthorizedFunctionTypeCreateContractV2HostFn") {
-    return wasmHashOf(fn.createContractV2HostFn.executable)
+  if (fnType === "sorobanAuthorizedFunctionTypeCreateContractV2HostFn") {
+    return wasmHashOf(xdrField(xdrField(fn, "createContractV2HostFn"), "executable"))
   }
   return null
 }

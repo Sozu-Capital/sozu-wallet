@@ -48,6 +48,7 @@ import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
 import { ConnectPayConfirm } from "@/components/connect/connect-pay-confirm"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
+import { PwaInstallBanner } from "@/components/pwa-install-banner"
 import { circleSacCover } from "@/lib/connect/circle-balance"
 import { readSozuPayRequest, sozuConnectInsufficient, sozuConnectPayment } from "@/lib/connect/pay-request"
 import {
@@ -1148,61 +1149,17 @@ function AuthPageContent() {
       {/* ── PWA install banner — fixed top toast, visible on mobile before install ── */}
       <AnimatePresence>
         {!isInstalled && !pwaBannerDismissed && (canInstall || isIos) && (
-          <motion.div
+          <PwaInstallBanner
             key="pwa-banner"
-            initial={{ y: "-110%", opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "-110%", opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 300, delay: 1.2 }}
-            className="fixed left-3 right-3 z-[60] rounded-2xl border border-white/[0.10] px-4 py-3"
-            style={{
-              top: "max(0.75rem, env(safe-area-inset-top))",
-              background: "rgba(18, 18, 20, 0.82)",
-              backdropFilter: "blur(24px)",
-              WebkitBackdropFilter: "blur(24px)",
+            subtitle={isIos ? t.authPwaBannerIos : t.authPwaBannerAndroid}
+            actionLabel={isIos ? t.authPwaInstallIos : t.authPwaInstallAndroid}
+            closeLabel={t.authClose}
+            onAction={() => {
+              if (canInstall) void triggerInstall()
+              else setShowIosInstallModal(true)
             }}
-          >
-            <div className="flex items-center gap-3">
-              {/* App icon */}
-              <img
-                src="/icons/sozu_icon_192.png"
-                alt="Sozu"
-                className="h-11 w-11 shrink-0 rounded-[22%] object-cover"
-              />
-
-              {/* Text */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <p className="text-[13px] font-semibold text-white leading-tight">
-                  Sozu
-                </p>
-                <p className="text-[11px] text-white/45 leading-tight mt-0.5">
-                  {isIos ? t.authPwaBannerIos : t.authPwaBannerAndroid}
-                </p>
-              </div>
-
-              {/* Install / Add CTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (canInstall) void triggerInstall()
-                  else setShowIosInstallModal(true)
-                }}
-                className="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-black hover:bg-white/90 active:scale-95 transition-transform"
-              >
-                {isIos ? t.authPwaInstallIos : t.authPwaInstallAndroid}
-              </button>
-
-              {/* Dismiss */}
-              <button
-                type="button"
-                onClick={() => setPwaBannerDismissed(true)}
-                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] text-white/35 hover:text-white/60 transition-colors"
-                aria-label={t.authClose}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </motion.div>
+            onDismiss={() => setPwaBannerDismissed(true)}
+          />
         )}
       </AnimatePresence>
 
@@ -1216,10 +1173,18 @@ function AuthPageContent() {
       </div>
 
       <div
-        className={`fixed inset-x-0 bottom-0 z-[4] flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] transition-opacity duration-700 ${
+        className={`fixed inset-0 z-[4] flex flex-col transition-opacity duration-700 ${
           isAuthenticated ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
+        <div className="pointer-events-none flex flex-1 items-center justify-center">
+          <img
+            src="/brand/november-2026/mark.png"
+            alt="Sozu Wallet"
+            className="h-36 w-36 object-contain"
+          />
+        </div>
+        <div className="flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {offerCreateAccount && !isAuthenticated ? (
           <button
             type="button"
@@ -1244,6 +1209,7 @@ function AuthPageContent() {
         >
           {language === "en" ? "Recover my account" : "Recuperar mi cuenta"}
         </button>
+        </div>
       </div>
 
       {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
