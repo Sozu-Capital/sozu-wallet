@@ -33,7 +33,6 @@ import { signalAppReady } from "@/lib/app-ready" // kept for analytics/telemetry
 import { useSetOnboardingOverlayOpen } from "@/lib/onboarding-overlay-context"
 
 // Components
-import { BackgroundMark } from "@/components/onboarding/slide-art"
 import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { BalanceDisplay } from "@/components/wallet/balance-display"
 import { PizzaBalanceRow } from "@/components/wallet/pizza-balance-row"
@@ -817,11 +816,10 @@ export function WalletScreen({
         {activationOnboarding}
         <div
           className={cn(
-            "sozu-night relative h-full w-full overflow-hidden touch-pan-x select-none",
+            "sozu-night sozu-night-clear relative h-full w-full overflow-hidden touch-pan-x select-none",
             walletContentClass,
           )}
         >
-          <BackgroundMark />
           <div
             ref={landingRef}
             className="relative z-10 flex h-full flex-col overflow-hidden"

@@ -281,85 +281,20 @@ export async function getStellarWallet(userId: string, useServiceClient = false)
   }
 
   console.log("[getStellarWallet] Querying wallet for userId:", userId, "userId type:", typeof userId, "userId length:", userId?.length)
-  
-  // First, check if there are multiple wallets (shouldn't happen due to unique constraint, but let's verify)
-  // Order by updated_at first (most recently updated), then created_at (most recently created)
-  const { data: allWallets, error: checkError } = await supabase
-    .from("stellar_wallets")
-    .select("id, public_key, user_id, created_at, updated_at, network, turnkey_wallet_id")
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-  
-  if (checkError) {
-    console.error("[getStellarWallet] Error checking wallets:", checkError)
-  } else if (allWallets && allWallets.length > 1) {
-    console.warn("[getStellarWallet] ⚠️ Multiple wallets found for userId:", userId, "Count:", allWallets.length)
-    // Sort by updated_at DESC, then created_at DESC (client-side since Supabase doesn't support multiple orderings)
-    allWallets.sort((a, b) => {
-      const updatedDiff = new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      if (updatedDiff !== 0) return updatedDiff
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
-    allWallets.forEach((w, i) => {
-      console.warn(`[getStellarWallet]   Wallet ${i + 1}:`, {
-        id: w.id,
-        publicKey: w.public_key ? w.public_key.substring(0, 10) + "..." + w.public_key.substring(w.public_key.length - 10) : "NULL",
-        fullPublicKey: w.public_key, // Log full key for debugging
-        createdAt: w.created_at,
-        updatedAt: w.updated_at,
-        network: w.network,
-        turnkeyWalletId: w.turnkey_wallet_id ? w.turnkey_wallet_id.substring(0, 20) + "..." : null
-      })
-    })
-  }
-  
-  // Get the most recent wallet (by updated_at DESC, then created_at DESC)
-  // This ensures we always get the actual current wallet, not an old one
-  // Note: We order by updated_at first since it reflects the most recent activity
+
+  // Most recently updated row wins when a user has more than one wallet.
   const { data, error } = await supabase
     .from("stellar_wallets")
     .select("*")
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
     .limit(1)
-    .maybeSingle() // Use maybeSingle instead of single to avoid errors when no row found
-  
-  // If we got a result, but there are multiple wallets, verify we got the most recent one
-  if (data && allWallets && allWallets.length > 1) {
-    // Sort all wallets by updated_at DESC, then created_at DESC
-    allWallets.sort((a, b) => {
-      const updatedDiff = new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      if (updatedDiff !== 0) return updatedDiff
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
-    const mostRecent = allWallets[0]
-    if (mostRecent.id !== data.id) {
-      console.warn("[getStellarWallet] ⚠️ Query returned wallet that's not the most recent! Using most recent instead.")
-      // Use the most recent wallet instead
-      const { data: correctWallet } = await supabase
-        .from("stellar_wallets")
-        .select("*")
-        .eq("id", mostRecent.id)
-        .single()
-      if (correctWallet) {
-        return {
-          id: correctWallet.id,
-          userId: correctWallet.user_id,
-          turnkeyWalletId: correctWallet.turnkey_wallet_id || null,
-          publicKey: correctWallet.public_key,
-          network: correctWallet.network,
-          createdAt: correctWallet.created_at,
-          updatedAt: correctWallet.updated_at,
-          previousUsdcBalance: correctWallet.previous_usdc_balance ? Number(correctWallet.previous_usdc_balance) : null,
-        } as StellarWallet
-      }
-    }
-  }
+    .maybeSingle()
 
   if (error) {
     console.error("[getStellarWallet] Error querying wallet for userId:", userId, "Error:", error)
     // Don't throw - just return null if there's an error
-      return null
+    return null
   }
 
   if (!data) {

@@ -258,7 +258,7 @@ function MobileAppShellPanels() {
   return (
         <div
           ref={shellRef}
-          className={`sozu-app-shell sozu-app-viewport overscroll-none select-none touch-pan-y ${
+          className={`sozu-app-shell sozu-app-viewport z-10 overscroll-none select-none touch-pan-y ${
             isSendModalOpen || isDepositModalOpen
               ? "cursor-default"
               : "cursor-grab active:cursor-grabbing"
