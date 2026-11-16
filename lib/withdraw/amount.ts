@@ -1,4 +1,5 @@
 import { nativeToScVal, xdr } from "@stellar/stellar-sdk"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 /** Exact token amounts in minor units (stroops for 7-decimal USDC). Never goes through floats. */
 
@@ -37,9 +38,17 @@ export function minorToI128ScVal(minor: bigint): xdr.ScVal {
   return nativeToScVal(minor, { type: "i128" })
 }
 
+function xdrInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value
+  if (typeof value === "number") return BigInt(value)
+  if (value && typeof value === "object" && "toString" in value) return BigInt(String(value))
+  return BigInt(String(value))
+}
+
 export function i128ScValToBigInt(val: xdr.ScVal): bigint {
-  if (val.type !== "scvI128") throw new Error("expected i128 amount")
-  const hi = BigInt.asIntN(64, val.i128.hi)
-  const lo = BigInt.asUintN(64, val.i128.lo)
+  if (xdrType(val) !== "scvI128") throw new Error("expected i128 amount")
+  const parts = xdrField<{ hi: unknown; lo: unknown }>(val, "i128")
+  const hi = BigInt.asIntN(64, xdrInt(xdrField(parts, "hi")))
+  const lo = BigInt.asUintN(64, xdrInt(xdrField(parts, "lo")))
   return (hi << BigInt(64)) + lo
 }

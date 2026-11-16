@@ -25,7 +25,7 @@ export function deriveOzContractIdForUser(params: {
       ),
     }),
   )
-  return StrKey.encodeContract(hash(preimage.toXdr()))
+  return StrKey.encodeContract(hash(preimage.toXDR()))
 }
 
 export function contractIdForDeploySalt(params: {
@@ -44,5 +44,5 @@ export function contractIdForDeploySalt(params: {
       ),
     }),
   )
-  return StrKey.encodeContract(hash(preimage.toXdr()))
+  return StrKey.encodeContract(hash(preimage.toXDR()))
 }

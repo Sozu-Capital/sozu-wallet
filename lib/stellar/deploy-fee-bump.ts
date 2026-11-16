@@ -11,6 +11,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk"
 import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
+import { xdrBytes, xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 import {
   FEE_PAYER_SEQUENCE_ATTEMPTS,
@@ -89,35 +90,36 @@ export function assertSponsoredCreateContract(
     throw new SponsoredDeployRejected("Deploy envelope must contain one operation.")
   }
   const op = tx.operations[0]
-  if (op.type !== "invokeHostFunction" || !("func" in op) || !op.func) {
+  const func = xdrField<object | undefined>(op, "func")
+  const funcType = xdrType(func)
+  if (xdrType(op) !== "invokeHostFunction" || !func) {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  const func = op.func
   const args =
-    func.type === "hostFunctionTypeCreateContractV2"
-      ? func.createContractV2
-      : func.type === "hostFunctionTypeCreateContract"
-        ? func.createContract
+    funcType === "hostFunctionTypeCreateContractV2"
+      ? xdrField<object>(func, "createContractV2")
+      : funcType === "hostFunctionTypeCreateContract"
+        ? xdrField<object>(func, "createContract")
         : null
   if (!args) {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  const preimage = args.contractIdPreimage
-  if (preimage.type !== "contractIdPreimageFromAddress") {
+  const preimage = xdrField<object>(args, "contractIdPreimage")
+  if (xdrType(preimage) !== "contractIdPreimageFromAddress") {
     throw new SponsoredDeployRejected("Deploy envelope must create an address-salted contract.")
   }
-  const fromAddress = preimage.fromAddress
-  const deployer = Address.fromScAddress(fromAddress.address).toString()
+  const fromAddress = xdrField<object>(preimage, "fromAddress")
+  const deployer = Address.fromScAddress(xdrField(fromAddress, "address")).toString()
   assertSponsoredDeploySource(deployer)
-  const salt = Buffer.from(fromAddress.salt.toBytes())
+  const salt = xdrBytes(xdrField(fromAddress, "salt"))
   if (!saltMatches(salt, params.allowedSalts)) {
     throw new SponsoredDeployRejected("Deploy salt does not match this account.")
   }
-  const executable = args.executable
-  if (executable.type !== "contractExecutableWasm") {
+  const executable = xdrField<object>(args, "executable")
+  if (xdrType(executable) !== "contractExecutableWasm") {
     throw new SponsoredDeployRejected("Deploy envelope must use the smart-account WASM.")
   }
-  const wasmHashHex = Buffer.from(executable.wasmHash.toBytes()).toString("hex")
+  const wasmHashHex = xdrBytes(xdrField(executable, "wasmHash")).toString("hex")
   if (wasmHashHex.toLowerCase() !== params.wasmHashHex.trim().toLowerCase()) {
     throw new SponsoredDeployRejected("Deploy WASM does not match the pinned smart-account hash.")
   }

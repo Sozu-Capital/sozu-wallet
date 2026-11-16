@@ -1,4 +1,5 @@
 import { Address, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import { i128ScValToBigInt } from "@/lib/withdraw/amount"
 
 /**
@@ -27,27 +28,29 @@ export function parseSacTransferEnvelope(envelopeXdr: string, networkPassphrase:
   if (parsed.operations.length !== 1) return { ok: false, reason: "wrong_operation_count" }
 
   const op = parsed.operations[0]
-  if (op.type !== "invokeHostFunction") return { ok: false, reason: "not_invoke_host_function" }
-  const func = (op as unknown as { func: xdr.HostFunction }).func
-  if (func.type !== "hostFunctionTypeInvokeContract") return { ok: false, reason: "not_contract_invocation" }
+  if (xdrType(op) !== "invokeHostFunction") return { ok: false, reason: "not_invoke_host_function" }
+  const func = xdrField<xdr.HostFunction | undefined>(op, "func")
+  if (!func || xdrType(func) !== "hostFunctionTypeInvokeContract") {
+    return { ok: false, reason: "not_contract_invocation" }
+  }
 
-  const invoke = func.invokeContract
-  const fnName = invoke.functionName.toString()
+  const invoke = xdrField<{ toString(): string }>(func, "invokeContract") as object
+  const fnName = xdrField<{ toString(): string }>(invoke, "functionName").toString()
   if (fnName !== "transfer") {
     return { ok: false, reason: "not_transfer" }
   }
-  const args = invoke.args
+  const args = xdrField<xdr.ScVal[]>(invoke, "args")
   if (args.length !== 3) return { ok: false, reason: "wrong_arg_count" }
   const [fromArg, toArg, amountArg] = args
-  if (fromArg.type !== "scvAddress" || toArg.type !== "scvAddress") {
+  if (xdrType(fromArg) !== "scvAddress" || xdrType(toArg) !== "scvAddress") {
     return { ok: false, reason: "wrong_arg_types" }
   }
-  if (amountArg.type !== "scvI128") return { ok: false, reason: "wrong_amount_type" }
+  if (xdrType(amountArg) !== "scvI128") return { ok: false, reason: "wrong_amount_type" }
 
   return {
     ok: true,
     intent: {
-      contractId: Address.fromScAddress(invoke.contractAddress).toString(),
+      contractId: Address.fromScAddress(xdrField(invoke, "contractAddress")).toString(),
       from: Address.fromScVal(fromArg).toString(),
       to: Address.fromScVal(toArg).toString(),
       amountMinor: i128ScValToBigInt(amountArg),
