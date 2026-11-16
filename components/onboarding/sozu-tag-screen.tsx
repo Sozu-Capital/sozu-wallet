@@ -37,7 +37,7 @@ export function SozuTagScreen({ initialTag = "", onContinue, onSignIn, onHaveTag
 
   return (
     <main
-      className="sozu-night mx-auto flex w-full max-w-[430px] flex-col"
+      className="sozu-night sozu-night-clear relative z-10 mx-auto flex w-full max-w-[430px] flex-col"
       style={{ height: "var(--sozu-visual-viewport-height, var(--sozu-app-height))" }}
       aria-labelledby="sozu-tag-title"
     >

@@ -396,10 +396,21 @@ export async function getPasskeyForTransaction(challenge: PasskeyChallenge): Pro
   }
 }
 
+export type GetPasskeyOptions = {
+  /**
+   * Immediate UI only shows passkeys already on this device.
+   * allowCredentials must stay empty or the browser rejects the request.
+   */
+  uiMode?: "immediate"
+}
+
 /**
  * Get WebAuthn credential (browser API wrapper)
  */
-export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCredential | null> {
+export async function getPasskey(
+  challenge: PasskeyChallenge,
+  options?: GetPasskeyOptions,
+): Promise<PasskeyCredential | null> {
   try {
     if (!window.PublicKeyCredential) {
       throw new Error("WebAuthn is not supported in this browser")
@@ -410,10 +421,11 @@ export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCr
       (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RP_ID?.trim()) ||
       window.location.hostname
 
+    const listed = options?.uiMode === "immediate" ? [] : challenge.allowCredentials
     const publicKeyOptions: PublicKeyCredentialRequestOptions = {
       challenge: base64URLToArrayBuffer(challenge.challenge),
       rpId,
-      allowCredentials: challenge.allowCredentials?.map((cred) => ({
+      allowCredentials: listed?.map((cred) => ({
         id: base64URLToArrayBuffer(cred.id),
         type: cred.type as PublicKeyCredentialType,
         // Only include transports if explicitly provided
@@ -424,9 +436,12 @@ export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCr
       userVerification: challenge.userVerification || "required",
     }
 
-    const credential = (await navigator.credentials.get({
+    const request = {
       publicKey: publicKeyOptions,
-    })) as PublicKeyCredential
+      ...(options?.uiMode ? { uiMode: options.uiMode } : {}),
+    } as CredentialRequestOptions
+
+    const credential = (await navigator.credentials.get(request)) as PublicKeyCredential
 
     if (!credential) {
       throw new Error("Failed to get passkey")

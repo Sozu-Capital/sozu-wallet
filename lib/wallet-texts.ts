@@ -473,6 +473,7 @@ export type WalletTexts = {
   mathPerYear: string;
   // Auth
   authEnter: string;
+  authCreateAccount: string;
   authPasskeyCaption: string;
   authLoading: string;
   authPwaBannerIos: string;
@@ -1046,6 +1047,7 @@ export const walletTexts = {
     mathPerYear: "/ yr",
     // Auth
     authEnter: "Entrar",
+    authCreateAccount: "Crear cuenta nueva",
     authPasskeyCaption: "Passkey en este dispositivo",
     authLoading: "Cargando…",
     authPwaBannerIos: "Instálala desde Safari → Compartir → Agregar a inicio",
@@ -1585,6 +1587,7 @@ export const walletTexts = {
     mathPerYear: "/ yr",
     // Auth
     authEnter: "Enter",
+    authCreateAccount: "Create a new account",
     authPasskeyCaption: "Passkey on this device",
     authLoading: "Loading…",
     authPwaBannerIos: "Install from Safari → Share → Add to Home Screen",

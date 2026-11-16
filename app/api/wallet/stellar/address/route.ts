@@ -10,32 +10,31 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
+    const cookieUserId = getSessionUserId(request)
+    let userId: string | null = cookieUserId
+    const fromWalletCookie = Boolean(cookieUserId)
 
-    // Get the authenticated user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    let userId: string | null = null
-
-    if (user) {
-      userId = user.id
-      console.log("[Stellar Address API] Using Supabase auth, userId:", userId)
-    } else {
-      // In dev mode, check for userId in headers
-      userId = getSessionUserId(request)
-      console.log("[Stellar Address API] Dev mode, userId from header:", userId)
-
-      if (!userId) {
-        console.error("[Stellar Address API] No userId provided")
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401, headers: corsHeaders(request as any) }
-        )
+    if (!userId) {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        userId = user.id
+        console.log("[Stellar Address API] Using Supabase auth, userId:", userId)
       }
+    } else {
+      console.log("[Stellar Address API] Using wallet session cookie, userId:", userId)
+    }
+
+    if (!userId) {
+      console.error("[Stellar Address API] No userId provided")
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: corsHeaders(request as any) }
+      )
     }
 
     console.log("[Stellar Address API] Getting wallet for userId:", userId)
-    let wallet = await getStellarWallet(userId, !user)
+    let wallet = await getStellarWallet(userId, fromWalletCookie)
 
     if (
       wallet?.publicKey?.startsWith("G") &&

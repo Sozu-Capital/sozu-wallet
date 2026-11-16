@@ -1,5 +1,5 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js"
-import { NextResponse } from "next/server"
+import { after, NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { setSessionCookie } from "@/lib/auth/session"
@@ -65,7 +65,14 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
     if (!profile) return invalid()
 
-    await svc.from("passkeys").update({ last_used_at: new Date().toISOString() }).eq("id", passkey.id)
+    const passkeyId = passkey.id
+    after(async () => {
+      const { error } = await svc
+        .from("passkeys")
+        .update({ last_used_at: new Date().toISOString() })
+        .eq("id", passkeyId)
+      if (error) console.error("[Login] Failed to stamp last_used_at:", error.message)
+    })
 
     const response = NextResponse.json(
       { success: true, userId: profile.id, username: profile.username ?? undefined },

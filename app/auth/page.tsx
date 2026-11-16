@@ -1,7 +1,6 @@
 "use client"
 
 import { TagInputModal } from "@/components/tag-input-modal"
-import { BackgroundMark } from "@/components/onboarding/slide-art"
 import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { AuthDeviceChoiceModal } from "@/components/auth-device-choice-modal"
 import { RecoverAccountScreen } from "@/components/auth/recover-account-screen"
@@ -20,6 +19,7 @@ import {
 } from "@/lib/turnkey/passkeys"
 import { detectDeviceCapabilities } from "@/lib/webauthn/device-detection"
 import { resolveEnterAuthPath } from "@/lib/webauthn/enter-auth-path"
+import { requestImmediateLocalPasskey } from "@/lib/webauthn/immediate-passkey"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
@@ -85,6 +85,7 @@ function AuthPageContent() {
   const [showDeviceChoice, setShowDeviceChoice] = useState(false)
   const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(null)
   const [showRecover, setShowRecover] = useState(false)
+  const [offerCreateAccount, setOfferCreateAccount] = useState(false)
   const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
   const [payAccount, setPayAccount] = useState<{ username: string; accountId: string } | null>(null)
   const [payCheck, setPayCheck] = useState<"idle" | "checking" | "unavailable">("idle")
@@ -336,10 +337,7 @@ function AuthPageContent() {
       }
       redirectingRef.current = true
       setIsExiting(true)
-      setTimeout(
-        () => navigatePostAuth(finalPostAuthPath, (p) => router.push(p)),
-        300,
-      )
+      navigatePostAuth(finalPostAuthPath, (p) => router.push(p))
     },
     [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
@@ -389,10 +387,7 @@ function AuthPageContent() {
       }
       redirectingRef.current = true
       setIsExiting(true)
-      setTimeout(
-        () => navigatePostAuth(finalPostAuthPath, (p) => router.push(p)),
-        300,
-      )
+      navigatePostAuth(finalPostAuthPath, (p) => router.push(p))
     },
     [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
@@ -515,9 +510,22 @@ function AuthPageContent() {
     }
   }, [finalizePasskeyLoginSuccess])
 
+  const startSignup = () => {
+    setOfferCreateAccount(false)
+    setSignupPrefill(null)
+    setShowSignup(true)
+  }
+
+  const holdForCreateAccount = (
+    credential?: Awaited<ReturnType<typeof getPasskey>> | null,
+  ) => {
+    if (credential) pendingCredentialRef.current = credential
+    setIsAuthenticating(false)
+    setOfferCreateAccount(true)
+  }
+
   const handleAuth = async () => {
-    if (redirectingRef.current) {
-      console.log("[Auth] Already redirecting, ignoring...")
+    if (redirectingRef.current || isAuthenticating) {
       return
     }
 
@@ -529,55 +537,73 @@ function AuthPageContent() {
       const value = localStorage.getItem("sozu_username")
       if (value && value !== "user") {
         storedUsername = value
-        console.log("[Auth] Found stored username:", storedUsername)
       }
     }
 
-    // Returning user with a remembered tag → authenticate that passkey directly.
+    // Remembered tag: open that saved passkey. Cancelling stays on the lock
+    // screen; onboarding only starts from "create a new account".
     if (storedUsername) {
-      console.log("[Auth] ====== Attempting login with stored username:", storedUsername)
       const result = await attemptLoginWithTag(storedUsername)
-      if (result.ok) {
-        return
-      }
-      console.log("[Auth] Login with stored tag failed:", result.error, result.cancelled)
+      if (result.ok) return
 
-      if (result.capturedCredential) {
-        pendingCredentialRef.current = result.capturedCredential
-        console.log("[Auth] Captured credential stashed for registration reuse")
+      if (result.cancelled || result.capturedCredential) {
+        holdForCreateAccount(result.capturedCredential)
+        return
       }
 
       setIsAuthenticating(false)
-      if (result.cancelled) {
-        setResumeLoginTag(storedUsername)
-        setShowTagModal(true)
-      } else {
-        if (typeof window !== "undefined") localStorage.removeItem("sozu_username")
-        setSignupPrefill(storedUsername)
-        setShowSignup(true)
+      if (result.error && /not found/i.test(result.error)) {
+        localStorage.removeItem("sozu_username")
+        startSignup()
       }
       return
     }
 
-    // First visit / no remembered tag: decide from device capability BEFORE any
-    // credentials.get. Auto-discovery here is what triggered "scan with another
-    // device" on biometric phones that simply had no Sozu passkey yet.
+    // No remembered tag. Ask the browser only for passkeys already on this
+    // device. A miss goes to onboarding. A dismissed sheet does not.
+    if (typeof window !== "undefined" && window.PublicKeyCredential) {
+      try {
+        const challenge = await generateAuthChallenge()
+        const local = await requestImmediateLocalPasskey(challenge)
+        if (local.status === "credential") {
+          const authResult = await verifyAuthentication("", local.credential, challenge.challenge)
+          if (!authResult?.success || !authResult.userId) {
+            holdForCreateAccount(local.credential)
+            return
+          }
+          await finalizePasskeyLoginSuccess(authResult.userId, authResult.username, local.credential)
+          return
+        }
+        if (local.status === "cancelled") {
+          holdForCreateAccount()
+          return
+        }
+        if (local.status === "none") {
+          setIsAuthenticating(false)
+          startSignup()
+          return
+        }
+        if (local.status === "error") {
+          setIsAuthenticating(false)
+          return
+        }
+      } catch {
+        setIsAuthenticating(false)
+        return
+      }
+    }
+
+    // Browsers without immediate mode cannot list local passkeys without
+    // opening the cross-device sheet. Fall back to the capability route.
     const capabilities = await detectDeviceCapabilities()
     const path = resolveEnterAuthPath({ storedUsername: null, capabilities })
-    console.log("[Auth] Enter path:", path.action, {
-      canUsePasskeys: capabilities.canUsePasskeys,
-      deviceType: capabilities.deviceType,
-    })
-
     setIsAuthenticating(false)
 
     if (path.action === "create-or-login" || path.action === "unsupported") {
-      setSignupPrefill(null)
-      setShowSignup(true)
+      startSignup()
       return
     }
 
-    // No platform authenticator → let the user choose scan vs create.
     setShowDeviceChoice(true)
   }
 
@@ -1114,7 +1140,7 @@ function AuthPageContent() {
   }
 
   return (
-    <div className="sozu-night relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
+    <div className="sozu-night sozu-night-clear relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
       {isAuthenticated && pizzaAuth.kind !== "none" ? (
         <PizzaAuthContinuation continuation={pizzaAuth} />
       ) : null}
@@ -1180,66 +1206,36 @@ function AuthPageContent() {
         )}
       </AnimatePresence>
 
-      {/* Lock screen — November 2026 mark, centered. Enter stays at the bottom. */}
-      <div className={`absolute inset-0 z-[2] flex items-center justify-center pointer-events-none transition-opacity duration-700 ${isAuthenticated
-        ? "opacity-0"
-        : "opacity-100"
-        }`}>
-        <img
-          src="/brand/november-2026/mark.png"
-          alt="Sozu Wallet"
-          className="h-36 w-36 object-contain"
-        />
-      </div>
-
       {/* Post-auth skeleton — full viewport */}
       <div className="relative z-[1] h-full overflow-hidden">
         {isAuthenticated ? (
           <div className="relative z-10 h-full">
-            <BackgroundMark />
             <WalletSkeleton isExiting={isExiting} layout="landing" />
           </div>
         ) : null}
       </div>
 
-      {/* Enter CTA — pinned to viewport bottom with safe-area inset (no scroll needed) */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-[4] flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] transition-all duration-700 ${
-          isAuthenticated
-            ? "pointer-events-none scale-95 opacity-0"
-            : "scale-100 opacity-100"
+        className={`fixed inset-x-0 bottom-0 z-[4] flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] transition-opacity duration-700 ${
+          isAuthenticated ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
+        {offerCreateAccount && !isAuthenticated ? (
+          <button
+            type="button"
+            onClick={startSignup}
+            className="text-[13px] font-medium text-white/80 transition-colors hover:text-white"
+          >
+            {t.authCreateAccount}
+          </button>
+        ) : null}
         <Button
-          onClick={handleAuth}
+          type="button"
+          onClick={() => void handleAuth()}
           disabled={isAuthenticating}
-          className="w-full md:w-1/6 h-16 text-lg font-semibold bg-white text-black hover:bg-white/90 active:bg-white/80 transition-all duration-200 rounded-full shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden relative"
+          className="h-14 w-full max-w-[430px] rounded-full bg-white text-base font-semibold text-black hover:bg-white/90"
         >
-          <AnimatePresence mode="popLayout" initial={false}>
-            {isAuthenticating ? (
-              <motion.div
-                key="authenticating"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-center justify-center absolute inset-0"
-              >
-                <Fingerprint className="w-8 h-8" />
-              </motion.div>
-            ) : (
-              <motion.span
-                key="idle"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="flex items-center"
-              >
-                {t.authEnter}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {isAuthenticating ? <Fingerprint className="h-5 w-5" /> : t.authEnter}
         </Button>
         <button
           type="button"
@@ -1248,8 +1244,6 @@ function AuthPageContent() {
         >
           {language === "en" ? "Recover my account" : "Recuperar mi cuenta"}
         </button>
-
-        {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
       </div>
 
       {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
@@ -1501,7 +1495,7 @@ export default function AuthPage() {
   return (
     <WalletLanguageProvider>
       <Suspense fallback={
-        <div className="flex min-h-[var(--sozu-app-height,100lvh)] items-center justify-center bg-black text-white">
+        <div className="flex min-h-[var(--sozu-app-height,100lvh)] items-center justify-center text-white">
           <div className="text-white">Cargando…</div>
         </div>
       }>

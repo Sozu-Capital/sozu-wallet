@@ -489,6 +489,11 @@
   color-scheme: dark;
 }
 
+/* Lock screen keeps the night type tokens and lets the wave shader show through. */
+.sozu-night.sozu-night-clear {
+  background: transparent;
+}
+
 .sozu-serif {
   font-family: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
 }
