@@ -1,7 +1,5 @@
 import type { ReactNode } from "react"
-import Fingerprint from "lucide-react/dist/esm/icons/fingerprint"
-import Landmark from "lucide-react/dist/esm/icons/landmark"
-import ScanFace from "lucide-react/dist/esm/icons/scan-face"
+import { Fingerprint, Landmark, ScanFace } from "lucide-react"
 
 /** Each sentence starts on its own line. The period stays with its sentence. */
 export function sentenceLines(text: string): string[] {
