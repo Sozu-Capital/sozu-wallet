@@ -5,7 +5,7 @@ import { CollectionsPanelView, type CollectionCard } from "@/components/merch/co
 import { useWalletDataContext } from "@/components/wallet/wallet-data-provider"
 import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
 import { CITY_SPOTS, projectCityDots } from "@/lib/city/spots"
-import { listMerchItems, merchItemPath, UNRECORDED_PRICE_USDC } from "@/lib/merch/catalog"
+import { getMerchItem, listActivations, listMerchItems, merchItemPath, UNRECORDED_PRICE_USDC } from "@/lib/merch/catalog"
 import { receiptsForHoldings, type HeldOrder } from "@/lib/merch/collections"
 import { merchCopy } from "@/lib/merch/copy"
 import { purchasePlaceholderReceipts, type PurchaseTransfer } from "@/lib/merch/purchase-receipts"
@@ -114,15 +114,25 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
       })
     : []
   const cards: CollectionCard[] = [...placeholders, ...held]
-  const findItems = catalog.map((item) => ({
-    href: merchItemPath(item.slug),
-    name: item.name,
-    drop: item.drop,
-    imageUrl: item.imagePath,
-    priceLabel: item.priceUsdc && item.priceUsdc !== UNRECORDED_PRICE_USDC ? `${item.priceUsdc} USDC` : null,
-    excerpt: copy.receiptLine,
-    tags: [copy.testnet],
-    actionLabel: copy.findOpen,
+  const activations = listActivations().map((activation) => ({
+    slug: activation.slug,
+    name: activation.name,
+    drop: activation.drop,
+    imageUrl: activation.imagePath,
+    items: activation.itemSlugs.flatMap((slug) => {
+      const item = getMerchItem(slug)
+      if (!item) return []
+      return [{
+        href: merchItemPath(item.slug),
+        name: item.name,
+        drop: item.drop,
+        imageUrl: item.imagePath,
+        priceLabel: item.priceUsdc && item.priceUsdc !== UNRECORDED_PRICE_USDC ? `${item.priceUsdc} USDC` : null,
+        excerpt: copy.receiptLine,
+        tags: [copy.testnet],
+        actionLabel: copy.findOpen,
+      }]
+    }),
   }))
 
   return (
@@ -130,7 +140,10 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
       title={copy.collections}
       nearLabel={copy.findNear}
       cityLabel={copy.findCity}
-      findItems={findItems}
+      activations={activations}
+      openLabel={copy.findOpen}
+      backLabel={copy.back}
+      itemsLabel={copy.offered}
       cityDots={projectCityDots(CITY_SPOTS)}
       previousLabel={copy.previousReceipt}
       nextLabel={copy.nextReceipt}

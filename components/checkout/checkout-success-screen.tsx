@@ -5,6 +5,8 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { CollectibleReceipt } from "@/components/merch/collectible-receipt";
+import type { CollectibleReceiptModel } from "@/lib/merch/receipt";
 
 export function CheckoutSuccessScreen({
   merchantName,
@@ -15,6 +17,7 @@ export function CheckoutSuccessScreen({
   showCashback = true,
   transactionHash,
   receipt: _receipt,
+  collectible,
 }: {
   merchantName: string;
   amountUsd?: string;
@@ -24,6 +27,7 @@ export function CheckoutSuccessScreen({
   showCashback?: boolean;
   transactionHash: string | null;
   receipt?: PaymentReceipt;
+  collectible?: CollectibleReceiptModel | null;
 }) {
   const router = useRouter();
 
@@ -54,11 +58,17 @@ export function CheckoutSuccessScreen({
           <div>
             <h1 className="mb-2 text-3xl font-bold text-white">Comprobante</h1>
             <p className="text-white/60">
-              {itemName ? `${itemName} · pago confirmado` : "Pago confirmado"}
+              {collectible
+                ? "Comprobante coleccionable"
+                : itemName
+                  ? `${itemName} · pago confirmado`
+                  : "Pago confirmado"}
             </p>
           </div>
 
-          {/* Amount paid */}
+          {collectible ? (
+            <CollectibleReceipt model={collectible} />
+          ) : (
           <div className="rounded-xl border border-white/10 bg-white/5 p-6">
             <div className="mb-4">
               <div className="text-sm text-white/60">You paid</div>
@@ -82,6 +92,7 @@ export function CheckoutSuccessScreen({
               </div>
             ) : null}
           </div>
+          )}
 
           {/* Transaction details */}
           {transactionHash && (

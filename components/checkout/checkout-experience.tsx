@@ -13,6 +13,8 @@ import { warmKitForPay } from "@/lib/stellar/smartAccounts/warm-kit-for-pay";
 import type { CheckoutSession } from "@/lib/checkout/types";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { buildCollectibleReceipt } from "@/lib/merch/receipt";
+import { useWalletLanguage } from "@/lib/wallet-language";
 
 type CheckoutPhase =
   | "loading"
@@ -25,6 +27,7 @@ type CheckoutPhase =
 
 export function CheckoutExperience({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const { language } = useWalletLanguage();
   const [phase, setPhase] = useState<CheckoutPhase>("loading");
   const [session, setSession] = useState<CheckoutSession | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +118,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       merchantName: session.merchantName,
       itemName: session.reference,
       organizationId: session.organizationId,
+      collectibleReceipt: session.collectibleReceipt === true,
     });
 
     if (result.success) {
@@ -126,6 +130,23 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       setPhase("error");
     }
   }, [isAuthenticated, walletAddress, session, router, sessionId]);
+
+  const collectible =
+    phase === "success" && session?.collectibleReceipt && receipt
+      ? buildCollectibleReceipt({
+          item: {
+            name: session.reference?.trim() || session.merchantName,
+            drop: session.merchantName,
+            network: receipt.network,
+          },
+          language: language === "en" ? "en" : "es",
+          status: "paid",
+          priceUsdc: session.amountUsd,
+          paymentHash: transactionHash,
+          transferHash: null,
+          createdAt: receipt.completedAt,
+        })
+      : null;
 
   if (phase === "loading") {
     return (
@@ -238,6 +259,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
         showCashback={false}
         transactionHash={transactionHash}
         receipt={receipt}
+        collectible={collectible}
       />
     );
   }

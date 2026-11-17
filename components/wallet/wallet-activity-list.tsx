@@ -115,20 +115,20 @@ export const WalletActivityList = memo(function WalletActivityList({
           ) : (
             visible.map((item) => {
               const tag = KIND_TAG[item.kind]
-              const isChain = item.kind === "chain"
+              const canOpen = Boolean(onSelectChainTx && (item.chainTx || item.purchase))
               const hash = item.chainTx?.hash
               const explorerUrl = hash ? getStellarExpertTxUrl(hash, walletNetwork) : null
 
               return (
                 <li key={item.id} className="list-none">
                   <div
-                    role={isChain && onSelectChainTx ? "button" : undefined}
-                    tabIndex={isChain && onSelectChainTx ? 0 : undefined}
+                    role={canOpen ? "button" : undefined}
+                    tabIndex={canOpen ? 0 : undefined}
                     onClick={() => {
-                      if (isChain && onSelectChainTx) onSelectChainTx(item)
+                      if (canOpen) onSelectChainTx?.(item)
                     }}
                     onKeyDown={(e) => {
-                      if (!isChain || !onSelectChainTx) return
+                      if (!canOpen || !onSelectChainTx) return
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault()
                         onSelectChainTx(item)
@@ -136,7 +136,7 @@ export const WalletActivityList = memo(function WalletActivityList({
                     }}
                     className={cn(
                       "flex items-center gap-3 rounded-lg bg-white/5 p-3 transition-colors sm:gap-4 sm:p-4",
-                      isChain && onSelectChainTx && "cursor-pointer hover:bg-white/10",
+                      canOpen && "cursor-pointer hover:bg-white/10",
                     )}
                   >
                     <div className="shrink-0">

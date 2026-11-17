@@ -10,6 +10,8 @@
 export const LIQUID_SOCIETY_SLUG = "liquid-society"
 export const FIVE_PANEL_SLUG = "five-panel"
 export const LIQUID_SOCIETY_DROP = "Liquid Society · 18 Nov 2026"
+export const LIQUID_SOCIETY_ACTIVATION_SLUG = "liquid-society-event"
+export const LIQUID_SOCIETY_SOUVENIR_SLUG = "liquid-society-souvenir"
 
 /** Placeholder shown until a USDC price is recorded. */
 export const UNRECORDED_PRICE_USDC = "0"
@@ -37,7 +39,7 @@ export type MerchItemRecord = {
 
 const SHIRT: MerchItemRecord = {
   slug: LIQUID_SOCIETY_SLUG,
-  name: "Shirt",
+  name: "T-shirt",
   imagePath: "/merch/liquid-society.svg",
   priceUsdc: "15",
   preMintSupply: 10,
@@ -61,8 +63,51 @@ const FIVE_PANEL: MerchItemRecord = {
 
 const ITEMS: readonly MerchItemRecord[] = [SHIRT, FIVE_PANEL]
 
+/** One event. The collectibles page shows this card, then the items it offers. */
+export type CollectibleSouvenir = {
+  slug: string
+  name: string
+  drop: string
+  imagePath: string
+}
+
+export type MerchActivation = {
+  slug: string
+  name: string
+  drop: string
+  imagePath: string
+  /** Physical items offered at the activation, in display order. */
+  itemSlugs: readonly string[]
+  souvenir: CollectibleSouvenir
+}
+
+const LIQUID_SOCIETY_ACTIVATION: MerchActivation = {
+  slug: LIQUID_SOCIETY_ACTIVATION_SLUG,
+  name: "Liquid Society",
+  drop: LIQUID_SOCIETY_DROP,
+  imagePath: "/merch/liquid-society-event.svg",
+  itemSlugs: [LIQUID_SOCIETY_SLUG, FIVE_PANEL_SLUG],
+  souvenir: {
+    slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
+    name: "Collectible Souvenir",
+    drop: LIQUID_SOCIETY_DROP,
+    imagePath: "/merch/liquid-society-souvenir.svg",
+  },
+}
+
+const ACTIVATIONS: readonly MerchActivation[] = [LIQUID_SOCIETY_ACTIVATION]
+
 export function listMerchItems(): readonly MerchItemRecord[] {
   return ITEMS
+}
+
+export function listActivations(): readonly MerchActivation[] {
+  return ACTIVATIONS
+}
+
+/** Souvenirs shown on the current profile inside the wallet switcher. */
+export function listCollectibleSouvenirs(): readonly CollectibleSouvenir[] {
+  return ACTIVATIONS.map((activation) => activation.souvenir)
 }
 
 export function getMerchItem(slug: string): MerchItemRecord | null {

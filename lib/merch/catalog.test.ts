@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
   FIVE_PANEL_SLUG,
+  LIQUID_SOCIETY_ACTIVATION_SLUG,
   LIQUID_SOCIETY_DROP,
   LIQUID_SOCIETY_SLUG,
+  LIQUID_SOCIETY_SOUVENIR_SLUG,
   getMerchItem,
+  listActivations,
+  listCollectibleSouvenirs,
   listMerchItems,
   merchItemPath,
 } from "./catalog"
@@ -14,7 +18,7 @@ describe("merch catalog", () => {
 
     expect(getMerchItem(LIQUID_SOCIETY_SLUG)).toMatchObject({
       slug: LIQUID_SOCIETY_SLUG,
-      name: "Shirt",
+      name: "T-shirt",
       imagePath: "/merch/liquid-society.svg",
       priceUsdc: "15",
       preMintSupply: 10,
@@ -43,6 +47,25 @@ describe("merch catalog", () => {
     expect(nfc).toBe("/item/liquid-society")
     expect(qr).toBe(nfc)
     expect(merchItemPath(FIVE_PANEL_SLUG)).toBe("/item/five-panel")
+  })
+
+  it("offers Liquid Society as one activation, with the shirt, the 5-panel, and a souvenir", () => {
+    expect(listActivations()).toEqual([
+      {
+        slug: LIQUID_SOCIETY_ACTIVATION_SLUG,
+        name: "Liquid Society",
+        drop: LIQUID_SOCIETY_DROP,
+        imagePath: "/merch/liquid-society-event.svg",
+        itemSlugs: [LIQUID_SOCIETY_SLUG, FIVE_PANEL_SLUG],
+        souvenir: {
+          slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
+          name: "Collectible Souvenir",
+          drop: LIQUID_SOCIETY_DROP,
+          imagePath: "/merch/liquid-society-souvenir.svg",
+        },
+      },
+    ])
+    expect(listCollectibleSouvenirs()).toEqual([listActivations()[0]?.souvenir])
   })
 
   it("returns null for an unknown slug", () => {

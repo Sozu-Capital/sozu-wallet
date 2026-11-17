@@ -8,13 +8,31 @@ import { buildCollectibleReceipt } from "@/lib/merch/receipt"
 const discover = {
   nearLabel: "Cerca de ti",
   cityLabel: "En la ciudad",
-  findItems: [
+  openLabel: "Ver",
+  backLabel: "Volver",
+  itemsLabel: "En el evento",
+  activations: [
     {
-      href: "/item/liquid-society",
+      slug: "liquid-society-event",
       name: "Liquid Society",
       drop: "Liquid Society · 18 Nov 2026",
-      imageUrl: "/merch/liquid-society.svg",
-      priceLabel: null,
+      imageUrl: "/merch/liquid-society-event.svg",
+      items: [
+        {
+          href: "/item/liquid-society",
+          name: "T-shirt",
+          drop: "Liquid Society · 18 Nov 2026",
+          imageUrl: "/merch/liquid-society.svg",
+          priceLabel: "15 USDC",
+        },
+        {
+          href: "/item/five-panel",
+          name: "5-panel",
+          drop: "Liquid Society · 18 Nov 2026",
+          imageUrl: "/merch/five-panel.svg",
+          priceLabel: "8 USDC",
+        },
+      ],
     },
   ],
   cityDots: [
@@ -37,7 +55,9 @@ describe("collections panel", () => {
     expect(html).toContain("Colecciones")
     expect(html).toContain("Cerca de ti")
     expect(html).toContain("Liquid Society")
-    expect(html).toContain('href="/item/liquid-society"')
+    expect(html).toContain('data-activation="liquid-society-event"')
+    expect(html).toContain("T-shirt · 5-panel")
+    expect(html).not.toContain('href="/item/liquid-society"')
     expect(html).toContain("Ver")
     expect(html).toContain("En la ciudad")
     expect(html).toContain('href="/city"')
@@ -45,6 +65,29 @@ describe("collections panel", () => {
     expect(html).toContain('href="/city/spot/1"')
     expect(html).toContain("Charlie Wok")
     expect(html).not.toContain("Todavía no tienes coleccionables.")
+  })
+
+  it("opens the activation into the t-shirt and the 5-panel", () => {
+    const html = renderToStaticMarkup(
+      createElement(CollectionsPanelView, {
+        title: "Colecciones",
+        ...discover,
+        previousLabel: "Anterior",
+        nextLabel: "Siguiente",
+        cards: [],
+        selectedActivation: "liquid-society-event",
+      }),
+    )
+    expect(html).toContain("T-shirt")
+    expect(html).toContain("5-panel")
+    expect(html).toContain('href="/item/liquid-society"')
+    expect(html).toContain('href="/item/five-panel"')
+    expect(html).toContain("15 USDC")
+    expect(html).toContain("8 USDC")
+    expect(html).toContain('aria-label="Volver"')
+    expect(html).toContain("En el evento")
+    expect(html).not.toContain("Cerca de ti")
+    expect(html).not.toContain("Pandevilla")
   })
 
   it("shows the receipt in front, including the testnet label and the disclaimer", () => {
@@ -68,7 +111,7 @@ describe("collections panel", () => {
         cards: [{ slug: item.slug, receipt }],
       }),
     )
-    expect(html).toContain("Shirt")
+    expect(html).toContain("T-shirt")
     expect(html).toContain("12 USDC")
     expect(html).toContain("Red de pruebas")
     expect(html).toContain("Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.")

@@ -4,6 +4,8 @@ export type SavedPurchase = {
   itemName: string
   amount: string
   createdAt: string
+  /** True only for a product whose payment link opted into a collectible receipt. */
+  collectible?: boolean
 }
 
 const KEY = "sozu.checkout-purchases.v1"
@@ -29,7 +31,8 @@ export function readSavedPurchases(): SavedPurchase[] {
         typeof purchase.merchantName === "string" &&
         typeof purchase.itemName === "string" &&
         typeof purchase.amount === "string" &&
-        typeof purchase.createdAt === "string"
+        typeof purchase.createdAt === "string" &&
+        (purchase.collectible === undefined || typeof purchase.collectible === "boolean")
       )
     })
   } catch {
@@ -43,7 +46,7 @@ export function rememberCheckoutPurchase(purchase: SavedPurchase): void {
   const hash = purchase.hash.trim().toLowerCase()
   if (!/^[a-f0-9]{64}$/.test(hash)) return
   const next = [
-    { ...purchase, hash },
+    { ...purchase, hash, collectible: purchase.collectible === true },
     ...readSavedPurchases().filter((row) => row.hash.toLowerCase() !== hash),
   ].slice(0, MAX_SAVED)
   store.setItem(KEY, JSON.stringify(next))

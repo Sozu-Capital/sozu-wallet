@@ -28,10 +28,10 @@ describe("collectible receipt", () => {
     const line = renderToStaticMarkup(createElement(PurchaseLine, { model: receipt }))
     const card = renderToStaticMarkup(createElement(CollectibleReceipt, { model: receipt }))
 
-    expect(line).toContain("Compra · Shirt")
+    expect(line).toContain("Compra · T-shirt")
     expect(line).toContain("12 USDC")
     expect(line).toContain("Completada")
-    expect(card).toContain("Shirt")
+    expect(card).toContain("T-shirt")
     expect(card).toContain("12 USDC")
     expect(card).toContain("Liquid Society · 18 Nov 2026")
     expect(card).toContain("2026-11-18 22:00 UTC")
@@ -44,7 +44,7 @@ describe("collectible receipt", () => {
   it("uses English when the wallet language is English", () => {
     const receipt = model("en", TRANSFER)
     const card = renderToStaticMarkup(createElement(CollectibleReceipt, { model: receipt }))
-    expect(receipt.line).toBe("Purchase · Shirt")
+    expect(receipt.line).toBe("Purchase · T-shirt")
     expect(card).toContain("Testnet")
     expect(card).toContain("This collectible is a proof of purchase. It is not an investment and does not represent funds.")
     expect(card).toContain("Completed")
