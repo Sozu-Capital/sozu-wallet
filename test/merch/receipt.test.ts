@@ -31,6 +31,7 @@ describe("collectible receipt", () => {
     expect(line).toContain("Compra · T-shirt")
     expect(line).toContain("12 USDC")
     expect(line).toContain("Completada")
+    expect(card).toContain('data-product="shirt"')
     expect(card).toContain("T-shirt")
     expect(card).toContain("12 USDC")
     expect(card).toContain("Liquid Society · 18 Nov 2026")
@@ -48,6 +49,25 @@ describe("collectible receipt", () => {
     expect(card).toContain("Testnet")
     expect(card).toContain("This collectible is a proof of purchase. It is not an investment and does not represent funds.")
     expect(card).toContain("Completed")
+  })
+
+  it("prints the shirt number from a shared edition", () => {
+    const item = getMerchItem(LIQUID_SOCIETY_SLUG)
+    if (!item) throw new Error("missing seed")
+    const receipt = buildCollectibleReceipt({
+      item,
+      language: "en",
+      status: "paid",
+      priceUsdc: "15",
+      paymentHash: PAYMENT,
+      transferHash: null,
+      createdAt: "2026-11-18T22:00:00.000Z",
+      edition: { number: 6, size: 10 },
+    })
+    const card = renderToStaticMarkup(createElement(CollectibleReceipt, { model: receipt }))
+    expect(receipt.line).toBe("Purchase · T-shirt · 6/10")
+    expect(receipt.editionLabel).toBe("6/10")
+    expect(card).toContain('data-edition="6/10"')
   })
 
   it("shows receipt pending when the order is paid and the transfer hash is missing", () => {

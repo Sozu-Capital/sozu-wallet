@@ -7,6 +7,7 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 import { setSessionCookie } from "@/lib/auth/session"
 import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
+import { isNewAccountAllowed } from "@/lib/waitlist/signup-window"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -14,6 +15,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isNewAccountAllowed(request.headers.get("host"))) {
+      return NextResponse.json(
+        { error: "Account creation is closed.", code: "signup_closed" },
+        { status: 403, headers: corsHeaders(request) },
+      )
+    }
+
     const { username, credential, challenge, referralCode, clientPublicKey65b, recoveryEmail: recoveryEmailRaw } =
       await request.json()
     const recoveryEmail = normalizeRecoveryEmail(recoveryEmailRaw)

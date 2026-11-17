@@ -1,14 +1,48 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { createPortal } from "react-dom"
 import { MessageSquare, UserPlus, X } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useWalletLanguage } from "@/lib/wallet-language"
+import {
+  INVITE_GOAL,
+  INVITE_REWARD_USD,
+  INVITE_SHARING_ENABLED,
+  inviteCodeMatchesUsername,
+} from "@/lib/referral/invite-code"
 
-type SheetKind = "dollars" | "feedback" | null
+type SheetKind = "dollars" | "feedback" | "invite" | null
+
+const INVITE_CACHE_KEY = "sozu_invite_code:v1"
+
+function readInviteCache(username: string): string | null {
+  if (!username) return null
+  try {
+    const raw = localStorage.getItem(INVITE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { username?: string; code?: string }
+    if (
+      parsed.username === username &&
+      typeof parsed.code === "string" &&
+      inviteCodeMatchesUsername(parsed.code, username)
+    ) {
+      return parsed.code
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function writeInviteCache(username: string, code: string) {
+  try {
+    localStorage.setItem(INVITE_CACHE_KEY, JSON.stringify({ username, code }))
+  } catch {
+    // Private browsing can reject storage writes.
+  }
+}
 
 const tileClass = cn(
   "border border-white/15 bg-white/[0.08] text-left text-white",
@@ -20,35 +54,46 @@ function blockShellSwipe(event: React.SyntheticEvent) {
   event.stopPropagation()
 }
 
-async function shareOrCopy(text: string): Promise<"shared" | "copied" | "failed"> {
-  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-    try {
-      await navigator.share({ text })
-      return "shared"
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return "failed"
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(text)
-    return "copied"
-  } catch {
-    return "failed"
-  }
-}
-
 export function HomeDiscoverGrid({ className }: { className?: string }) {
   const { t } = useWalletLanguage()
   const [sheet, setSheet] = useState<SheetKind>(null)
   const [note, setNote] = useState("")
   const [sending, setSending] = useState(false)
+  const [inviteCode, setInviteCode] = useState("")
+  const [confirmedInvites, setConfirmedInvites] = useState(0)
+  const [inviteGoal, setInviteGoal] = useState(INVITE_GOAL)
 
-  const invite = async () => {
-    const link = typeof window !== "undefined" ? window.location.origin : "https://app.sozu.capital"
-    const result = await shareOrCopy(`${t.homeInviteShare} ${link}`)
-    if (result === "copied") toast(t.homeLinkCopied)
-    else if (result === "shared") toast(t.homeInviteReady)
-  }
+  useEffect(() => {
+    let cancelled = false
+    const username = localStorage.getItem("sozu_username")?.trim() ?? ""
+    const cached = readInviteCache(username)
+    if (cached) setInviteCode(cached)
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/wallet/referral/invite")
+        if (!response.ok) return
+        const data = (await response.json()) as {
+          code?: string
+          username?: string
+          confirmedInvites?: number
+          goal?: number
+        }
+        if (cancelled || typeof data.code !== "string") return
+        setInviteCode(data.code)
+        if (typeof data.confirmedInvites === "number") setConfirmedInvites(data.confirmedInvites)
+        if (typeof data.goal === "number" && data.goal > 0) setInviteGoal(data.goal)
+        const owner = typeof data.username === "string" && data.username.trim() ? data.username.trim() : username
+        if (owner) writeInviteCache(owner, data.code)
+      } catch {
+        // The cached code still shows if the request fails.
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const sendFeedback = async () => {
     const text = note.trim()
@@ -97,17 +142,18 @@ export function HomeDiscoverGrid({ className }: { className?: string }) {
           <p className="mt-1 text-lg font-medium leading-none tracking-tight">{t.homeDollarsTitle}</p>
         </button>
 
-        <Link
-          href="/stores"
-          className={cn(tileClass, "col-span-2 flex min-h-[3.25rem] flex-col justify-center rounded-2xl px-4 py-2.5")}
+        <button
+          type="button"
+          disabled
+          className="col-span-2 flex min-h-[3.25rem] cursor-not-allowed flex-col justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-left text-white/35"
         >
           <span className="text-[14px] font-medium leading-tight">{t.homePayStoreTitle}</span>
-          <span className="mt-0.5 text-[11px] leading-snug text-white/50">{t.homePayStoreBody}</span>
-        </Link>
+          <span className="mt-0.5 text-[11px] leading-snug text-white/40">{t.homePayStoreBody}</span>
+        </button>
 
         <button
           type="button"
-          onClick={() => void invite()}
+          onClick={() => setSheet("invite")}
           className={cn(tileClass, "flex min-h-[4.25rem] flex-col justify-between rounded-2xl p-3")}
         >
           <UserPlus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
@@ -136,6 +182,47 @@ export function HomeDiscoverGrid({ className }: { className?: string }) {
         onClose={() => setSheet(null)}
       >
         <p className="text-[15px] leading-relaxed text-white/75">{t.homeDollarsBody}</p>
+      </DiscoverSheet>
+
+      <DiscoverSheet
+        open={sheet === "invite"}
+        title={t.homeInviteEyebrow}
+        onClose={() => setSheet(null)}
+      >
+        <p className="text-[15px] leading-relaxed text-white/75">{t.homeInviteRewardBody}</p>
+        <div className="mt-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[13px] text-white/70">
+              {t.homeInviteProgress
+                .replace("{count}", String(confirmedInvites))
+                .replace("{goal}", String(inviteGoal))}
+            </p>
+            <p className="text-[13px] font-medium text-white">${INVITE_REWARD_USD}</p>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-white"
+              style={{ width: `${Math.min(100, Math.round((confirmedInvites / inviteGoal) * 100))}%` }}
+            />
+          </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/40">
+            {t.homeInviteCodeLabel}
+          </p>
+          <p className={cn("mt-1 font-mono text-lg tracking-wide text-white", !inviteCode && "animate-pulse text-white/30")}>
+            {inviteCode || "····-····"}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!INVITE_SHARING_ENABLED}
+          aria-disabled={!INVITE_SHARING_ENABLED}
+          className="mt-4 w-full cursor-not-allowed rounded-full border border-white/10 bg-white/[0.06] py-3 text-[13px] font-semibold text-white/35"
+        >
+          {t.homeInviteShareCode}
+        </button>
+        <p className="mt-2 text-center text-[12px] leading-snug text-white/45">{t.homeInviteSoon}</p>
       </DiscoverSheet>
 
       <DiscoverSheet

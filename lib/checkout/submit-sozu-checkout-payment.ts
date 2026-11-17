@@ -3,6 +3,7 @@ import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { getSenderDisplayLabel } from "@/lib/payment/payment-receipt";
 import { getStellarConfig } from "@/lib/turnkey/config";
 import { checkoutBuildSigner } from "@/lib/checkout/checkout-build-signer";
+import { resolveCollectibleSale } from "@/lib/merch/collectible-sale";
 
 const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital";
 
@@ -23,6 +24,8 @@ export async function submitSozuCheckoutPayment({
   itemName,
   organizationId,
   collectibleReceipt = false,
+  editionNumber,
+  editionSize,
 }: {
   sessionId: string;
   walletAddress: string;
@@ -32,6 +35,8 @@ export async function submitSozuCheckoutPayment({
   itemName?: string | null;
   organizationId?: string | null;
   collectibleReceipt?: boolean;
+  editionNumber?: number | null;
+  editionSize?: number | null;
 }): Promise<CheckoutPaymentResult> {
   try {
     const userId = getUserId();
@@ -252,13 +257,23 @@ export async function submitSozuCheckoutPayment({
     };
 
     const { rememberCheckoutPurchase } = await import("@/lib/checkout/saved-purchases");
+    const sale = resolveCollectibleSale({
+      collectibleReceipt,
+      itemName,
+      editionNumber,
+      editionSize,
+    });
     rememberCheckoutPurchase({
       hash: result.transactionHash,
       merchantName,
-      itemName: itemName?.trim() || merchantName,
+      itemName: sale.itemName || merchantName,
       amount: amountUsd,
       createdAt: new Date().toISOString(),
-      collectible: collectibleReceipt,
+      collectible: sale.collectible,
+      toAddress: actualDestination,
+      ...(sale.editionNumber && sale.editionSize
+        ? { editionNumber: sale.editionNumber, editionSize: sale.editionSize }
+        : {}),
     });
 
     return {

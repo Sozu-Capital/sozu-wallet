@@ -1,9 +1,12 @@
 import { merchCopy, type MerchLanguage } from "@/lib/merch/copy"
+import { editionMark } from "@/lib/merch/edition-label"
 import type { MerchOrderStatus } from "@/lib/merch/order"
 
 export type CollectibleReceiptModel = {
   line: string
   itemName: string
+  /** Shirt number in the shared run, for example "6/10". Absent for an open collectible. */
+  editionLabel?: string | null
   price: string
   currency: "USDC"
   statusLabel: string
@@ -41,8 +44,10 @@ export function buildCollectibleReceipt(input: {
   paymentHash: string | null
   transferHash: string | null
   createdAt?: string | null
+  edition?: { number: number; size: number } | null
 }): CollectibleReceiptModel {
   const copy = merchCopy(input.language)
+  const editionLabel = editionMark(input.edition?.number, input.edition?.size)
   const paidWithoutTransfer = input.status === "paid" && !input.transferHash
   const statusLabel =
     input.status === "completed"
@@ -54,8 +59,9 @@ export function buildCollectibleReceipt(input: {
           : copy.statusPending
 
   return {
-    line: copy.purchase(input.item.name),
+    line: editionLabel ? `${copy.purchase(input.item.name)} · ${editionLabel}` : copy.purchase(input.item.name),
     itemName: input.item.name,
+    editionLabel,
     price: input.priceUsdc,
     currency: "USDC",
     statusLabel,

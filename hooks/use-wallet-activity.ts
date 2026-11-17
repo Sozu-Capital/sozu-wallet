@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { readSavedPurchases, type SavedPurchase } from "@/lib/checkout/saved-purchases"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
 import type { Transaction } from "@/hooks/use-wallet-data"
+import { historyCounterpartyLabel } from "@/lib/wallet/account-tx-history"
 
 export type WalletActivityKind = "chain" | "gmail" | "manual"
 
@@ -56,7 +57,8 @@ function chainItemsFromTransactions(
 
     const other = isSent ? to : from
     const tag = addressToTagMap[other] ?? addressToTagMap[paymentOp.from] ?? addressToTagMap[paymentOp.to]
-    const counterparty = tag ? `$${tag.replace(/^\$+/, "")}` : `${other.slice(0, 6)}…${other.slice(-4)}`
+    const counterparty =
+      historyCounterpartyLabel(other, tag) ?? `${other.slice(0, 6)}…${other.slice(-4)}`
     const purchase = savedByHash.get(tx.hash?.toLowerCase() ?? "") ?? savedByHash.get(tx.id?.toLowerCase() ?? "")
     const purchaseLabel = purchase
       ? [purchase.merchantName, purchase.itemName].filter(Boolean).join(" · ")

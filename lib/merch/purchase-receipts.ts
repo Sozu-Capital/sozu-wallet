@@ -1,5 +1,6 @@
 import type { MerchLanguage } from "@/lib/merch/copy"
 import type { SavedPurchase } from "@/lib/checkout/saved-purchases"
+import { isCollectiblePurchase, resolveCollectibleSale } from "@/lib/merch/collectible-sale"
 import { buildCollectibleReceipt, type CollectibleReceiptModel } from "@/lib/merch/receipt"
 
 export type PurchaseTransfer = {
@@ -57,20 +58,29 @@ export function purchasePlaceholderReceipts(input: {
     seen.add(hash)
 
     const saved = savedByHash.get(hash)
-    if (!saved?.collectible) continue
-    const itemName = saved?.itemName.trim() || placeholderName(input.language)
-    const merchant = saved?.merchantName.trim() || shortAddress(transfer.to)
-    const price = saved?.amount.trim() || transfer.amount.toFixed(2)
+    if (!saved || !isCollectiblePurchase(saved)) continue
+    const sale = resolveCollectibleSale({
+      collectibleReceipt: saved.collectible,
+      itemName: saved.itemName,
+      editionNumber: saved.editionNumber,
+      editionSize: saved.editionSize,
+    })
+    const merchant = saved.merchantName.trim() || shortAddress(transfer.to)
+    const price = saved.amount.trim() || transfer.amount.toFixed(2)
     cards.push({
       slug: `purchase-${hash.slice(0, 12)}`,
       receipt: buildCollectibleReceipt({
-        item: { name: itemName, drop: merchant, network: input.network },
+        item: { name: sale.itemName || placeholderName(input.language), drop: merchant, network: input.network },
         language: input.language,
         status: "paid",
         priceUsdc: price,
         paymentHash: hash,
         transferHash: null,
-        createdAt: saved?.createdAt ?? transfer.createdAt,
+        createdAt: saved.createdAt ?? transfer.createdAt,
+        edition:
+          sale.editionNumber && sale.editionSize
+            ? { number: sale.editionNumber, size: sale.editionSize }
+            : null,
       }),
     })
   }

@@ -1,3 +1,4 @@
+import { CollectibleProduct } from "@/components/merch/collectible-product"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 
 export function PurchaseLine({
@@ -20,8 +21,10 @@ export function PurchaseLine({
 
 export function CollectibleReceipt({ model }: { model: CollectibleReceiptModel }) {
   return (
-    <article className="relative z-10 rounded-lg border border-white/15 bg-black p-4 text-white">
-      <h2>{model.itemName}</h2>
+    <article className="relative z-10 space-y-1 rounded-lg border border-white/15 bg-black p-4 text-center text-white">
+      <CollectibleProduct name={model.itemName} />
+      <h2 className="mt-1 text-xl font-semibold tracking-tight">{model.itemName}</h2>
+      {model.editionLabel ? <p data-edition={model.editionLabel}>{model.editionLabel}</p> : null}
       <p>
         {model.price} {model.currency}
       </p>

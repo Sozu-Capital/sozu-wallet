@@ -16,6 +16,9 @@ export type CheckoutSession = {
   organizationId?: string | null;
   /** Product link with the merchant's collectible receipt toggle on. Drinks are never set. */
   collectibleReceipt?: boolean;
+  /** Shirt number claimed for this sale. Set together with editionSize. */
+  editionNumber?: number | null;
+  editionSize?: number | null;
 };
 
 export type CheckoutPublicResponse = CheckoutSession;

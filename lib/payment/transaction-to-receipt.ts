@@ -1,5 +1,6 @@
 import type { Transaction } from "@/hooks/use-wallet-data"
 import { formatAddress } from "@/lib/wallet-utils"
+import { historyCounterpartyLabel } from "@/lib/wallet/account-tx-history"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
 import { getSenderDisplayLabel } from "@/lib/payment/payment-receipt"
 
@@ -23,9 +24,8 @@ export function transactionToPaymentReceipt(
     addressToTagMap[otherAddress] ??
     addressToTagMap[paymentOp.from] ??
     addressToTagMap[paymentOp.to]
-  const otherLabel = tag
-    ? `$${tag.replace(/^\$+/, "")}`
-    : formatAddress(otherAddress, 6, 6)
+  const otherLabel =
+    historyCounterpartyLabel(otherAddress, tag) ?? formatAddress(otherAddress, 6, 6)
   const selfLabel = getSenderDisplayLabel()
 
   return {

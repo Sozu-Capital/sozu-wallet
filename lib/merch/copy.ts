@@ -27,6 +27,10 @@ export type MerchCopy = {
   offered: string
   souvenirs: string
   openSouvenirs: string
+  claimSouvenir: string
+  claimWithWallet: string
+  claimFailed: string
+  emptySouvenirs: string
 }
 
 const es: MerchCopy = {
@@ -56,6 +60,10 @@ const es: MerchCopy = {
   offered: "En el evento",
   souvenirs: "Souvenirs coleccionables",
   openSouvenirs: "Ver souvenirs coleccionables",
+  claimSouvenir: "Reclamar",
+  claimWithWallet: "Firma con tu billetera",
+  claimFailed: "No se pudo reclamar el souvenir.",
+  emptySouvenirs: "Todavía no reclamaste ni compraste un souvenir.",
 }
 
 const en: MerchCopy = {
@@ -85,6 +93,10 @@ const en: MerchCopy = {
   offered: "At the event",
   souvenirs: "Collectible souvenirs",
   openSouvenirs: "View collectible souvenirs",
+  claimSouvenir: "Claim",
+  claimWithWallet: "Sign with your wallet",
+  claimFailed: "The souvenir could not be claimed.",
+  emptySouvenirs: "You have not claimed or bought a souvenir yet.",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {

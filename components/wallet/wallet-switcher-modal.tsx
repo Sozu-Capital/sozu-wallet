@@ -5,10 +5,15 @@ import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Check, ChevronLeft, ChevronRight, Copy, LogOut, Plus, X } from "lucide-react"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
-import { SouvenirList } from "@/components/merch/souvenir-list"
+import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
+import { BadgePopup, SouvenirPopup } from "@/components/merch/souvenir-popup"
+import { SouvenirList, type SouvenirListItem } from "@/components/merch/souvenir-list"
 import { SozuShaderAvatar } from "@/components/ui/sozu-shader-avatar"
+import { readSavedPurchases, type SavedPurchase } from "@/lib/checkout/saved-purchases"
 import { listCollectibleSouvenirs } from "@/lib/merch/catalog"
+import { claimEventSouvenir } from "@/lib/merch/claim-souvenir"
 import { merchCopy } from "@/lib/merch/copy"
+import { profileSouvenirs, readClaimedSouvenirs, type ClaimedSouvenir, type HeldSouvenir } from "@/lib/merch/souvenirs"
 import { useWalletLanguage } from "@/lib/wallet-language"
 
 interface WalletSwitcherModalProps {
@@ -48,9 +53,37 @@ export function WalletSwitcherModal({
   const [signingOut, setSigningOut] = useState(false)
   const [showProHint, setShowProHint] = useState(false)
   const [view, setView] = useState<"wallets" | "souvenirs">("wallets")
+  const [purchases, setPurchases] = useState<SavedPurchase[]>([])
+  const [claims, setClaims] = useState<ClaimedSouvenir[]>([])
+  const [openSouvenir, setOpenSouvenir] = useState<HeldSouvenir | null>(null)
+  const [claimingId, setClaimingId] = useState<string | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
   const { language } = useWalletLanguage()
   const copy = merchCopy(language === "en" ? "en" : "es")
-  const souvenirs = listCollectibleSouvenirs()
+  const lang = language === "en" ? "en" : "es"
+  const { held, claimable } = profileSouvenirs({
+    purchases,
+    claims,
+    catalog: listCollectibleSouvenirs(),
+    language: lang,
+    network: walletNetwork,
+  })
+  const souvenirItems: SouvenirListItem[] = [
+    ...held.map((item) =>
+      item.kind === "receipt"
+        ? { id: item.id, kind: "receipt" as const, name: item.name, drop: item.drop }
+        : { id: item.id, kind: "badge" as const, name: item.name, drop: item.drop, imagePath: item.imagePath },
+    ),
+    ...claimable.map((item) => ({
+      id: `claim:${item.slug}`,
+      kind: "claim" as const,
+      name: item.name,
+      drop: item.drop,
+      imagePath: item.imagePath,
+      claimLabel: copy.claimSouvenir,
+      signingLabel: copy.claimWithWallet,
+    })),
+  ]
 
   const handleAddWallet = useCallback(() => {
     setShowProHint(true)
@@ -96,8 +129,38 @@ export function WalletSwitcherModal({
   }, [])
 
   useEffect(() => {
-    if (!isOpen) setView("wallets")
-  }, [isOpen])
+    if (!isOpen) {
+      setView("wallets")
+      setOpenSouvenir(null)
+      setClaimError(null)
+      return
+    }
+    setPurchases(readSavedPurchases())
+    setClaims(readClaimedSouvenirs(walletAddress))
+  }, [isOpen, walletAddress])
+
+  const handleSouvenirSelect = useCallback(
+    async (id: string) => {
+      const heldItem = held.find((item) => item.id === id)
+      if (heldItem) {
+        setOpenSouvenir(heldItem)
+        return
+      }
+      const claim = claimable.find((item) => `claim:${item.slug}` === id)
+      if (!claim || !walletAddress || claimingId) return
+      setClaimingId(id)
+      setClaimError(null)
+      try {
+        const saved = await claimEventSouvenir({ slug: claim.slug, walletAddress })
+        if (saved) setClaims(readClaimedSouvenirs(walletAddress))
+      } catch {
+        setClaimError(copy.claimFailed)
+      } finally {
+        setClaimingId(null)
+      }
+    },
+    [claimable, claimingId, copy.claimFailed, held, walletAddress],
+  )
 
   if (!portalEl) return null
 
@@ -169,7 +232,16 @@ export function WalletSwitcherModal({
             {/* Cards */}
             <div className="flex flex-1 flex-col gap-3 px-4 overflow-hidden">
               {view === "souvenirs" ? (
-                <SouvenirList label={copy.souvenirs} items={souvenirs} />
+                <>
+                  {claimError ? <p className="px-1 text-sm text-red-300">{claimError}</p> : null}
+                  <SouvenirList
+                    label={copy.souvenirs}
+                    items={souvenirItems}
+                    emptyLabel={copy.emptySouvenirs}
+                    onSelect={(id) => void handleSouvenirSelect(id)}
+                    claimingId={claimingId}
+                  />
+                </>
               ) : (
               <>
               {/* Active wallet card */}
@@ -306,6 +378,21 @@ export function WalletSwitcherModal({
             </div>
           </motion.div>
         </>
+      ) : null}
+      {openSouvenir?.kind === "badge" ? (
+        <BadgePopup
+          name={openSouvenir.name}
+          drop={openSouvenir.drop}
+          imagePath={openSouvenir.imagePath}
+          onClose={() => setOpenSouvenir(null)}
+        />
+      ) : null}
+      {openSouvenir?.kind === "receipt" ? (
+        <SouvenirPopup label={openSouvenir.name} onClose={() => setOpenSouvenir(null)}>
+          <div data-souvenir-popup="receipt">
+            <CollectibleReceipt model={openSouvenir.receipt} />
+          </div>
+        </SouvenirPopup>
       ) : null}
     </AnimatePresence>,
     portalEl,

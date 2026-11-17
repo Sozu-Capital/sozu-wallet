@@ -27,7 +27,6 @@ export const PILOT_BLOCKED_PREFIXES: readonly string[] = [
   "/api/wallet/debug-profile",
   "/api/wallet/stellar/test",
   "/test-keys",
-  "/dev",
   "/public-memory-analysis",
   "/connect-demo",
   // Credit.

@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Activity, ArrowUp, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
 import { TransactionHistorySkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { getStellarExpertTxUrl } from "@/lib/wallet-utils"
+import { isOnChainTxHash } from "@/lib/wallet/account-tx-history"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import type { WalletActivityItem, WalletActivityKind } from "@/hooks/use-wallet-activity"
 import { cn } from "@/lib/utils"
@@ -117,7 +118,8 @@ export const WalletActivityList = memo(function WalletActivityList({
               const tag = KIND_TAG[item.kind]
               const canOpen = Boolean(onSelectChainTx && (item.chainTx || item.purchase))
               const hash = item.chainTx?.hash
-              const explorerUrl = hash ? getStellarExpertTxUrl(hash, walletNetwork) : null
+              const explorerUrl =
+                hash && isOnChainTxHash(hash) ? getStellarExpertTxUrl(hash, walletNetwork) : null
 
               return (
                 <li key={item.id} className="list-none">

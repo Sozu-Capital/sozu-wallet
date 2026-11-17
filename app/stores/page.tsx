@@ -13,6 +13,11 @@ export default function StoresSearchPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q") ?? ""
+    if (q) setQuery(q)
+  }, [])
+
+  useEffect(() => {
     const q = query.trim()
     if (q.length < 2) {
       setStores([])
