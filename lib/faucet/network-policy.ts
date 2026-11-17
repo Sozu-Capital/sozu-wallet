@@ -61,7 +61,7 @@ export function isFaucetContractConfigured(
 }
 
 export function usdcToMinorUnits(amount: number): bigint {
-  if (!Number.isFinite(amount)) return 0n
+  if (!Number.isFinite(amount)) return BigInt(0)
   return BigInt(Math.round(amount * USDC_MINOR))
 }
 
