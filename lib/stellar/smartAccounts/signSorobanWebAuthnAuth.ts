@@ -16,6 +16,8 @@ import {
   buildOzAuthPayloadScVal,
   defaultContextRuleIdsForEntry,
   ozWebAuthnChallengeFromEntry,
+  readAddressCredentials,
+  replaceAddressCredentials,
 } from "@/lib/stellar/smartAccounts/ozAuthPayload"
 
 /** Send flow — fail fast so UI does not sit on "Waiting for passkey" for a full minute. */
@@ -191,24 +193,6 @@ function sortSignerMapEntries(sigMap: xdr.ScMapEntry[]): void {
     const aKeyXdr = xdrField<{ toXDR: (encoding: string) => string }>(a, "key").toXDR("hex")
     const bKeyXdr = xdrField<{ toXDR: (encoding: string) => string }>(b, "key").toXDR("hex")
     return aKeyXdr.localeCompare(bKeyXdr)
-  })
-}
-
-function addressCredentialsOf(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
-  const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
-  if (xdrType(credentials) !== "sorobanCredentialsAddress") {
-    throw new Error("Soroban auth entry is not address credentials")
-  }
-  return xdrField(credentials, "address")
-}
-
-function entryWithAddressCredentials(
-  entry: xdr.SorobanAuthorizationEntry,
-  next: xdr.SorobanAddressCredentials,
-): xdr.SorobanAuthorizationEntry {
-  return new xdr.SorobanAuthorizationEntry({
-    credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(next),
-    rootInvocation: xdrField(entry, "rootInvocation"),
   })
 }
 
@@ -477,7 +461,7 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
   const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
-  const preparedCredentials = addressCredentialsOf(normalizedEntry)
+  const preparedCredentials = readAddressCredentials(normalizedEntry)
 
   // Use the server-prepared expiration directly when it looks valid (> 0).
   // Only hit `getLatestLedger` if it's missing or zero — skipping the RPC call
@@ -491,7 +475,7 @@ export async function signAuthEntryWithResolvedKeyData(params: {
         : undefined
   // A prepare from a few ledgers ago fails __check_auth once Touch ID returns.
   const expiration = await resolveSignatureExpirationLedger(preferred, preparedCredentials)
-  const entryForChallenge = entryWithAddressCredentials(
+  const entryForChallenge = replaceAddressCredentials(
     normalizedEntry,
     credentialsWithExpiration(preparedCredentials, expiration),
   )
@@ -556,15 +540,15 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   })
 
   const signedCredentials = credentialsWithSignature(
-    addressCredentialsOf(entryForChallenge),
+    readAddressCredentials(entryForChallenge),
     nextOzAuthPayloadSignature(
-      xdrField(addressCredentialsOf(entryForChallenge), "signature"),
+      xdrField(readAddressCredentials(entryForChallenge), "signature"),
       scMapEntry,
       contextRuleIds,
     ),
   )
 
-  return entryWithAddressCredentials(entryForChallenge, signedCredentials)
+  return replaceAddressCredentials(entryForChallenge, signedCredentials)
 }
 
 /**
@@ -581,9 +565,9 @@ export async function signAuthEntryWithStoredPasskey(params: {
   expiration?: number
 }): Promise<xdr.SorobanAuthorizationEntry> {
   const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
-  const preparedCredentials = addressCredentialsOf(normalizedEntry)
+  const preparedCredentials = readAddressCredentials(normalizedEntry)
   const expiration = await resolveSignatureExpirationLedger(params.expiration, preparedCredentials)
-  const entryForChallenge = entryWithAddressCredentials(
+  const entryForChallenge = replaceAddressCredentials(
     normalizedEntry,
     credentialsWithExpiration(preparedCredentials, expiration),
   )
@@ -644,17 +628,17 @@ export async function signAuthEntryWithStoredPasskey(params: {
   if (process.env.NODE_ENV === "development") {
     console.log("[signSorobanWebAuthnAuth] applying AuthPayload", {
       contextRuleIds,
-      priorSigType: xdrType(xdrField(addressCredentialsOf(entryForChallenge), "signature")),
+      priorSigType: xdrType(xdrField(readAddressCredentials(entryForChallenge), "signature")),
     })
   }
   const signedCredentials = credentialsWithSignature(
-    addressCredentialsOf(entryForChallenge),
+    readAddressCredentials(entryForChallenge),
     nextOzAuthPayloadSignature(
-      xdrField(addressCredentialsOf(entryForChallenge), "signature"),
+      xdrField(readAddressCredentials(entryForChallenge), "signature"),
       scMapEntry,
       contextRuleIds,
     ),
   )
 
-  return entryWithAddressCredentials(entryForChallenge, signedCredentials)
+  return replaceAddressCredentials(entryForChallenge, signedCredentials)
 }
