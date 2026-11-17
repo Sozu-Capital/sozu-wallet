@@ -4,8 +4,7 @@ import { useEffect, useState } from "react"
 import { CollectionsPanelView, type CollectionCard } from "@/components/merch/collections-panel-view"
 import { useWalletDataContext } from "@/components/wallet/wallet-data-provider"
 import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
-import { CITY_SPOTS, projectCityDots } from "@/lib/city/spots"
-import { getMerchItem, listActivations, listMerchItems, merchItemPath, UNRECORDED_PRICE_USDC } from "@/lib/merch/catalog"
+import { getMerchItem, listActivations, listMerchItems, merchOfferHref, UNRECORDED_PRICE_USDC } from "@/lib/merch/catalog"
 import { receiptsForHoldings, type HeldOrder } from "@/lib/merch/collections"
 import { merchCopy } from "@/lib/merch/copy"
 import { purchasePlaceholderReceipts, type PurchaseTransfer } from "@/lib/merch/purchase-receipts"
@@ -123,7 +122,7 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
       const item = getMerchItem(slug)
       if (!item) return []
       return [{
-        href: merchItemPath(item.slug),
+        href: merchOfferHref(item),
         name: item.name,
         drop: item.drop,
         imageUrl: item.imagePath,
@@ -139,12 +138,10 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
     <CollectionsPanelView
       title={copy.collections}
       nearLabel={copy.findNear}
-      cityLabel={copy.findCity}
       activations={activations}
       openLabel={copy.findOpen}
       backLabel={copy.back}
       itemsLabel={copy.offered}
-      cityDots={projectCityDots(CITY_SPOTS)}
       previousLabel={copy.previousReceipt}
       nextLabel={copy.nextReceipt}
       cards={cards}

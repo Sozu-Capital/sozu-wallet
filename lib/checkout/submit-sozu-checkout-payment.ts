@@ -26,6 +26,7 @@ export async function submitSozuCheckoutPayment({
   collectibleReceipt = false,
   editionNumber,
   editionSize,
+  productImageUrl,
 }: {
   sessionId: string;
   walletAddress: string;
@@ -37,6 +38,7 @@ export async function submitSozuCheckoutPayment({
   collectibleReceipt?: boolean;
   editionNumber?: number | null;
   editionSize?: number | null;
+  productImageUrl?: string | null;
 }): Promise<CheckoutPaymentResult> {
   try {
     const userId = getUserId();
@@ -274,6 +276,7 @@ export async function submitSozuCheckoutPayment({
       ...(sale.editionNumber && sale.editionSize
         ? { editionNumber: sale.editionNumber, editionSize: sale.editionSize }
         : {}),
+      ...(productImageUrl ? { imageUrl: productImageUrl } : {}),
     });
 
     return {

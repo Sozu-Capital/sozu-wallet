@@ -97,6 +97,7 @@ function collectibleFromPurchase(
         sale.editionNumber && sale.editionSize
           ? { number: sale.editionNumber, size: sale.editionSize }
           : null,
+      imageUrl: purchase.imageUrl,
     }),
   }
 }

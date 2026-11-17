@@ -19,6 +19,8 @@ export type CheckoutSession = {
   /** Shirt number claimed for this sale. Set together with editionSize. */
   editionNumber?: number | null;
   editionSize?: number | null;
+  /** Photo the merchant attached to this payment link. */
+  productImageUrl?: string | null;
 };
 
 export type CheckoutPublicResponse = CheckoutSession;

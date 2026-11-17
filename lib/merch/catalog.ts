@@ -9,6 +9,8 @@
 
 export const LIQUID_SOCIETY_SLUG = "liquid-society"
 export const FIVE_PANEL_SLUG = "five-panel"
+/** Final checkout for the Liquid Society shirt. */
+export const LIQUID_SOCIETY_TEE_URL = "https://pay.sozu.capital/pay/qr/unblck/defi-your-mind-tee"
 export const LIQUID_SOCIETY_DROP = "Liquid Society · 18 Nov 2026"
 export const LIQUID_SOCIETY_ACTIVATION_SLUG = "liquid-society-event"
 export const LIQUID_SOCIETY_SOUVENIR_SLUG = "liquid-society-souvenir"
@@ -35,6 +37,8 @@ export type MerchItemRecord = {
   contractId: string | null
   /** Account that holds unsold units. Its balance is remaining supply. */
   distributorAddress: string | null
+  /** Public product page. Absent items stay on the in-app hang-tag path. */
+  productUrl?: string | null
 }
 
 const SHIRT: MerchItemRecord = {
@@ -47,6 +51,7 @@ const SHIRT: MerchItemRecord = {
   network: "testnet",
   contractId: null,
   distributorAddress: null,
+  productUrl: LIQUID_SOCIETY_TEE_URL,
 }
 
 const FIVE_PANEL: MerchItemRecord = {
@@ -118,4 +123,10 @@ export function getMerchItem(slug: string): MerchItemRecord | null {
 /** One path for the hang tag. NFC and QR both use it. */
 export function merchItemPath(slug: string): string {
   return `/item/${encodeURIComponent(slug.trim().toLowerCase())}`
+}
+
+/** Where the collectibles page opens an offered item. */
+export function merchOfferHref(item: Pick<MerchItemRecord, "slug" | "productUrl">): string {
+  const url = item.productUrl?.trim()
+  return url ? url : merchItemPath(item.slug)
 }

@@ -14,6 +14,7 @@ export type MerchCopy = {
   statusPending: string
   statusFailed: string
   disclaimer: string
+  share: string
   paymentLink: string
   transferLink: string
   collections: string
@@ -21,7 +22,6 @@ export type MerchCopy = {
   previousReceipt: string
   nextReceipt: string
   findNear: string
-  findCity: string
   findOpen: string
   back: string
   offered: string
@@ -47,6 +47,7 @@ const es: MerchCopy = {
   statusPending: "Pendiente",
   statusFailed: "Fallida",
   disclaimer: "Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.",
+  share: "Compartir",
   paymentLink: "Pago",
   transferLink: "Coleccionable",
   collections: "Colecciones",
@@ -54,7 +55,6 @@ const es: MerchCopy = {
   previousReceipt: "Anterior",
   nextReceipt: "Siguiente",
   findNear: "Cerca de ti",
-  findCity: "En la ciudad",
   findOpen: "Ver",
   back: "Volver",
   offered: "En el evento",
@@ -80,6 +80,7 @@ const en: MerchCopy = {
   statusPending: "Pending",
   statusFailed: "Failed",
   disclaimer: "This collectible is a proof of purchase. It is not an investment and does not represent funds.",
+  share: "Share",
   paymentLink: "Payment",
   transferLink: "Collectible",
   collections: "Collections",
@@ -87,7 +88,6 @@ const en: MerchCopy = {
   previousReceipt: "Previous",
   nextReceipt: "Next",
   findNear: "Near you",
-  findCity: "In the city",
   findOpen: "View",
   back: "Back",
   offered: "At the event",

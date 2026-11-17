@@ -129,6 +129,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       collectibleReceipt: sale.collectible,
       editionNumber: sale.editionNumber,
       editionSize: sale.editionSize,
+      productImageUrl: session.productImageUrl,
     });
 
     if (result.success) {
@@ -167,6 +168,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
           paymentHash: transactionHash,
           transferHash: null,
           createdAt: receipt.completedAt,
+          imageUrl: session.productImageUrl,
         })
       : null;
 
