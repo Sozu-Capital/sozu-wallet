@@ -1,13 +1,54 @@
-import { hash, xdr } from "@stellar/stellar-sdk"
+import { buildAuthorizationEntryPreimage, hash, xdr } from "@stellar/stellar-sdk"
 import base64url from "base64url"
 import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
-function addressCredentials(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
+/**
+ * CAP-71: RPC simulation now returns ADDRESS_V2 (the address is inside the
+ * signed preimage). ADDRESS is the pre-CAP-71 arm. Both carry SorobanAddressCredentials.
+ */
+export function readAddressCredentials(entry: xdr.SorobanAuthorizationEntry): xdr.SorobanAddressCredentials {
   const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
-  if (xdrType(credentials) !== "sorobanCredentialsAddress") {
-    throw new Error("Soroban auth entry is not address credentials")
+  const type = xdrType(credentials)
+  if (type === "sorobanCredentialsAddress") {
+    return xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
   }
-  return xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
+  if (type === "sorobanCredentialsAddressV2") {
+    return xdrField<xdr.SorobanAddressCredentials>(credentials, "addressV2")
+  }
+  if (type === "sorobanCredentialsAddressWithDelegates") {
+    const wrapped = xdrField<object>(credentials, "addressWithDelegates")
+    return xdrField<xdr.SorobanAddressCredentials>(wrapped, "addressCredentials")
+  }
+  throw new Error(`Soroban auth entry is not address credentials (${type ?? "unknown"})`)
+}
+
+/** Write updated address credentials back without dropping the CAP-71 arm. */
+export function replaceAddressCredentials(
+  entry: xdr.SorobanAuthorizationEntry,
+  next: xdr.SorobanAddressCredentials,
+): xdr.SorobanAuthorizationEntry {
+  const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
+  const type = xdrType(credentials)
+  let nextCredentials: xdr.SorobanCredentials
+  if (type === "sorobanCredentialsAddress") {
+    nextCredentials = xdr.SorobanCredentials.sorobanCredentialsAddress(next)
+  } else if (type === "sorobanCredentialsAddressV2") {
+    nextCredentials = xdr.SorobanCredentials.sorobanCredentialsAddressV2(next)
+  } else if (type === "sorobanCredentialsAddressWithDelegates") {
+    const wrapped = xdrField<object>(credentials, "addressWithDelegates")
+    nextCredentials = xdr.SorobanCredentials.sorobanCredentialsAddressWithDelegates(
+      new xdr.SorobanAddressCredentialsWithDelegates({
+        addressCredentials: next,
+        delegates: xdrField<xdr.SorobanDelegateSignature[]>(wrapped, "delegates"),
+      }),
+    )
+  } else {
+    throw new Error(`Soroban auth entry is not address credentials (${type ?? "unknown"})`)
+  }
+  return new xdr.SorobanAuthorizationEntry({
+    credentials: nextCredentials,
+    rootInvocation: xdrField(entry, "rootInvocation"),
+  })
 }
 
 /** XDR-encode Vec<u32> the same way Soroban `ToXdr` does for context_rule_ids. */
@@ -29,21 +70,18 @@ export function computeOzAuthDigest(
 
 /**
  * Soroban host signature_payload for a SorobanAuthorizationEntry (32-byte hash).
- * This SDK's address credentials use the single Soroban authorization preimage.
+ * ADDRESS_V2 binds the signer address into the preimage (CAP-71). ADDRESS does not.
  */
 export function sorobanSignaturePayloadFromEntry(params: {
   networkPassphrase: string
   entry: xdr.SorobanAuthorizationEntry
 }): Buffer {
-  const addressCreds = addressCredentials(params.entry)
-  const networkId = hash(Buffer.from(params.networkPassphrase))
-  const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-    new xdr.HashIdPreimageSorobanAuthorization({
-      networkId,
-      nonce: xdrField(addressCreds, "nonce"),
-      signatureExpirationLedger: xdrField(addressCreds, "signatureExpirationLedger"),
-      invocation: xdrField(params.entry, "rootInvocation"),
-    }),
+  const addressCreds = readAddressCredentials(params.entry)
+  const expiration = Number(xdrField(addressCreds, "signatureExpirationLedger"))
+  const preimage = buildAuthorizationEntryPreimage(
+    params.entry,
+    expiration,
+    params.networkPassphrase,
   )
   return Buffer.from(hash(preimage.toXDR()))
 }
