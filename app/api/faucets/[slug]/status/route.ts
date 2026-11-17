@@ -62,12 +62,20 @@ export async function GET(
         contractConfigured: isFaucetContractConfigured(),
         pilotSlug: mainnetPilotSlug(),
       });
-      if (!decision.ok && decision.reason !== "invalid_amount") {
-        availability = {
-          available: false,
-          reason: decision.reason,
-          remainingToday: availability.remainingToday,
-        };
+      if (!decision.ok) {
+        const reason = decision.reason;
+        if (
+          reason === "mainnet_refused" ||
+          reason === "pilot_slug" ||
+          reason === "pilot_cap" ||
+          reason === "pilot_contract_required"
+        ) {
+          availability = {
+            available: false,
+            reason,
+            remainingToday: availability.remainingToday,
+          };
+        }
       }
     }
     if (availability.available && !(await vaultCanCoverClaim(claimAmount, { cached: true }))) {
