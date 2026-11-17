@@ -10,8 +10,8 @@ import { BadgePopup, SouvenirPopup } from "@/components/merch/souvenir-popup"
 import { SouvenirList, type SouvenirListItem } from "@/components/merch/souvenir-list"
 import { SozuShaderAvatar } from "@/components/ui/sozu-shader-avatar"
 import { readSavedPurchases, type SavedPurchase } from "@/lib/checkout/saved-purchases"
-import { listCollectibleSouvenirs } from "@/lib/merch/catalog"
-import { claimEventSouvenir } from "@/lib/merch/claim-souvenir"
+import { listCollectibleSouvenirs, type CollectibleSouvenir } from "@/lib/merch/catalog"
+import { claimEventSouvenir, fetchAccountSouvenirs } from "@/lib/merch/claim-souvenir"
 import { merchCopy } from "@/lib/merch/copy"
 import { profileSouvenirs, readClaimedSouvenirs, type ClaimedSouvenir, type HeldSouvenir } from "@/lib/merch/souvenirs"
 import { useWalletLanguage } from "@/lib/wallet-language"
@@ -55,6 +55,7 @@ export function WalletSwitcherModal({
   const [view, setView] = useState<"wallets" | "souvenirs">("wallets")
   const [purchases, setPurchases] = useState<SavedPurchase[]>([])
   const [claims, setClaims] = useState<ClaimedSouvenir[]>([])
+  const [catalog, setCatalog] = useState<readonly CollectibleSouvenir[]>(() => listCollectibleSouvenirs())
   const [openSouvenir, setOpenSouvenir] = useState<HeldSouvenir | null>(null)
   const [claimingId, setClaimingId] = useState<string | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -64,7 +65,7 @@ export function WalletSwitcherModal({
   const { held, claimable } = profileSouvenirs({
     purchases,
     claims,
-    catalog: listCollectibleSouvenirs(),
+    catalog,
     language: lang,
     network: walletNetwork,
   })
@@ -137,6 +138,12 @@ export function WalletSwitcherModal({
     }
     setPurchases(readSavedPurchases())
     setClaims(readClaimedSouvenirs(walletAddress))
+    setCatalog(listCollectibleSouvenirs())
+    void fetchAccountSouvenirs().then((remote) => {
+      if (!remote) return
+      setCatalog(remote.catalog.length > 0 ? remote.catalog : listCollectibleSouvenirs())
+      setClaims(remote.claims)
+    })
   }, [isOpen, walletAddress])
 
   const handleSouvenirSelect = useCallback(
@@ -151,15 +158,20 @@ export function WalletSwitcherModal({
       setClaimingId(id)
       setClaimError(null)
       try {
-        const saved = await claimEventSouvenir({ slug: claim.slug, walletAddress })
-        if (saved) setClaims(readClaimedSouvenirs(walletAddress))
-      } catch {
-        setClaimError(copy.claimFailed)
+        const saved = await claimEventSouvenir({ souvenir: claim, walletAddress })
+        if (saved) {
+          setClaims((current) => {
+            const slug = saved.slug.trim().toLowerCase()
+            return [saved, ...current.filter((row) => row.slug.trim().toLowerCase() !== slug)]
+          })
+        }
+      } catch (error) {
+        setClaimError(error instanceof Error && error.message === "claim_closed" ? copy.claimClosed : copy.claimFailed)
       } finally {
         setClaimingId(null)
       }
     },
-    [claimable, claimingId, copy.claimFailed, held, walletAddress],
+    [claimable, claimingId, copy.claimClosed, copy.claimFailed, held, walletAddress],
   )
 
   if (!portalEl) return null

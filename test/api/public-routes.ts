@@ -34,6 +34,10 @@ export const PUBLIC_ROUTES: Record<string, PublicRoute> = {
   "/api/deposits/fx": { reason: "FX quote for deposits" },
   "/api/faucets": { reason: "public faucet list" },
   "/api/faucets/[slug]/status": { reason: "public faucet status; per-user cooldown only with a session" },
+  "/api/faucet-tap/enter": {
+    methods: ["POST"],
+    reason: "trades the chip secret for an httpOnly cookie; a wrong secret answers 404, not a session 401",
+  },
   "/api/smart-accounts/config": { reason: "public contract configuration" },
   "/api/smart-accounts/resolve-key-data": { reason: "on-chain signer lookup by contract id" },
   "/api/smart-accounts/resolve-public-key": {

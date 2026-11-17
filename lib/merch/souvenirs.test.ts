@@ -4,6 +4,8 @@ import { profileSouvenirs } from "@/lib/merch/souvenirs"
 import { buildCollectibleReceipt } from "@/lib/merch/receipt"
 
 const hash = "a".repeat(64)
+const DURING_EVENT = Date.parse("2026-11-18T12:00:00.000-03:00")
+const AFTER_EVENT = Date.parse("2026-11-20T12:00:00.000-03:00")
 
 describe("profile souvenirs", () => {
   it("keeps a bought 1/10 as a 3D receipt and an unclaimed event badge as something to sign for", () => {
@@ -22,6 +24,7 @@ describe("profile souvenirs", () => {
       catalog: listCollectibleSouvenirs(),
       language: "en",
       network: "testnet",
+      nowMs: DURING_EVENT,
     })
 
     expect(claimable.map((item) => item.slug)).toEqual([LIQUID_SOCIETY_SOUVENIR_SLUG])
@@ -48,6 +51,7 @@ describe("profile souvenirs", () => {
       catalog,
       language: "es",
       network: "testnet",
+      nowMs: DURING_EVENT,
     })
 
     expect(claimable).toEqual([])
@@ -60,6 +64,45 @@ describe("profile souvenirs", () => {
         imagePath: "/merch/liquid-society-souvenir.svg",
       },
     ])
+  })
+
+  it("keeps a claimed badge forever after the window closes, and will not offer a second claim", () => {
+    const catalog = listCollectibleSouvenirs()
+    const claimed = profileSouvenirs({
+      purchases: [],
+      claims: [
+        {
+          slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
+          walletAddress: "C".padEnd(56, "A"),
+          claimedAt: "2026-11-18T22:00:00.000Z",
+          name: "Collectible Souvenir",
+          drop: catalog[0]?.drop,
+          imagePath: "/merch/liquid-society-souvenir.svg",
+        },
+      ],
+      catalog,
+      language: "en",
+      network: "testnet",
+      nowMs: AFTER_EVENT,
+    })
+    expect(claimed.claimable).toEqual([])
+    expect(claimed.held).toHaveLength(1)
+    expect(claimed.held[0]).toMatchObject({
+      kind: "badge",
+      id: `badge:${LIQUID_SOCIETY_SOUVENIR_SLUG}`,
+      name: "Collectible Souvenir",
+    })
+
+    const missed = profileSouvenirs({
+      purchases: [],
+      claims: [],
+      catalog,
+      language: "en",
+      network: "testnet",
+      nowMs: AFTER_EVENT,
+    })
+    expect(missed.claimable).toEqual([])
+    expect(missed.held).toEqual([])
   })
 
   it("does not invent a receipt image for the badge model", () => {

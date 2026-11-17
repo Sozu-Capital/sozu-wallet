@@ -3,11 +3,15 @@ import type { CollectibleSouvenir } from "@/lib/merch/catalog"
 import { isCollectiblePurchase, resolveCollectibleSale } from "@/lib/merch/collectible-sale"
 import type { MerchLanguage } from "@/lib/merch/copy"
 import { buildCollectibleReceipt, type CollectibleReceiptModel } from "@/lib/merch/receipt"
+import { isSouvenirClaimOpen, souvenirSlugKey } from "@/lib/merch/souvenir-window"
 
 export type ClaimedSouvenir = {
   slug: string
   walletAddress: string
   claimedAt: string
+  name?: string
+  drop?: string
+  imagePath?: string
 }
 
 export type HeldSouvenir =
@@ -75,10 +79,13 @@ export function rememberClaimedSouvenir(claim: ClaimedSouvenir): void {
   } catch {
     existing = []
   }
-  const next = {
+  const next: ClaimedSouvenir = {
     slug,
     walletAddress: wallet,
     claimedAt: claim.claimedAt,
+    ...(claim.name ? { name: claim.name } : {}),
+    ...(claim.drop ? { drop: claim.drop } : {}),
+    ...(claim.imagePath ? { imagePath: claim.imagePath } : {}),
   }
   const kept = existing.filter((row) => {
     if (!row || typeof row !== "object") return false
@@ -88,8 +95,9 @@ export function rememberClaimedSouvenir(claim: ClaimedSouvenir): void {
 }
 
 /**
- * Bought collectibles become 3D receipts. Event badges appear only after this wallet claims them.
- * The catalog entry that has not been signed for stays claimable.
+ * Bought collectibles become 3D receipts. Event badges appear only after this account claims them.
+ * A claim is once per account. After that the badge stays collected even when the window closes.
+ * Unclaimed catalog entries are offered only while their timeframe is open.
  */
 export function profileSouvenirs(input: {
   purchases: readonly SavedPurchase[]
@@ -97,8 +105,15 @@ export function profileSouvenirs(input: {
   catalog: readonly CollectibleSouvenir[]
   language: MerchLanguage
   network: "testnet" | "mainnet"
+  nowMs?: number
 }): { held: HeldSouvenir[]; claimable: CollectibleSouvenir[] } {
-  const claimed = new Set(input.claims.map((claim) => claim.slug.trim().toLowerCase()))
+  const nowMs = input.nowMs ?? Date.now()
+  const catalogBySlug = new Map(input.catalog.map((souvenir) => [souvenirSlugKey(souvenir.slug), souvenir]))
+  const claimed = new Map<string, ClaimedSouvenir>()
+  for (const claim of input.claims) {
+    const slug = souvenirSlugKey(claim.slug)
+    if (slug) claimed.set(slug, claim)
+  }
   const receipts: HeldSouvenir[] = input.purchases.filter(isCollectiblePurchase).map((purchase) => {
     const sale = resolveCollectibleSale({
       collectibleReceipt: purchase.collectible,
@@ -128,16 +143,20 @@ export function profileSouvenirs(input: {
     }
   })
   const badges: HeldSouvenir[] = []
-  for (const souvenir of input.catalog) {
-    if (!claimed.has(souvenir.slug.trim().toLowerCase())) continue
+  for (const [slug, claim] of claimed) {
+    const souvenir = catalogBySlug.get(slug)
     badges.push({
       kind: "badge",
-      id: `badge:${souvenir.slug}`,
-      name: souvenir.name,
-      drop: souvenir.drop,
-      imagePath: souvenir.imagePath,
+      id: `badge:${souvenir?.slug ?? slug}`,
+      name: souvenir?.name || claim.name || slug,
+      drop: souvenir?.drop || claim.drop || "",
+      imagePath: souvenir?.imagePath || claim.imagePath || "",
     })
   }
-  const claimable = input.catalog.filter((souvenir) => !claimed.has(souvenir.slug.trim().toLowerCase()))
+  const claimable = input.catalog.filter((souvenir) => {
+    const slug = souvenirSlugKey(souvenir.slug)
+    if (claimed.has(slug)) return false
+    return isSouvenirClaimOpen(souvenir, nowMs)
+  })
   return { held: [...receipts, ...badges], claimable }
 }
