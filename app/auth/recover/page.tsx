@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
-import { OnboardingForm } from "@/components/ui/onboarding-form"
+import { Button } from "@/components/ui/button"
 import { WalletLanguageProvider, useWalletLanguage } from "@/lib/wallet-language"
 import { createPasskey } from "@/lib/turnkey/passkeys"
 
@@ -92,21 +92,29 @@ function RecoverPasskey() {
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-black px-4">
-      <OnboardingForm
-        imageSrc="/onboarding/slide2.webp"
-        title={es ? "Nueva llave" : "New passkey"}
-        description={
-          es
-            ? "Esta llave abre la cuenta que ya estaba vinculada a tu correo."
-            : "This passkey opens the account already linked to your email."
-        }
-        buttonText={busy ? (es ? "Creando…" : "Creating…") : es ? "Crear llave" : "Create passkey"}
-        hideInput
-        isSubmitting={busy}
-        submitDisabled={done || !token}
-        onSubmit={() => void createKey()}
-        hint={error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
-      />
+      <div className="w-full max-w-sm rounded-lg border border-white/10 bg-black/95 p-6 text-white">
+        <div className="space-y-8 pt-1 pb-2">
+          <div className="space-y-1 text-center">
+            <p className="text-[15px] font-light tracking-wide text-white/90">
+              {es ? "Nueva llave" : "New passkey"}
+            </p>
+            <p className="text-[13px] font-extralight tracking-wide text-white/55">
+              {es
+                ? "Esta llave abre la cuenta que ya estaba vinculada a tu correo."
+                : "This passkey opens the account already linked to your email."}
+            </p>
+          </div>
+          {error ? <p className="text-center text-[11px] text-amber-500/90">{error}</p> : null}
+          <Button
+            type="button"
+            onClick={() => void createKey()}
+            disabled={busy || done || !token}
+            className="h-11 w-full rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white disabled:opacity-40"
+          >
+            {busy ? (es ? "Creando…" : "Creating…") : es ? "Crear llave" : "Create passkey"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

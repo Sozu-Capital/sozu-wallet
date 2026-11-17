@@ -1,17 +1,15 @@
 import type { DeviceCapabilities } from "@/lib/webauthn/device-detection"
 
 /**
- * Decides what Enter on the lock screen should do before any WebAuthn ceremony.
+ * Decides what Enter on the lock screen should do.
  *
- * Discovery `credentials.get` with empty allowCredentials triggers the OS
- * "scan with another device" sheet when no local passkey exists — even on
- * biometric devices. First-time / no-stored-username users with biometrics
- * should go to create/login UI instead.
+ * A remembered tag opens that passkey. Otherwise Enter opens the OS passkey
+ * sheet immediately. Closing that sheet is how a new account starts — name,
+ * recovery email, then a new passkey — not a form before the prompt.
  */
 export type EnterAuthPath =
   | { action: "login-stored"; username: string }
-  | { action: "create-or-login" }
-  | { action: "choose-path" }
+  | { action: "passkey-prompt" }
   | { action: "unsupported" }
 
 export function resolveEnterAuthPath(opts: {
@@ -27,9 +25,5 @@ export function resolveEnterAuthPath(opts: {
     return { action: "unsupported" }
   }
 
-  if (opts.capabilities.canUsePasskeys) {
-    return { action: "create-or-login" }
-  }
-
-  return { action: "choose-path" }
+  return { action: "passkey-prompt" }
 }

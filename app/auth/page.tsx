@@ -1,8 +1,6 @@
 "use client"
 
 import { TagInputModal } from "@/components/tag-input-modal"
-import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
-import { AuthDeviceChoiceModal } from "@/components/auth-device-choice-modal"
 import { RecoverAccountScreen } from "@/components/auth/recover-account-screen"
 import { QRCodeRegistrationModal } from "@/components/qr-code-registration-modal"
 import { WalletSkeleton } from "@/components/ui/wallet-skeleton"
@@ -19,7 +17,6 @@ import {
 } from "@/lib/turnkey/passkeys"
 import { detectDeviceCapabilities } from "@/lib/webauthn/device-detection"
 import { resolveEnterAuthPath } from "@/lib/webauthn/enter-auth-path"
-import { requestImmediateLocalPasskey } from "@/lib/webauthn/immediate-passkey"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
@@ -74,8 +71,6 @@ function AuthPageContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
   const [showTagModal, setShowTagModal] = useState(false)
-  const [showSignup, setShowSignup] = useState(false)
-  const [signupPrefill, setSignupPrefill] = useState<string | null>(null)
   const [resumeLoginTag, setResumeLoginTag] = useState<string | null>(null)
   const [tagModalPrefill, setTagModalPrefill] = useState<string | null>(null)
   const [referralCode, setReferralCode] = useState<string | null>(null)
@@ -83,7 +78,6 @@ function AuthPageContent() {
   const [pwaBannerDismissed, setPwaBannerDismissed] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
-  const [showDeviceChoice, setShowDeviceChoice] = useState(false)
   const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(null)
   const [showRecover, setShowRecover] = useState(false)
   const [offerCreateAccount, setOfferCreateAccount] = useState(false)
@@ -230,8 +224,9 @@ function AuthPageContent() {
         method: "POST",
         credentials: "include",
       })
-      setSignupPrefill(null)
-      setShowSignup(true)
+      setTagModalPrefill(null)
+      setResumeLoginTag(null)
+      setShowTagModal(true)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => signalBootstrapReady())
       })
@@ -450,17 +445,21 @@ function AuthPageContent() {
     }
   }, [searchParams])
 
+  const openAccountWindows = useCallback((prefill?: string | null) => {
+    setOfferCreateAccount(false)
+    setResumeLoginTag(null)
+    setTagModalPrefill(prefill?.replace(/^\$/, "").trim() || null)
+    setShowTagModal(true)
+    setIsAuthenticating(false)
+  }, [])
+
   /**
-   * Explicit discovery login (empty allowCredentials).
-   * Only call when the user chose "scan with another device" — never as the
-   * default Enter path for first-time biometric devices (that surfaces the OS
-   * hybrid QR sheet when no local passkey exists).
+   * OS passkey sheet with no allow-list. Face ID signs an existing account in.
+   * Closing the sheet opens the small account windows.
    */
   const attemptDiscoveryLogin = useCallback(async () => {
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
-      setIsAuthenticating(false)
-      setSignupPrefill(null)
-      setShowSignup(true)
+      openAccountWindows()
       return
     }
 
@@ -473,9 +472,8 @@ function AuthPageContent() {
 
       if (!credential) {
         console.log("[Auth] No passkey selected or user cancelled discovery")
-        setIsAuthenticating(false)
-        setSignupPrefill(null)
-        setShowSignup(true)
+        pendingCredentialRef.current = null
+        openAccountWindows()
         return
       }
 
@@ -491,8 +489,7 @@ function AuthPageContent() {
           "[Auth] Discovery mode authentication failed — credential captured for registration reuse",
         )
         pendingCredentialRef.current = credential
-        setIsAuthenticating(false)
-        setShowTagModal(true)
+        openAccountWindows()
         return
       }
 
@@ -505,16 +502,21 @@ function AuthPageContent() {
     } catch (discoveryError: unknown) {
       const err = discoveryError as { name?: string; message?: string }
       console.log("[Auth] Passkey discovery failed:", err?.name, err?.message)
+      const dismissed =
+        discoveryError instanceof DOMException &&
+        (discoveryError.name === "NotAllowedError" || discoveryError.name === "AbortError")
+      if (dismissed) {
+        pendingCredentialRef.current = null
+        openAccountWindows()
+        return
+      }
       setIsAuthenticating(false)
-      setSignupPrefill(null)
-      setShowSignup(true)
+      toast.error(t.authFailed)
     }
-  }, [finalizePasskeyLoginSuccess])
+  }, [finalizePasskeyLoginSuccess, openAccountWindows, t.authFailed])
 
   const startSignup = () => {
-    setOfferCreateAccount(false)
-    setSignupPrefill(null)
-    setShowSignup(true)
+    openAccountWindows()
   }
 
   const holdForCreateAccount = (
@@ -531,7 +533,6 @@ function AuthPageContent() {
     }
 
     setIsAuthenticating(true)
-    setShowDeviceChoice(false)
 
     let storedUsername: string | null = null
     if (typeof window !== "undefined") {
@@ -541,10 +542,18 @@ function AuthPageContent() {
       }
     }
 
-    // Remembered tag: open that saved passkey. Cancelling stays on the lock
-    // screen; onboarding only starts from "create a new account".
-    if (storedUsername) {
-      const result = await attemptLoginWithTag(storedUsername)
+    const path = resolveEnterAuthPath({
+      storedUsername,
+      capabilities: {
+        hasWebAuthn: typeof window !== "undefined" && !!window.PublicKeyCredential,
+        canUsePasskeys: true,
+      },
+    })
+
+    // Remembered tag: that passkey, one Face ID. Cancelling stays on the
+    // lock screen so Enter can be tapped again.
+    if (path.action === "login-stored") {
+      const result = await attemptLoginWithTag(path.username)
       if (result.ok) return
 
       if (result.cancelled || result.capturedCredential) {
@@ -560,52 +569,14 @@ function AuthPageContent() {
       return
     }
 
-    // No remembered tag. Ask the browser only for passkeys already on this
-    // device. A miss goes to onboarding. A dismissed sheet does not.
-    if (typeof window !== "undefined" && window.PublicKeyCredential) {
-      try {
-        const challenge = await generateAuthChallenge()
-        const local = await requestImmediateLocalPasskey(challenge)
-        if (local.status === "credential") {
-          const authResult = await verifyAuthentication("", local.credential, challenge.challenge)
-          if (!authResult?.success || !authResult.userId) {
-            holdForCreateAccount(local.credential)
-            return
-          }
-          await finalizePasskeyLoginSuccess(authResult.userId, authResult.username, local.credential)
-          return
-        }
-        if (local.status === "cancelled") {
-          holdForCreateAccount()
-          return
-        }
-        if (local.status === "none") {
-          setIsAuthenticating(false)
-          startSignup()
-          return
-        }
-        if (local.status === "error") {
-          setIsAuthenticating(false)
-          return
-        }
-      } catch {
-        setIsAuthenticating(false)
-        return
-      }
-    }
-
-    // Browsers without immediate mode cannot list local passkeys without
-    // opening the cross-device sheet. Fall back to the capability route.
-    const capabilities = await detectDeviceCapabilities()
-    const path = resolveEnterAuthPath({ storedUsername: null, capabilities })
-    setIsAuthenticating(false)
-
-    if (path.action === "create-or-login" || path.action === "unsupported") {
-      startSignup()
+    // No remembered tag. The OS passkey sheet is the login. Closing it
+    // opens the small windows for a new account.
+    if (path.action === "passkey-prompt") {
+      await attemptDiscoveryLogin()
       return
     }
 
-    setShowDeviceChoice(true)
+    openAccountWindows()
   }
 
   const handleRegisterFromModal = (tag: string, email: string) => {
@@ -691,8 +662,7 @@ function AuthPageContent() {
             `Sozu Wallet requires ${capabilities.os === 'ios' ? 'Face ID or Touch ID' : 'fingerprint or face unlock'} for self-custody security.\n\n` +
             `Please use a device with biometric authentication.`
           )
-          setSignupPrefill(usernameToRegister)
-          setShowSignup(true)
+          openAccountWindows(usernameToRegister)
           return
         }
         console.log("[Auth] Device supports passkeys - proceeding with registration")
@@ -752,9 +722,7 @@ function AuthPageContent() {
             passkeyError.name === "AbortError"
           )) {
             console.log("[Auth] User cancelled passkey registration")
-            setIsAuthenticating(false)
-            setSignupPrefill(usernameToRegister)
-            setShowSignup(true)
+            openAccountWindows(usernameToRegister)
             return
           }
           throw passkeyError // Re-throw other errors
@@ -1013,10 +981,8 @@ function AuthPageContent() {
         error.name === "AbortError"
       )) {
         console.log("[Auth] User cancelled passkey authentication/registration")
-        setIsAuthenticating(false)
         const stored = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        setSignupPrefill(stored)
-        setShowSignup(true)
+        openAccountWindows(stored)
         return
       }
 
@@ -1027,8 +993,7 @@ function AuthPageContent() {
         setIsAuthenticating(false)
         toast.message(t.authCancelledHint)
         const storedTag = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        setSignupPrefill(storedTag)
-        setShowSignup(true)
+        openAccountWindows(storedTag)
         return
       }
 
@@ -1214,25 +1179,6 @@ function AuthPageContent() {
 
       {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
 
-      {showSignup ? (
-        <WalletActivationOnboarding
-          open
-          activationSettled
-          intent="signup"
-          initialTag={signupPrefill ?? ""}
-          onSignIn={(tag) => {
-            setShowSignup(false)
-            void handleLoginPasskeyFromModal(tag)
-          }}
-          onCreateAccount={(tag, email) => {
-            setShowSignup(false)
-            handleRegisterFromModal(tag, email)
-          }}
-          onExitComplete={() => setShowSignup(false)}
-        />
-      ) : null}
-
-      {/* Sign-in for an existing tag. New accounts use the night flow above. */}
       <TagInputModal
         isOpen={showTagModal}
         resumeWithTag={resumeLoginTag}
@@ -1246,23 +1192,6 @@ function AuthPageContent() {
         onRegister={handleRegisterFromModal}
         onLoginPasskey={handleLoginPasskeyFromModal}
         onLoginPin={handlePinLoginFromModal}
-      />
-
-      <AuthDeviceChoiceModal
-        isOpen={showDeviceChoice}
-        onClose={() => {
-          setShowDeviceChoice(false)
-          setIsAuthenticating(false)
-        }}
-        onScanOtherDevice={() => {
-          setShowDeviceChoice(false)
-          void attemptDiscoveryLogin()
-        }}
-        onCreateAccount={() => {
-          setShowDeviceChoice(false)
-          setSignupPrefill(null)
-          setShowSignup(true)
-        }}
       />
 
       {showQRModal && qrUsername && (
@@ -1344,8 +1273,7 @@ function AuthPageContent() {
             setShowQRModal(false)
             setQRUsername(null)
             setIsAuthenticating(false)
-            setSignupPrefill(qrUsername)
-            setShowSignup(true)
+            openAccountWindows(qrUsername)
           }}
         />
       )}
