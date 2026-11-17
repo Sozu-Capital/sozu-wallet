@@ -7,7 +7,6 @@ import { buildCollectibleReceipt } from "@/lib/merch/receipt"
 
 const discover = {
   nearLabel: "Cerca de ti",
-  cityLabel: "En la ciudad",
   openLabel: "Ver",
   backLabel: "Volver",
   itemsLabel: "En el evento",
@@ -35,14 +34,10 @@ const discover = {
       ],
     },
   ],
-  cityDots: [
-    { id: "1", name: "Pandevilla", href: "/city/spot/1", x: 36, y: 78 },
-    { id: "4", name: "Charlie Wok", href: "/city/spot/4", x: 54, y: 22 },
-  ],
 }
 
 describe("collections panel", () => {
-  it("offers active collectibles and the city dots when the wallet holds nothing", () => {
+  it("offers the current event when the wallet holds nothing", () => {
     const html = renderToStaticMarkup(
       createElement(CollectionsPanelView, {
         title: "Colecciones",
@@ -59,11 +54,10 @@ describe("collections panel", () => {
     expect(html).toContain("T-shirt · 5-panel")
     expect(html).not.toContain('href="/item/liquid-society"')
     expect(html).toContain("Ver")
-    expect(html).toContain("En la ciudad")
-    expect(html).toContain('href="/city"')
-    expect(html).toContain("Pandevilla")
-    expect(html).toContain('href="/city/spot/1"')
-    expect(html).toContain("Charlie Wok")
+    expect(html).not.toContain("En la ciudad")
+    expect(html).not.toContain('href="/city"')
+    expect(html).not.toContain("Pandevilla")
+    expect(html).not.toContain("Charlie Wok")
     expect(html).not.toContain("Todavía no tienes coleccionables.")
   })
 
@@ -90,7 +84,7 @@ describe("collections panel", () => {
     expect(html).not.toContain("Pandevilla")
   })
 
-  it("shows the receipt in front, including the testnet label and the disclaimer", () => {
+  it("shows the receipt in front through the timestamp", () => {
     const item = getMerchItem(LIQUID_SOCIETY_SLUG)
     if (!item) throw new Error("missing seed")
     const receipt = buildCollectibleReceipt({
@@ -113,8 +107,10 @@ describe("collections panel", () => {
     )
     expect(html).toContain("T-shirt")
     expect(html).toContain("12 USDC")
-    expect(html).toContain("Red de pruebas")
-    expect(html).toContain("Este coleccionable es un comprobante de compra. No es una inversión ni representa fondos.")
+    expect(html).toContain("2026-11-18 22:00 UTC")
+    expect(html).toContain("Compartir")
+    expect(html).not.toContain("Red de pruebas")
+    expect(html).not.toContain("Este coleccionable es un comprobante de compra")
     expect(html).not.toContain("Cerca de ti")
     expect(html).not.toContain("Pandevilla")
   })
@@ -153,7 +149,8 @@ describe("collections panel", () => {
     const front = renderToStaticMarkup(createElement(CollectionsPanelView, { ...shared, activeIndex: 0 }))
     expect(front).toContain('data-receipt-slug="liquid-society"')
     expect(front).toContain("12 USDC")
-    expect(front).toContain("Este coleccionable es un comprobante de compra.")
+    expect(front).toContain("2026-11-18 22:00 UTC")
+    expect(front).not.toContain("Este coleccionable es un comprobante de compra")
     expect(front).not.toContain("40 USDC")
     expect(front).not.toContain("Five Panel")
 
@@ -162,7 +159,8 @@ describe("collections panel", () => {
     expect(next).toContain("Five Panel")
     expect(next).toContain("Streetwear · 18 Nov 2026")
     expect(next).toContain("40 USDC")
-    expect(next).toContain("Este coleccionable es un comprobante de compra.")
+    expect(next).toContain("2026-11-18 23:00 UTC")
+    expect(next).not.toContain("Este coleccionable es un comprobante de compra")
     expect(next).not.toContain("12 USDC")
   })
 })

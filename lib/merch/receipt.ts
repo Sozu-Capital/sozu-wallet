@@ -15,6 +15,9 @@ export type CollectibleReceiptModel = {
   timeLabel: string
   networkLabel: string
   disclaimer: string
+  shareLabel: string
+  /** Merchant photo for this payment link. Absent when the link has no image. */
+  imageUrl: string | null
   paymentUrl: string | null
   transferUrl: string | null
   paymentLink: string
@@ -22,6 +25,18 @@ export type CollectibleReceiptModel = {
 }
 
 const HASH = /^[a-fA-F0-9]{64}$/
+
+export function collectibleImageUrl(raw: string | null | undefined): string | null {
+  const value = raw?.trim() ?? ""
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol === "https:" || url.protocol === "http:") return url.toString()
+  } catch {
+    return null
+  }
+  return null
+}
 
 export function stellarExpertTxUrl(network: "testnet" | "mainnet", hash: string | null | undefined): string | null {
   const value = hash?.trim() ?? ""
@@ -45,6 +60,7 @@ export function buildCollectibleReceipt(input: {
   transferHash: string | null
   createdAt?: string | null
   edition?: { number: number; size: number } | null
+  imageUrl?: string | null
 }): CollectibleReceiptModel {
   const copy = merchCopy(input.language)
   const editionLabel = editionMark(input.edition?.number, input.edition?.size)
@@ -70,6 +86,8 @@ export function buildCollectibleReceipt(input: {
     timeLabel: formatReceiptTime(input.createdAt),
     networkLabel: input.item.network === "testnet" ? copy.testnet : input.item.network,
     disclaimer: copy.disclaimer,
+    shareLabel: copy.share,
+    imageUrl: collectibleImageUrl(input.imageUrl),
     paymentUrl: stellarExpertTxUrl(input.item.network, input.paymentHash),
     transferUrl: stellarExpertTxUrl(input.item.network, input.transferHash),
     paymentLink: copy.paymentLink,

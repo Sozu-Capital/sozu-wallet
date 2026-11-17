@@ -768,12 +768,12 @@ export function WalletScreen({
           if (!open) setCollectibleReceipt(null)
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/20 bg-black/80 text-white backdrop-blur-md sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/20 bg-black/90 text-white backdrop-blur-md sm:max-w-md">
           <DialogHeader className="sr-only">
             <DialogTitle>{t.receiptDetailTitle}</DialogTitle>
             <DialogDescription>{t.receiptDetailDesc}</DialogDescription>
           </DialogHeader>
-          {collectibleReceipt ? <CollectibleReceipt model={collectibleReceipt} /> : null}
+          {collectibleReceipt ? <CollectibleReceipt model={collectibleReceipt} embedded /> : null}
           <Button
             onClick={() => setCollectibleReceipt(null)}
             className="h-14 w-full bg-white text-lg font-semibold text-black hover:bg-white/90"

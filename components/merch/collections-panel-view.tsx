@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
-import { FindCollectibles, type FindCityDot, type FindCollectibleCard } from "@/components/merch/find-collectibles"
+import { FindCollectibles, type FindCollectibleCard } from "@/components/merch/find-collectibles"
 import { useHorizontalPanelSwipe } from "@/hooks/use-horizontal-panel-swipe"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 import { stepReceipt } from "@/lib/merch/collections"
@@ -25,12 +25,10 @@ export type ActivationOffer = {
 export function CollectionsPanelView({
   title,
   nearLabel,
-  cityLabel,
   activations,
   openLabel,
   backLabel,
   itemsLabel,
-  cityDots,
   previousLabel,
   nextLabel,
   cards,
@@ -42,12 +40,10 @@ export function CollectionsPanelView({
 }: {
   title: string
   nearLabel: string
-  cityLabel: string
   activations: ActivationOffer[]
   openLabel: string
   backLabel: string
   itemsLabel: string
-  cityDots: FindCityDot[]
   previousLabel: string
   nextLabel: string
   cards: CollectionCard[]
@@ -155,12 +151,11 @@ export function CollectionsPanelView({
               <ChevronLeft className="size-4" aria-hidden />
               {activation.name}
             </button>
-            <FindCollectibles nearLabel={itemsLabel} cityLabel={cityLabel} items={activation.items} dots={[]} />
+            <FindCollectibles nearLabel={itemsLabel} items={activation.items} />
           </div>
         ) : (
           <FindCollectibles
             nearLabel={nearLabel}
-            cityLabel={cityLabel}
             items={activations.map((entry) => ({
               id: entry.slug,
               name: entry.name,
@@ -171,7 +166,6 @@ export function CollectionsPanelView({
               actionLabel: openLabel,
               onSelect: () => selectActivation(entry.slug),
             }))}
-            dots={cityDots}
           />
         )
       )}

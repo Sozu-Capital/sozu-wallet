@@ -5,11 +5,13 @@ import {
   LIQUID_SOCIETY_DROP,
   LIQUID_SOCIETY_SLUG,
   LIQUID_SOCIETY_SOUVENIR_SLUG,
+  LIQUID_SOCIETY_TEE_URL,
   getMerchItem,
   listActivations,
   listCollectibleSouvenirs,
   listMerchItems,
   merchItemPath,
+  merchOfferHref,
 } from "./catalog"
 
 describe("merch catalog", () => {
@@ -26,6 +28,7 @@ describe("merch catalog", () => {
       network: "testnet",
       contractId: null,
       distributorAddress: null,
+      productUrl: LIQUID_SOCIETY_TEE_URL,
     })
 
     expect(getMerchItem(FIVE_PANEL_SLUG)).toMatchObject({
@@ -47,6 +50,8 @@ describe("merch catalog", () => {
     expect(nfc).toBe("/item/liquid-society")
     expect(qr).toBe(nfc)
     expect(merchItemPath(FIVE_PANEL_SLUG)).toBe("/item/five-panel")
+    expect(merchOfferHref(getMerchItem(LIQUID_SOCIETY_SLUG)!)).toBe(LIQUID_SOCIETY_TEE_URL)
+    expect(merchOfferHref(getMerchItem(FIVE_PANEL_SLUG)!)).toBe("/item/five-panel")
   })
 
   it("offers Liquid Society as one activation, with the shirt, the 5-panel, and a souvenir", () => {

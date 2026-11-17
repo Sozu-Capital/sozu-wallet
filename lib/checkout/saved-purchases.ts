@@ -11,6 +11,8 @@ export type SavedPurchase = {
   editionSize?: number
   /** Account that received the USDC. Used to reopen the receipt from history. */
   toAddress?: string
+  /** Merchant photo shown on the collectible receipt. */
+  imageUrl?: string
 }
 
 function isEditionNumber(value: unknown): value is number {
