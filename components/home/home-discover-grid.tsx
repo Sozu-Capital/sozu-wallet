@@ -55,11 +55,23 @@ export function HomeDiscoverGrid({ className }: { className?: string }) {
     if (!text || sending) return
     setSending(true)
     try {
-      const result = await shareOrCopy(`${t.homeFeedbackTitle}: ${text}`)
-      if (result === "failed") return
-      toast(result === "copied" ? t.homeLinkCopied : t.homeFeedbackReady)
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          path: typeof window !== "undefined" ? window.location.pathname : null,
+        }),
+      })
+      if (!response.ok) {
+        toast.error(t.homeFeedbackFailed)
+        return
+      }
+      toast(t.homeFeedbackReady)
       setNote("")
       setSheet(null)
+    } catch {
+      toast.error(t.homeFeedbackFailed)
     } finally {
       setSending(false)
     }
