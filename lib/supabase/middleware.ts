@@ -45,6 +45,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Sozu Pay store map and directory. The wallet session lives in sessionStorage, not a Supabase cookie.
+  if (pathname === "/stores" || pathname.startsWith("/stores/")) {
+    return NextResponse.next()
+  }
+
   // Public Hack Meridian watch page: live testnet ledger of offline vault txs.
   if (pathname === "/offline" || pathname.startsWith("/offline/")) {
     return NextResponse.next()
@@ -110,6 +115,7 @@ export async function updateSession(request: NextRequest) {
   const isSettingsRoute = pathname === "/settings"
   const isTestKeysRoute = pathname === "/test-keys"
   const isCityRoute = pathname.startsWith("/city")
+  const isStoresRoute = pathname === "/stores" || pathname.startsWith("/stores/")
   const isTrackerRoute = pathname.startsWith("/tracker")
   const isOnboardingRoute = pathname.startsWith("/onboarding")
   const isOfflineLedgerRoute = pathname === "/offline" || pathname.startsWith("/offline/")
@@ -214,6 +220,7 @@ export async function updateSession(request: NextRequest) {
     !isCreditRoute &&
     !isTestKeysRoute &&
     !isCityRoute &&
+    !isStoresRoute &&
     !isTrackerRoute &&
     !isOnboardingRoute &&
     !isOfflineLedgerRoute

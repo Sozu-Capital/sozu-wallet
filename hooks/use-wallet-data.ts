@@ -16,6 +16,8 @@ import {
   type CachedUsdcBalance,
 } from "@/lib/wallet/cached-usdc-balance"
 import { offlineCardUsdc, saveOfflineBalanceLocal } from "@/lib/offline/offline-balance"
+import { mergeAccountHistory, FAUCET_COUNTERPARTY } from "@/lib/wallet/account-tx-history"
+import { readCachedTxHistory, writeCachedTxHistory } from "@/lib/wallet/cached-tx-history"
 
 export interface Vault {
   id: string
@@ -104,6 +106,8 @@ export function useWalletData() {
   const [apyValue, setApyValue] = useState<number | null>(null)
   const [apyLoading, setApyLoading] = useState(true)
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
+  const historyAddressRef = useRef(walletAddress.trim().toUpperCase())
+  historyAddressRef.current = walletAddress.trim().toUpperCase()
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
   const [addressToTagMap, setAddressToTagMap] = useState<Record<string, string>>({})
   /** One-shot client bootstrap: avoids Strict Mode double-fetch and dependency churn loops. */
@@ -331,40 +335,64 @@ export function useWalletData() {
     return null
   }, [addressToTagMap, updateAddressToTagMap])
 
+  // Paint this account's saved history immediately. A later fetch must not
+  // leave another account's rows on screen.
+  useEffect(() => {
+    const pk = walletAddress.trim().toUpperCase()
+    if (!/^[GC][A-Z0-9]{55}$/.test(pk)) {
+      setTransactionHistory([])
+      return
+    }
+    setTransactionHistory(readCachedTxHistory(pk) ?? [])
+  }, [walletAddress])
+
   // Fetch transaction history
   const fetchTransactionHistory = useCallback(async (publicKey: string) => {
-    if (!publicKey) {
+    const pk = publicKey.trim().toUpperCase()
+    if (!/^[GC][A-Z0-9]{55}$/.test(pk)) {
       console.warn("[Wallet] No public key provided for transaction history fetch")
       return
     }
-    
+
+    const cached = readCachedTxHistory(pk) ?? []
+    if (historyAddressRef.current === pk) {
+      setTransactionHistory(cached)
+    }
+
     setIsLoadingTransactions(true)
     try {
-      const userId = getUserId()
-      
-      console.log("[Wallet] 🔍 Fetching transaction history for:", publicKey.substring(0, 10) + "...")
-      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`)
-      
+      console.log("[Wallet] 🔍 Fetching transaction history for:", pk.substring(0, 10) + "...")
+      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${pk}&limit=200`)
+
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.transactions) {
+        if (data.success && Array.isArray(data.transactions)) {
           console.log("[Wallet] ✅ Transaction history fetched:", data.transactions.length, "transactions")
-          
-          // Resolve addresses to tags for all transactions
-          const addressesToResolve = new Set<string>()
-          data.transactions.forEach((tx: any) => {
-            const paymentOp = tx.operations.find((op: any) => op.type === "payment")
-            if (paymentOp) {
-              if (paymentOp.from && paymentOp.from !== publicKey) addressesToResolve.add(paymentOp.from)
-              if (paymentOp.to && paymentOp.to !== publicKey) addressesToResolve.add(paymentOp.to)
-            }
+
+          const merged = mergeAccountHistory({
+            walletAddress: pk,
+            remembered: cached,
+            chain: data.transactions as Transaction[],
+            faucet: [],
           })
-          
-          // Resolve all addresses in parallel
-          const resolvePromises = Array.from(addressesToResolve).map(addr => resolveAddressToTag(addr))
-          await Promise.all(resolvePromises)
-          
-          setTransactionHistory(data.transactions)
+
+          const addressesToResolve = new Set<string>()
+          for (const tx of merged) {
+            const paymentOp = tx.operations.find((op) => op.type === "payment")
+            if (!paymentOp) continue
+            for (const address of [paymentOp.from, paymentOp.to]) {
+              const normalized = address.trim().toUpperCase()
+              if (!normalized || normalized === pk || normalized === FAUCET_COUNTERPARTY) continue
+              addressesToResolve.add(normalized)
+            }
+          }
+
+          await Promise.all(Array.from(addressesToResolve).map((addr) => resolveAddressToTag(addr)))
+
+          writeCachedTxHistory(pk, merged)
+          if (historyAddressRef.current === pk) {
+            setTransactionHistory(merged)
+          }
         }
       } else {
         console.warn("[Wallet] Could not fetch transaction history:", response.status)
@@ -372,7 +400,9 @@ export function useWalletData() {
     } catch (error) {
       console.error("[Wallet] ❌ Error fetching transaction history:", error)
     } finally {
-      setIsLoadingTransactions(false)
+      if (historyAddressRef.current === pk) {
+        setIsLoadingTransactions(false)
+      }
     }
   }, [resolveAddressToTag])
 

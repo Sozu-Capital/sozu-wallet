@@ -35,6 +35,39 @@ export function CheckoutSuccessScreen({
     router.push("/home");
   };
 
+  if (collectible) {
+    return (
+      <BackgroundGradientAnimation
+        firstColor="255, 100, 0"
+        secondColor="255, 140, 0"
+        thirdColor="255, 69, 0"
+        fourthColor="0, 0, 0"
+        fifthColor="255, 100, 0"
+        size="80%"
+        blendingValue="hard-light"
+        interactive={false}
+        containerClassName="min-h-screen"
+      >
+        <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10 text-white">
+          <div className="w-full max-w-md space-y-6">
+            <CollectibleReceipt model={collectible} />
+            {transactionHash ? (
+              <div className="break-all px-2 text-center font-mono text-[11px] text-white/45">
+                {transactionHash}
+              </div>
+            ) : null}
+            <Button
+              onClick={handleDone}
+              className="w-full bg-white py-6 text-lg font-medium text-black hover:bg-white/90"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      </BackgroundGradientAnimation>
+    );
+  }
+
   return (
     <BackgroundGradientAnimation
       firstColor="255, 100, 0"
@@ -49,26 +82,17 @@ export function CheckoutSuccessScreen({
     >
       <div className="flex min-h-screen flex-col items-center justify-center text-white p-4">
         <div className="w-full max-w-md space-y-6 text-center">
-          {/* Success icon */}
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/30 bg-white/10">
             <Check className="h-10 w-10 text-white" />
           </div>
 
-          {/* Success message */}
           <div>
             <h1 className="mb-2 text-3xl font-bold text-white">Comprobante</h1>
             <p className="text-white/60">
-              {collectible
-                ? "Comprobante coleccionable"
-                : itemName
-                  ? `${itemName} · pago confirmado`
-                  : "Pago confirmado"}
+              {itemName ? `${itemName} · pago confirmado` : "Pago confirmado"}
             </p>
           </div>
 
-          {collectible ? (
-            <CollectibleReceipt model={collectible} />
-          ) : (
           <div className="rounded-xl border border-white/10 bg-white/5 p-6">
             <div className="mb-4">
               <div className="text-sm text-white/60">You paid</div>
@@ -92,7 +116,6 @@ export function CheckoutSuccessScreen({
               </div>
             ) : null}
           </div>
-          )}
 
           {/* Transaction details */}
           {transactionHash && (

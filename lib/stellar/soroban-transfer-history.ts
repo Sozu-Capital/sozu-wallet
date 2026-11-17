@@ -13,6 +13,25 @@ const EVENTS_PAGE_SIZE = 100
 const MAX_EVENT_PAGES = 5
 const LEDGER_LOOKBACK = 12_000
 const LEDGER_WINDOW = 2_000
+/** First load for an account with nothing stored yet. RPC retention is the real cap. */
+export const SOROBAN_HISTORY_BACKFILL_LEDGERS = 200_000
+const DEEP_SCAN_TIMEOUT_MS = 8_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      },
+    )
+  })
+}
 
 export type SorobanWalletTransaction = {
   id: string
@@ -78,6 +97,7 @@ function resolveSorobanRpcUrl(network: StellarNetwork): string {
 export async function getSorobanWalletTransactions(
   holderAddress: string,
   limit: number,
+  options?: { lookbackLedgers?: number },
 ): Promise<SorobanWalletTransaction[]> {
   const holder = holderAddress.trim().toUpperCase()
   if (!holder.startsWith("C") || holder.length !== 56) return []
@@ -96,7 +116,8 @@ export async function getSorobanWalletTransactions(
   const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
   const latest = await server.getLatestLedger()
   const endLedger = latest.sequence ?? 1
-  const startLedger = Math.max(1, endLedger - LEDGER_LOOKBACK)
+  const lookback = Math.max(LEDGER_LOOKBACK, options?.lookbackLedgers ?? LEDGER_LOOKBACK)
+  const startLedger = Math.max(1, endLedger - lookback)
 
   const assetByContract = new Map(
     getAssetRegistry(network).map((a) => [a.contractId.trim().toUpperCase(), a.symbol]),
@@ -161,34 +182,52 @@ export async function getSorobanWalletTransactions(
     }
   }
 
+  const pages = async (contractId: string, windowStart: number, windowEnd: number) => {
+    let cursor: string | undefined
+    for (let page = 0; page < MAX_EVENT_PAGES && byHash.size < limit; page++) {
+      const res = cursor
+        ? await server.getEvents({
+            filters: transferEventFilters(contractId, holder),
+            cursor,
+            limit: EVENTS_PAGE_SIZE,
+          })
+        : await server.getEvents({
+            startLedger: windowStart,
+            endLedger: windowEnd,
+            filters: transferEventFilters(contractId, holder),
+            limit: EVENTS_PAGE_SIZE,
+          })
+      const events = res?.events ?? []
+      absorb(contractId, events)
+      if (events.length < EVENTS_PAGE_SIZE) break
+      cursor = typeof res.cursor === "string" && res.cursor.length > 0 ? res.cursor : undefined
+      if (!cursor) break
+    }
+  }
+
   // Newest windows first. An unfiltered scan starts at the oldest ledger and never reaches a payment from the last few minutes.
-  for (let windowEnd = endLedger; windowEnd >= startLedger && byHash.size < limit; windowEnd -= LEDGER_WINDOW) {
-    const windowStart = Math.max(startLedger, windowEnd - LEDGER_WINDOW + 1)
+  const recentStart = Math.max(1, endLedger - LEDGER_LOOKBACK)
+  for (let windowEnd = endLedger; windowEnd >= recentStart && byHash.size < limit; windowEnd -= LEDGER_WINDOW) {
+    const windowStart = Math.max(recentStart, windowEnd - LEDGER_WINDOW + 1)
     for (const contractId of contractIds) {
       if (byHash.size >= limit) break
-      let cursor: string | undefined
       try {
-        for (let page = 0; page < MAX_EVENT_PAGES && byHash.size < limit; page++) {
-          const res = cursor
-            ? await server.getEvents({
-                filters: transferEventFilters(contractId, holder),
-                cursor,
-                limit: EVENTS_PAGE_SIZE,
-              })
-            : await server.getEvents({
-                startLedger: windowStart,
-                endLedger: windowEnd,
-                filters: transferEventFilters(contractId, holder),
-                limit: EVENTS_PAGE_SIZE,
-              })
-          const events = res?.events ?? []
-          absorb(contractId, events)
-          if (events.length < EVENTS_PAGE_SIZE) break
-          cursor = typeof res.cursor === "string" && res.cursor.length > 0 ? res.cursor : undefined
-          if (!cursor) break
-        }
+        await pages(contractId, windowStart, windowEnd)
       } catch (error) {
         console.warn("[soroban-transfer-history] event window skipped:", contractId.slice(0, 8), error)
+      }
+    }
+  }
+
+  // Holder-filtered scan across the backfill range. Recent payments are already
+  // collected, so this only fills older transfers the short window forgot.
+  if (lookback > LEDGER_LOOKBACK && byHash.size < limit) {
+    for (const contractId of contractIds) {
+      if (byHash.size >= limit) break
+      try {
+        await withTimeout(pages(contractId, startLedger, endLedger), DEEP_SCAN_TIMEOUT_MS)
+      } catch (error) {
+        console.warn("[soroban-transfer-history] deep scan skipped:", contractId.slice(0, 8), error)
       }
     }
   }

@@ -88,4 +88,53 @@ describe("history receipt", () => {
       expect(drink.receipt.toLabel).toBe("Cafe")
     }
   })
+
+  it("opens the 3D collectible receipt for a 1/10 purchase when the chain hash differs", () => {
+    const view = historyReceiptForTransaction({
+      tx: payment({ hash: "b".repeat(64), id: "b".repeat(64) }),
+      walletAddress: wallet,
+      walletNetwork: "testnet",
+      addressToTagMap: {},
+      saved: [
+        {
+          hash: "c".repeat(64),
+          merchantName: "Liquid Society",
+          itemName: "T-shirt 1/10",
+          amount: "15.00",
+          createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: true,
+          editionNumber: 1,
+          editionSize: 10,
+        },
+      ],
+      language: "en",
+    })
+    expect(view?.kind).toBe("collectible")
+    if (view?.kind === "collectible") {
+      expect(view.receipt.itemName).toBe("T-shirt")
+      expect(view.receipt.editionLabel).toBe("1/10")
+      expect(view.receipt.drop).toBe("Liquid Society")
+    }
+  })
+
+  it("keeps a same-amount drink on the confirmation receipt", () => {
+    const view = historyReceiptForTransaction({
+      tx: payment(),
+      walletAddress: wallet,
+      walletNetwork: "testnet",
+      addressToTagMap: {},
+      saved: [
+        {
+          hash: "c".repeat(64),
+          merchantName: "Cafe",
+          itemName: "House latte",
+          amount: "15.00",
+          createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: false,
+        },
+      ],
+      language: "en",
+    })
+    expect(view?.kind).toBe("simple")
+  })
 })

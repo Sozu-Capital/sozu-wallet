@@ -29,6 +29,7 @@ const COPY = {
     success: "Estás dentro.",
     invalid: "Revisa tu correo.",
     failed: "No pudimos guardarlo. Intenta de nuevo.",
+    signIn: "Ya tengo cuenta",
   },
   en: {
     statements: [
@@ -43,6 +44,7 @@ const COPY = {
     success: "You're in.",
     invalid: "Check your email.",
     failed: "We couldn't save it. Try again.",
+    signIn: "I already have an account",
   },
 } as const satisfies Record<WaitlistLocale, { statements: readonly string[] } & Record<string, unknown>>
 
@@ -192,9 +194,12 @@ export function WaitlistScreen() {
         )}
       </div>
 
-      <p className="absolute bottom-0 left-0 right-0 z-[2] pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-[10px] font-extralight tracking-[0.3em] text-white/50">
-        SOZU CAPITAL
-      </p>
+      <div className="absolute bottom-0 left-0 right-0 z-[2] flex flex-col items-center gap-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <a href="/auth" className="text-xs font-light text-white/70 underline-offset-4 hover:text-white hover:underline">
+          {t.signIn}
+        </a>
+        <p className="text-center text-[10px] font-extralight tracking-[0.3em] text-white/50">SOZU CAPITAL</p>
+      </div>
     </main>
   )
 }

@@ -13,6 +13,8 @@ import { warmKitForPay } from "@/lib/stellar/smartAccounts/warm-kit-for-pay";
 import type { CheckoutSession } from "@/lib/checkout/types";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { merchCopy } from "@/lib/merch/copy";
+import { resolveCollectibleSale } from "@/lib/merch/collectible-sale";
 import { buildCollectibleReceipt } from "@/lib/merch/receipt";
 import { useWalletLanguage } from "@/lib/wallet-language";
 
@@ -110,15 +112,23 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       merchantName: session.merchantName,
     });
 
+    const sale = resolveCollectibleSale({
+      collectibleReceipt: session.collectibleReceipt,
+      itemName: session.reference,
+      editionNumber: session.editionNumber,
+      editionSize: session.editionSize,
+    });
     const result = await submitSozuCheckoutPayment({
       sessionId,
       walletAddress,
       destination: session.destinationStellarAddress,
       amountUsd: session.amountUsd,
       merchantName: session.merchantName,
-      itemName: session.reference,
+      itemName: sale.itemName || session.reference,
       organizationId: session.organizationId,
-      collectibleReceipt: session.collectibleReceipt === true,
+      collectibleReceipt: sale.collectible,
+      editionNumber: sale.editionNumber,
+      editionSize: sale.editionSize,
     });
 
     if (result.success) {
@@ -131,14 +141,26 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
     }
   }, [isAuthenticated, walletAddress, session, router, sessionId]);
 
+  const sale = session
+    ? resolveCollectibleSale({
+        collectibleReceipt: session.collectibleReceipt,
+        itemName: session.reference,
+        editionNumber: session.editionNumber,
+        editionSize: session.editionSize,
+      })
+    : null;
   const collectible =
-    phase === "success" && session?.collectibleReceipt && receipt
+    phase === "success" && sale?.collectible && session && receipt
       ? buildCollectibleReceipt({
           item: {
-            name: session.reference?.trim() || session.merchantName,
+            name: sale.itemName || session.merchantName,
             drop: session.merchantName,
             network: receipt.network,
           },
+          edition:
+            sale.editionNumber && sale.editionSize
+              ? { number: sale.editionNumber, size: sale.editionSize }
+              : null,
           language: language === "en" ? "en" : "es",
           status: "paid",
           priceUsdc: session.amountUsd,
@@ -288,6 +310,12 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
             reference={session.reference}
             destinationAddress={treasuryAddress || session.destinationStellarAddress}
           />
+
+          {sale?.collectible ? (
+            <p className="text-center text-sm text-white/70">
+              {merchCopy(language === "en" ? "en" : "es").receiptLine}
+            </p>
+          ) : null}
 
           {phase === "ready" && (
             <>

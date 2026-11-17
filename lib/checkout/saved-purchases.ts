@@ -6,6 +6,15 @@ export type SavedPurchase = {
   createdAt: string
   /** True only for a product whose payment link opted into a collectible receipt. */
   collectible?: boolean
+  /** Numbered run. Both are set, or neither is. */
+  editionNumber?: number
+  editionSize?: number
+  /** Account that received the USDC. Used to reopen the receipt from history. */
+  toAddress?: string
+}
+
+function isEditionNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
 }
 
 const KEY = "sozu.checkout-purchases.v1"
@@ -32,7 +41,12 @@ export function readSavedPurchases(): SavedPurchase[] {
         typeof purchase.itemName === "string" &&
         typeof purchase.amount === "string" &&
         typeof purchase.createdAt === "string" &&
-        (purchase.collectible === undefined || typeof purchase.collectible === "boolean")
+        (purchase.collectible === undefined || typeof purchase.collectible === "boolean") &&
+        (purchase.toAddress === undefined || typeof purchase.toAddress === "string") &&
+        ((purchase.editionNumber === undefined && purchase.editionSize === undefined) ||
+          (isEditionNumber(purchase.editionNumber) &&
+            isEditionNumber(purchase.editionSize) &&
+            purchase.editionNumber <= purchase.editionSize))
       )
     })
   } catch {
@@ -45,8 +59,14 @@ export function rememberCheckoutPurchase(purchase: SavedPurchase): void {
   if (!store) return
   const hash = purchase.hash.trim().toLowerCase()
   if (!/^[a-f0-9]{64}$/.test(hash)) return
+  const edition =
+    isEditionNumber(purchase.editionNumber) &&
+    isEditionNumber(purchase.editionSize) &&
+    purchase.editionNumber <= purchase.editionSize
+      ? { editionNumber: purchase.editionNumber, editionSize: purchase.editionSize }
+      : {}
   const next = [
-    { ...purchase, hash, collectible: purchase.collectible === true },
+    { ...purchase, ...edition, hash, collectible: purchase.collectible === true },
     ...readSavedPurchases().filter((row) => row.hash.toLowerCase() !== hash),
   ].slice(0, MAX_SAVED)
   store.setItem(KEY, JSON.stringify(next))

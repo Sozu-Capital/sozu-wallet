@@ -414,7 +414,17 @@ export function WalletScreen({
   const handleActivitySelect = useCallback(
     (item: WalletActivityItem) => {
       if (item.chainTx) {
-        handleTransactionSelect(item.chainTx)
+        presentReceipt(
+          historyReceiptForTransaction({
+            tx: item.chainTx,
+            walletAddress,
+            walletNetwork,
+            addressToTagMap,
+            saved: readSavedPurchases(),
+            language: merchLanguage,
+            purchase: item.purchase,
+          }),
+        )
         return
       }
       if (!item.purchase) return
@@ -426,7 +436,7 @@ export function WalletScreen({
         }),
       )
     },
-    [handleTransactionSelect, merchLanguage, presentReceipt, walletNetwork],
+    [addressToTagMap, merchLanguage, presentReceipt, walletAddress, walletNetwork],
   )
 
   const handleDepositClose = useCallback(() => {

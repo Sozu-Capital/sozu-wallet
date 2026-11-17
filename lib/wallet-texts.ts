@@ -241,12 +241,19 @@ export type WalletTexts = {
   homeInviteBody: string;
   homeInviteShare: string;
   homeInviteReady: string;
+  homeInviteEyebrow: string;
+  homeInviteRewardBody: string;
+  homeInviteProgress: string;
+  homeInviteCodeLabel: string;
+  homeInviteShareCode: string;
+  homeInviteSoon: string;
   homeLinkCopied: string;
   homeFeedbackTitle: string;
   homeFeedbackBody: string;
   homeFeedbackPlaceholder: string;
   homeFeedbackSend: string;
   homeFeedbackReady: string;
+  homeFeedbackFailed: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -827,17 +834,25 @@ export const walletTexts = {
     homeDollarsBody:
       "USDC es un dólar digital. En Sozu está en tu cuenta y lo puedes enviar a otra persona con un toque.",
     homePayStoreTitle: "Pagar a un local",
-    homePayStoreBody: "Buscá la tienda por nombre",
+    homePayStoreBody: "Próximamente",
     homeInviteTitle: "Invita a alguien",
-    homeInviteBody: "A probar la app",
+    homeInviteBody: "Gana $40",
     homeInviteShare: "Prueba Sozu, dólares digitales en el teléfono.",
     homeInviteReady: "Listo para invitar.",
+    homeInviteEyebrow: "Invitación",
+    homeInviteRewardBody:
+      "Cada persona que cree una cuenta con tu código y confirme su correo suma 1 de 20. Al llegar a 20, recibes $40.",
+    homeInviteProgress: "{count}/{goal} invitaciones",
+    homeInviteCodeLabel: "Tu código",
+    homeInviteShareCode: "Compartir código",
+    homeInviteSoon: "Pronto vas a poder invitar a otras personas.",
     homeLinkCopied: "Enlace copiado.",
     homeFeedbackTitle: "Deja tu opinión",
     homeFeedbackBody: "Cuéntanos cómo se sintió",
     homeFeedbackPlaceholder: "Qué te gustó, qué faltó…",
     homeFeedbackSend: "Enviar",
-    homeFeedbackReady: "Gracias. Tu nota quedó lista para compartir.",
+    homeFeedbackReady: "Gracias. Recibimos tu nota.",
+    homeFeedbackFailed: "No pudimos enviar tu nota. Intentá de nuevo.",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -1384,17 +1399,25 @@ export const walletTexts = {
     homeDollarsBody:
       "USDC is a digital dollar. In Sozu it sits in your account, and you can send it to someone with a tap.",
     homePayStoreTitle: "Pay a store",
-    homePayStoreBody: "Find it by name",
+    homePayStoreBody: "Coming soon",
     homeInviteTitle: "Invite someone",
-    homeInviteBody: "To try the app",
+    homeInviteBody: "Earn $40",
     homeInviteShare: "Try Sozu, digital dollars on your phone.",
     homeInviteReady: "Ready to invite.",
+    homeInviteEyebrow: "Invite",
+    homeInviteRewardBody:
+      "Each person who creates an account with your code and confirms their email counts as 1 of 20. At 20, you get $40.",
+    homeInviteProgress: "{count}/{goal} invites",
+    homeInviteCodeLabel: "Your code",
+    homeInviteShareCode: "Share code",
+    homeInviteSoon: "You'll be able to invite other people soon.",
     homeLinkCopied: "Link copied.",
     homeFeedbackTitle: "Leave feedback",
     homeFeedbackBody: "Tell us how it felt",
     homeFeedbackPlaceholder: "What worked, what was missing…",
     homeFeedbackSend: "Send",
-    homeFeedbackReady: "Thanks. Your note is ready to share.",
+    homeFeedbackReady: "Thanks. We received your note.",
+    homeFeedbackFailed: "We couldn't send your note. Try again.",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",

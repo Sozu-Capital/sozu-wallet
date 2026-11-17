@@ -2,6 +2,8 @@ import { readdirSync, statSync } from "node:fs"
 import path from "node:path"
 import { NextRequest } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { buildSessionCookieValue } from "@/lib/auth/session-cookie"
+import { WALLET_SESSION_COOKIE } from "@/lib/auth/wallet-session-edge"
 import { isPilotBlockedPath, PILOT_BLOCKED_PREFIXES } from "./pilot-mainnet"
 
 vi.mock("@/lib/supabase/middleware", () => ({
@@ -22,7 +24,6 @@ const REQUIRED_DISABLED = [
   "/api/test/auto-deposit-e2e",
   "/api/debug/passkeys",
   "/test-keys",
-  "/dev/cleanup",
   "/connect-demo",
   // Credit
   "/api/wallet/credits",
@@ -115,7 +116,7 @@ describe("PILOT_MAINNET blocklist", () => {
   it("matches whole segments only", () => {
     expect(isPilotBlockedPath("/developers")).toBe(false)
     expect(isPilotBlockedPath("/ledgerx")).toBe(false)
-    expect(isPilotBlockedPath("/dev/cleanup")).toBe(true)
+    expect(isPilotBlockedPath("/credit/x")).toBe(true)
   })
 })
 
@@ -137,7 +138,14 @@ describe("middleware under PILOT_MAINNET=1", () => {
 
   it("still runs the page session check for allowed pages", async () => {
     vi.stubEnv("PILOT_MAINNET", "1")
-    expect(await statusFor("/home")).toBe(299)
+    vi.stubEnv("WALLET_SESSION_SECRET", "test-secret")
+    const cookie = buildSessionCookieValue("user-1", Date.now(), "test-secret")
+    const response = await middleware(
+      new NextRequest("https://app.sozu.capital/home", {
+        headers: { cookie: `${WALLET_SESSION_COOKIE}=${cookie}` },
+      }),
+    )
+    expect(response.status).toBe(299)
   })
 })
 

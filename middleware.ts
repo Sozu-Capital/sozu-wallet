@@ -1,3 +1,4 @@
+import { hasValidWalletSessionCookie, WALLET_SESSION_COOKIE } from "@/lib/auth/wallet-session-edge"
 import { isPilotBlockedPath, isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { updateSession } from "@/lib/supabase/middleware"
 import {
@@ -5,9 +6,8 @@ import {
   WAITLIST_BYPASS_QUERY,
   WAITLIST_PATH,
   isValidBypass,
-  isWaitlistMode,
-  waitlistGate,
 } from "@/lib/waitlist/waitlist-mode"
+import { betaAccessDecision } from "@/lib/waitlist/signup-window"
 import { NextResponse, type NextRequest } from "next/server"
 
 const IMAGE_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp)$/i
@@ -19,10 +19,8 @@ export async function middleware(request: NextRequest) {
     return new NextResponse(null, { status: 404 })
   }
 
-  if (isWaitlistMode()) {
-    const gated = waitlistResponse(request)
-    if (gated) return gated
-  }
+  const gated = await waitlistResponse(request)
+  if (gated) return gated
 
   // API routes enforce their own auth; the matcher includes them only for the pilot gate above.
   if (pathname.startsWith("/api/")) {
@@ -57,7 +55,7 @@ export async function middleware(request: NextRequest) {
   return await updateSession(request)
 }
 
-function waitlistResponse(request: NextRequest): NextResponse | null {
+async function waitlistResponse(request: NextRequest): Promise<NextResponse | null> {
   const accessParam = request.nextUrl.searchParams.get(WAITLIST_BYPASS_QUERY)
   if (accessParam !== null && isValidBypass(accessParam)) {
     const url = request.nextUrl.clone()
@@ -74,8 +72,15 @@ function waitlistResponse(request: NextRequest): NextResponse | null {
   }
 
   const hasBypass = isValidBypass(request.cookies.get(WAITLIST_BYPASS_COOKIE)?.value)
-  const decision = waitlistGate(request.nextUrl.pathname, hasBypass)
-  if (decision === "pass") return null
+  const hasSession = await hasValidWalletSessionCookie(request.cookies.get(WALLET_SESSION_COOKIE)?.value)
+  const decision = betaAccessDecision({
+    pathname: request.nextUrl.pathname,
+    hasBypass,
+    hasSession,
+    host: request.headers.get("host"),
+    nowMs: Date.now(),
+  })
+  if (decision === "open" || decision === "pass") return null
 
   const url = request.nextUrl.clone()
   url.search = ""

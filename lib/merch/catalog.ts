@@ -105,7 +105,7 @@ export function listActivations(): readonly MerchActivation[] {
   return ACTIVATIONS
 }
 
-/** Souvenirs shown on the current profile inside the wallet switcher. */
+/** Event badges a wallet can claim. Holding one is a separate signed claim. */
 export function listCollectibleSouvenirs(): readonly CollectibleSouvenir[] {
   return ACTIVATIONS.map((activation) => activation.souvenir)
 }

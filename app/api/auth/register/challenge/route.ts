@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
+import { isNewAccountAllowed } from "@/lib/waitlist/signup-window"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -11,6 +12,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isNewAccountAllowed(request.headers.get("host"))) {
+      return NextResponse.json(
+        { error: "Account creation is closed.", code: "signup_closed" },
+        { status: 403, headers: corsHeaders(request) },
+      )
+    }
+
     const { username } = await request.json()
 
     if (!username || typeof username !== "string") {
