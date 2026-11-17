@@ -14,33 +14,59 @@ export type CollectionCard = {
   receipt: CollectibleReceiptModel
 }
 
+export type ActivationOffer = {
+  slug: string
+  name: string
+  drop: string
+  imageUrl: string
+  items: FindCollectibleCard[]
+}
+
 export function CollectionsPanelView({
   title,
   nearLabel,
   cityLabel,
-  findItems,
+  activations,
+  openLabel,
+  backLabel,
+  itemsLabel,
   cityDots,
   previousLabel,
   nextLabel,
   cards,
   activeIndex,
   onActiveIndexChange,
+  selectedActivation,
+  onSelectedActivationChange,
   onLeavePrevious,
 }: {
   title: string
   nearLabel: string
   cityLabel: string
-  findItems: FindCollectibleCard[]
+  activations: ActivationOffer[]
+  openLabel: string
+  backLabel: string
+  itemsLabel: string
   cityDots: FindCityDot[]
   previousLabel: string
   nextLabel: string
   cards: CollectionCard[]
   activeIndex?: number
   onActiveIndexChange?: (index: number) => void
+  selectedActivation?: string | null
+  onSelectedActivationChange?: (slug: string | null) => void
   onLeavePrevious?: () => void
 }) {
   const [uncontrolledIndex, setUncontrolledIndex] = useState(0)
+  const [localActivation, setLocalActivation] = useState<string | null>(null)
+  const activationSlug = selectedActivation !== undefined ? selectedActivation : localActivation
+  const activation = activations.find((entry) => entry.slug === activationSlug) ?? null
   const controlled = activeIndex != null
+
+  function selectActivation(slug: string | null) {
+    if (selectedActivation === undefined) setLocalActivation(slug)
+    onSelectedActivationChange?.(slug)
+  }
   const index = cards.length === 0 ? 0 : Math.min(controlled ? activeIndex : uncontrolledIndex, cards.length - 1)
   const card = cards[index] ?? null
   const swipeable = cards.length > 1
@@ -118,7 +144,36 @@ export function CollectionsPanelView({
           ) : null}
         </div>
       ) : (
-        <FindCollectibles nearLabel={nearLabel} cityLabel={cityLabel} items={findItems} dots={cityDots} />
+        activation ? (
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => selectActivation(null)}
+              aria-label={backLabel}
+              className="inline-flex items-center gap-1 text-sm text-white/70"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              {activation.name}
+            </button>
+            <FindCollectibles nearLabel={itemsLabel} cityLabel={cityLabel} items={activation.items} dots={[]} />
+          </div>
+        ) : (
+          <FindCollectibles
+            nearLabel={nearLabel}
+            cityLabel={cityLabel}
+            items={activations.map((entry) => ({
+              id: entry.slug,
+              name: entry.name,
+              drop: entry.drop,
+              imageUrl: entry.imageUrl,
+              priceLabel: null,
+              excerpt: entry.items.map((item) => item.name).join(" · "),
+              actionLabel: openLabel,
+              onSelect: () => selectActivation(entry.slug),
+            }))}
+            dots={cityDots}
+          />
+        )
       )}
     </section>
   )

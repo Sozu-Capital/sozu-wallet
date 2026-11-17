@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check, Copy, LogOut, Plus, X } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Copy, LogOut, Plus, X } from "lucide-react"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
+import { SouvenirList } from "@/components/merch/souvenir-list"
 import { SozuShaderAvatar } from "@/components/ui/sozu-shader-avatar"
+import { listCollectibleSouvenirs } from "@/lib/merch/catalog"
+import { merchCopy } from "@/lib/merch/copy"
+import { useWalletLanguage } from "@/lib/wallet-language"
 
 interface WalletSwitcherModalProps {
   isOpen: boolean
@@ -43,6 +47,10 @@ export function WalletSwitcherModal({
   const [copied, setCopied] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [showProHint, setShowProHint] = useState(false)
+  const [view, setView] = useState<"wallets" | "souvenirs">("wallets")
+  const { language } = useWalletLanguage()
+  const copy = merchCopy(language === "en" ? "en" : "es")
+  const souvenirs = listCollectibleSouvenirs()
 
   const handleAddWallet = useCallback(() => {
     setShowProHint(true)
@@ -87,6 +95,10 @@ export function WalletSwitcherModal({
     setPortalEl(document.body)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) setView("wallets")
+  }, [isOpen])
+
   if (!portalEl) return null
 
   return createPortal(
@@ -130,9 +142,21 @@ export function WalletSwitcherModal({
 
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between px-5 py-4">
-              <p className="text-[13px] font-medium tracking-wider text-white/40 uppercase">
-                Mis billeteras
-              </p>
+              <div className="flex min-w-0 items-center gap-2">
+                {view === "souvenirs" ? (
+                  <button
+                    type="button"
+                    onClick={() => setView("wallets")}
+                    aria-label={copy.back}
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.07] text-white/55 hover:text-white/80 transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <p className="truncate text-[13px] font-medium tracking-wider text-white/40 uppercase">
+                  {view === "souvenirs" ? copy.souvenirs : "Mis billeteras"}
+                </p>
+              </div>
               <button
                 onClick={onClose}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.07] text-white/35 hover:text-white/70 transition-colors"
@@ -144,13 +168,21 @@ export function WalletSwitcherModal({
 
             {/* Cards */}
             <div className="flex flex-1 flex-col gap-3 px-4 overflow-hidden">
-
+              {view === "souvenirs" ? (
+                <SouvenirList label={copy.souvenirs} items={souvenirs} />
+              ) : (
+              <>
               {/* Active wallet card */}
               <div
                 className="rounded-2xl p-5"
                 style={{ background: "rgba(255,255,255,0.06)" }}
               >
-                <div className="flex items-start gap-4">
+                <button
+                  type="button"
+                  onClick={() => setView("souvenirs")}
+                  aria-label={copy.openSouvenirs}
+                  className="flex w-full items-start gap-4 text-left"
+                >
                   <WalletAvatar address={walletAddress} tag={sozuTag} />
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
@@ -176,7 +208,8 @@ export function WalletSwitcherModal({
                       )}
                     </div>
                   </div>
-                </div>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-white/30" aria-hidden />
+                </button>
 
                 <div className="my-4 h-px bg-white/[0.06]" />
 
@@ -253,6 +286,8 @@ export function WalletSwitcherModal({
               </motion.button>
 
               <div className="flex-1" />
+              </>
+              )}
             </div>
 
             {/* Sign out — white text, clearly visible */}

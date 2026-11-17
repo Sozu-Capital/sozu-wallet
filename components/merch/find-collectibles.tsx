@@ -1,7 +1,8 @@
 import { GlassBlogCard } from "@/components/ui/glass-blog-card-shadcnui"
 
 export type FindCollectibleCard = {
-  href: string
+  id?: string
+  href?: string
   name: string
   drop: string
   imageUrl: string
@@ -9,6 +10,7 @@ export type FindCollectibleCard = {
   excerpt?: string
   tags?: string[]
   actionLabel?: string
+  onSelect?: () => void
 }
 
 export type FindCityDot = {
@@ -36,10 +38,10 @@ export function FindCollectibles({
         <div>
           <h2 className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/45">{nearLabel}</h2>
           <ul className="dark mt-3 flex flex-col gap-4 text-foreground">
-            {items.map((item) => (
-              <li key={item.href} className="list-none">
+            {items.map((item) => {
+              const card = (
                 <GlassBlogCard
-                  href={item.href}
+                  href={item.onSelect ? undefined : item.href}
                   title={item.name}
                   excerpt={item.excerpt ?? item.drop}
                   image={item.imageUrl}
@@ -48,8 +50,24 @@ export function FindCollectibles({
                   readTime={item.priceLabel ?? undefined}
                   actionLabel={item.actionLabel}
                 />
-              </li>
-            ))}
+              )
+              return (
+                <li key={item.id ?? item.href} className="list-none">
+                  {item.onSelect ? (
+                    <button
+                      type="button"
+                      onClick={item.onSelect}
+                      data-activation={item.id}
+                      className="block w-full cursor-pointer text-left"
+                    >
+                      {card}
+                    </button>
+                  ) : (
+                    card
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

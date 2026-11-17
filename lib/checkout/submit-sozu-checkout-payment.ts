@@ -22,6 +22,7 @@ export async function submitSozuCheckoutPayment({
   merchantName,
   itemName,
   organizationId,
+  collectibleReceipt = false,
 }: {
   sessionId: string;
   walletAddress: string;
@@ -30,6 +31,7 @@ export async function submitSozuCheckoutPayment({
   merchantName: string;
   itemName?: string | null;
   organizationId?: string | null;
+  collectibleReceipt?: boolean;
 }): Promise<CheckoutPaymentResult> {
   try {
     const userId = getUserId();
@@ -256,6 +258,7 @@ export async function submitSozuCheckoutPayment({
       itemName: itemName?.trim() || merchantName,
       amount: amountUsd,
       createdAt: new Date().toISOString(),
+      collectible: collectibleReceipt,
     });
 
     return {

@@ -20,7 +20,7 @@ describe("USDC transfer event filter", () => {
 })
 
 describe("purchase placeholder receipts", () => {
-  it("shows an outgoing USDC payment as a collectible that is still on its way", () => {
+  it("shows a collectible product payment that is still on its way", () => {
     const cards = purchasePlaceholderReceipts({
       wallet,
       transfers: [
@@ -40,6 +40,7 @@ describe("purchase placeholder receipts", () => {
           itemName: "Polera UNBLCK Drop-002",
           amount: "8.00",
           createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: true,
         },
       ],
       language: "en",
@@ -53,7 +54,7 @@ describe("purchase placeholder receipts", () => {
     expect(cards[0].receipt.statusLabel).toBe("Receipt pending")
   })
 
-  it("ignores incoming transfers and uses a placeholder name when the item was not saved", () => {
+  it("ignores incoming transfers, drinks, and peer payments", () => {
     const cards = purchasePlaceholderReceipts({
       wallet,
       transfers: [
@@ -73,14 +74,28 @@ describe("purchase placeholder receipts", () => {
           amount: 3,
           asset: "USDC",
         },
+        {
+          hash: "d".repeat(64),
+          createdAt: "2026-11-14T06:00:00.000Z",
+          from: wallet,
+          to: merchant,
+          amount: 4.5,
+          asset: "USDC",
+        },
       ],
-      saved: [],
+      saved: [
+        {
+          hash: "d".repeat(64),
+          merchantName: "Cafe",
+          itemName: "House latte",
+          amount: "4.50",
+          createdAt: "2026-11-14T06:00:00.000Z",
+          collectible: false,
+        },
+      ],
       language: "es",
       network: "testnet",
     })
-    expect(cards).toHaveLength(1)
-    expect(cards[0].receipt.itemName).toBe("Comprobante de compra")
-    expect(cards[0].receipt.price).toBe("3.00")
-    expect(cards[0].receipt.statusLabel).toBe("Comprobante en camino")
+    expect(cards).toHaveLength(0)
   })
 })

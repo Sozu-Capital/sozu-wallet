@@ -23,6 +23,10 @@ export type MerchCopy = {
   findNear: string
   findCity: string
   findOpen: string
+  back: string
+  offered: string
+  souvenirs: string
+  openSouvenirs: string
 }
 
 const es: MerchCopy = {
@@ -48,6 +52,10 @@ const es: MerchCopy = {
   findNear: "Cerca de ti",
   findCity: "En la ciudad",
   findOpen: "Ver",
+  back: "Volver",
+  offered: "En el evento",
+  souvenirs: "Souvenirs coleccionables",
+  openSouvenirs: "Ver souvenirs coleccionables",
 }
 
 const en: MerchCopy = {
@@ -73,6 +81,10 @@ const en: MerchCopy = {
   findNear: "Near you",
   findCity: "In the city",
   findOpen: "View",
+  back: "Back",
+  offered: "At the event",
+  souvenirs: "Collectible souvenirs",
+  openSouvenirs: "View collectible souvenirs",
 }
 
 export function merchCopy(language: MerchLanguage): MerchCopy {

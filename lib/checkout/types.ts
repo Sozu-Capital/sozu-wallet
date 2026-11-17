@@ -14,6 +14,8 @@ export type CheckoutSession = {
   stellarTxHash?: string | null;
   completedPaymentMethod?: string | null;
   organizationId?: string | null;
+  /** Product link with the merchant's collectible receipt toggle on. Drinks are never set. */
+  collectibleReceipt?: boolean;
 };
 
 export type CheckoutPublicResponse = CheckoutSession;

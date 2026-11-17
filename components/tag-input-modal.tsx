@@ -11,8 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Check, Fingerprint, Hash, Loader2 } from "lucide-react"
-import { AnimatePresence, motion } from "framer-motion"
-import { OnboardingForm } from "@/components/ui/onboarding-form"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
@@ -54,6 +52,9 @@ const EMAIL_COPY = {
     back: "Back",
   },
 } as const
+
+const fieldClass =
+  "h-11 rounded-none border-0 border-b border-b-white/15 bg-transparent px-0 text-center text-lg font-light tracking-[0.15em] text-white placeholder:text-white/25 focus-visible:border-b-white/40 focus-visible:ring-0"
 
 export function TagInputModal({
   isOpen,
@@ -192,10 +193,10 @@ export function TagInputModal({
     }
   }, [isOpen, resumeWithTag, prefillTag, checkUsernameAvailability])
 
-  const handleTagValue = (value: string) => {
-    const next = value.replace(/[^a-zA-Z0-9_]/g, "")
-    setTag(next)
-    if (error && next.trim().length >= 3) setError("")
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^a-zA-Z0-9_]/g, "")
+    setTag(value)
+    if (error && value.trim().length >= 3) setError("")
   }
 
   const trimmed = tag.trim()
@@ -253,8 +254,12 @@ export function TagInputModal({
     }
   }
 
-  const canProceedTag =
-    isTagValid && (availabilityStatus === "available" || availabilityStatus === "taken")
+  const handleKeyDownTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handlePrimaryTagStep()
+    }
+  }
 
   const submitEmail = () => {
     const normalized = normalizeRecoveryEmail(email)
@@ -265,37 +270,13 @@ export function TagInputModal({
     onRegister(trimmed, normalized)
   }
 
-  const backClass = "w-full text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
-
-  const availabilityHint = (
-    <div className="flex min-h-5 items-center justify-center gap-2">
-      {trimmed.length >= 3 && isTagValid && availabilityStatus === "checking" ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-      ) : null}
-      {trimmed.length >= 3 && isTagValid && availabilityStatus === "available" ? (
-        <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
-      ) : null}
-      {availabilityMessage ? (
-        <p
-          className={`text-[11px] font-light ${
-            availabilityStatus === "available"
-              ? "text-emerald-400"
-              : availabilityStatus === "error"
-                ? "text-amber-400"
-                : "text-muted-foreground"
-          }`}
-        >
-          {availabilityMessage}
-        </p>
-      ) : null}
-      {error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
-    </div>
-  )
+  const canProceedTag =
+    isTagValid && (availabilityStatus === "available" || availabilityStatus === "taken")
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-md border-0 bg-transparent p-0 shadow-none sm:max-w-md"
+        className="max-w-sm border-white/10 bg-black/95 text-white shadow-none"
         showCloseButton={false}
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -305,128 +286,193 @@ export function TagInputModal({
         <DialogDescription className="sr-only">
           {step === "email" ? emailCopy.subtitle : step === "tag" ? t.authRegisterOnInternet : trimmed}
         </DialogDescription>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-          >
-          {step === "tag" ? (
-            <OnboardingForm
-              imageSrc="/onboarding/slide1.webp"
-              title={t.authChooseName}
-              description={t.authRegisterOnInternet}
-              inputPlaceholder={t.authTagPlaceholder}
-              buttonText={availabilityStatus === "taken" ? t.authSignIn : t.authRegister}
-              value={tag}
-              onValueChange={handleTagValue}
-              autoCapitalize="none"
-              autoComplete="username"
-              onSubmit={() => handlePrimaryTagStep()}
-              submitDisabled={!canProceedTag}
-              hint={availabilityHint}
-              note={
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setLearnOpen((open) => !open)}
-                    className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+        {step === "tag" ? (
+          <div className="space-y-8 pt-1 pb-2">
+            <div className="space-y-1 text-center">
+              <p className="text-[15px] font-light tracking-wide text-white/90">{t.authChooseName}</p>
+              <p className="text-[13px] font-extralight tracking-wide text-white/55">{t.authRegisterOnInternet}</p>
+              <button
+                type="button"
+                onClick={() => setLearnOpen((v) => !v)}
+                className="mt-2 text-[10px] tracking-[0.2em] uppercase text-white/35 hover:text-white/50 transition-colors"
+              >
+                {t.authLearnMore}
+              </button>
+              {learnOpen ? (
+                <p className="mt-3 border-t border-white/5 px-1 pt-2 text-left text-[11px] leading-relaxed text-white/45">
+                  {t.authLearnMoreBody}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              <Input
+                type="text"
+                value={tag}
+                onChange={handleChange}
+                onKeyDown={handleKeyDownTag}
+                placeholder={t.authTagPlaceholder}
+                className={`${fieldClass} ${
+                  availabilityStatus === "available"
+                    ? "border-b-emerald-500/40"
+                    : availabilityStatus === "taken"
+                      ? "border-b-white/25"
+                      : "border-b-white/15"
+                }`}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              <div className="flex min-h-[1.25rem] items-center justify-center gap-2">
+                {trimmed.length >= 3 && isTagValid && availabilityStatus === "checking" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />
+                ) : null}
+                {trimmed.length >= 3 && isTagValid && availabilityStatus === "available" ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600/80" aria-hidden />
+                ) : null}
+                {availabilityMessage ? (
+                  <p
+                    className={`text-[11px] font-light ${
+                      availabilityStatus === "available"
+                        ? "text-emerald-600/70"
+                        : availabilityStatus === "taken"
+                          ? "text-white/40"
+                          : availabilityStatus === "error"
+                            ? "text-amber-500/80"
+                            : "text-white/30"
+                    }`}
                   >
-                    {t.authLearnMore}
-                  </button>
-                  {learnOpen ? (
-                    <p className="mt-3 border-t border-border pt-3 text-left text-[11px] leading-relaxed text-muted-foreground">
-                      {t.authLearnMoreBody}
-                    </p>
-                  ) : null}
-                </>
-              }
-            />
-          ) : step === "email" ? (
-            <OnboardingForm
-              key="email"
-              imageSrc="/onboarding/slide4.webp"
-              title={emailCopy.title}
-              description={emailCopy.subtitle}
-              inputPlaceholder={emailCopy.placeholder}
-              inputType="email"
-              inputMode="email"
-              autoComplete="email"
-              buttonText={emailCopy.button}
-              value={email}
-              onValueChange={(next) => {
-                setEmail(next)
+                    {availabilityMessage}
+                  </p>
+                ) : null}
+              </div>
+              {error ? <p className="text-center text-[11px] text-amber-500/90">{error}</p> : null}
+            </div>
+
+            <Button
+              type="button"
+              onClick={handlePrimaryTagStep}
+              disabled={!canProceedTag}
+              className="h-11 w-full rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white disabled:opacity-30"
+            >
+              {availabilityStatus === "taken" ? t.authSignIn : t.authRegister}
+            </Button>
+          </div>
+        ) : step === "email" ? (
+          <div className="space-y-8 pt-1 pb-2">
+            <div className="space-y-1 text-center">
+              <p className="text-[15px] font-light tracking-wide text-white/90">{emailCopy.title}</p>
+              <p className="text-[13px] font-extralight tracking-wide text-white/55">{emailCopy.subtitle}</p>
+            </div>
+
+            <div className="space-y-3">
+              <Input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setEmailError("")
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    submitEmail()
+                  }
+                }}
+                placeholder={emailCopy.placeholder}
+                className={fieldClass}
+                autoFocus
+              />
+              {emailError ? <p className="text-center text-[11px] text-amber-500/90">{emailError}</p> : null}
+            </div>
+
+            <Button
+              type="button"
+              onClick={submitEmail}
+              className="h-11 w-full rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white"
+            >
+              {emailCopy.button}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("tag")
                 setEmailError("")
               }}
-              onSubmit={() => submitEmail()}
-              hint={emailError ? <p className="text-[11px] text-amber-400">{emailError}</p> : null}
-              footer={
-                <button type="button" onClick={() => { setStep("tag"); setEmailError("") }} className={backClass}>
-                  {emailCopy.back}
-                </button>
-              }
-            />
-          ) : (
-            <OnboardingForm
-              key="signin"
-              imageSrc="/onboarding/slide2.webp"
-              title={t.authSignIn}
-              description={trimmed}
-              buttonText={t.authPasskey}
-              buttonIcon={<Fingerprint className="mr-2 h-4 w-4" />}
-              hideInput
-              onSubmit={() => void handlePasskey()}
-              isSubmitting={passkeyBusy}
-              hint={error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
-              footer={
-                <div className="space-y-4">
-                  {pinEnabled ? (
-                    <div className="space-y-3 border-t border-border pt-4">
-                      <Label className="flex items-center justify-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                        <Hash className="h-3 w-3" />
-                        {t.authBackupPin}
-                      </Label>
-                      <Input
-                        type="password"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        value={pin}
-                        onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 12))}
-                        placeholder={t.authPinPlaceholder}
-                        className="text-center tracking-widest"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => void handlePinSubmit()}
-                        disabled={pinBusy || pin.length < 6}
-                        className="w-full"
-                      >
-                        {pinBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t.authContinueWithPin}
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-[10px] leading-relaxed text-muted-foreground">{t.authNoBackupPin}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("tag")
-                      setPin("")
-                      setError("")
-                    }}
-                    className={backClass}
-                  >
-                    {t.authBack}
-                  </button>
-                </div>
-              }
-            />
-          )}
-          </motion.div>
-        </AnimatePresence>
+              className="w-full text-[10px] tracking-[0.2em] uppercase text-white/30 hover:text-white/45"
+            >
+              {emailCopy.back}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6 pt-1 pb-2">
+            <div className="space-y-1 text-center">
+              <p className="text-[11px] tracking-[0.25em] uppercase text-white/35">{t.authSignIn}</p>
+              <p className="text-base font-light tracking-wide text-white/90">{trimmed}</p>
+            </div>
+
+            {error ? <p className="text-center text-[11px] text-amber-500/90">{error}</p> : null}
+
+            <Button
+              type="button"
+              onClick={() => void handlePasskey()}
+              disabled={passkeyBusy}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white disabled:opacity-40"
+            >
+              {passkeyBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Fingerprint className="h-4 w-4 opacity-70" />
+                  {t.authPasskey}
+                </>
+              )}
+            </Button>
+
+            {pinEnabled ? (
+              <div className="space-y-3 border-t border-white/10 pt-2">
+                <Label className="flex items-center gap-1.5 text-[10px] tracking-[0.2em] uppercase text-white/30">
+                  <Hash className="h-3 w-3" />
+                  {t.authBackupPin}
+                </Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                  placeholder={t.authPinPlaceholder}
+                  className="h-10 border-white/10 bg-white/5 text-center text-sm tracking-widest"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void handlePinSubmit()}
+                  disabled={pinBusy || pin.length < 6}
+                  className="w-full text-xs text-white/60 hover:bg-white/5 hover:text-white"
+                >
+                  {pinBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t.authContinueWithPin}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-center text-[10px] leading-relaxed text-white/30">{t.authNoBackupPin}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep("tag")
+                setPin("")
+                setError("")
+              }}
+              className="w-full pt-2 text-[10px] tracking-[0.2em] uppercase text-white/30 hover:text-white/45"
+            >
+              {t.authBack}
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

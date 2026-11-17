@@ -7,6 +7,7 @@ import { Wallet } from "lucide-react"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCoins } from "@fortawesome/free-solid-svg-icons"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { WalletLazySectionSkeleton, WalletSkeleton } from "@/components/ui/wallet-skeleton"
 import { BalanceCardSkeleton, CommandBarSkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { WalletErrorBoundary } from "@/components/wallet/wallet-error-boundary"
@@ -46,7 +47,14 @@ import { UniversalCommandBar } from "@/components/home/universal-command-bar"
 import { P2pWithdrawSheet } from "@/components/home/p2p-withdraw-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
-import { transactionToPaymentReceipt } from "@/lib/payment/transaction-to-receipt"
+import {
+  historyReceiptForPurchase,
+  historyReceiptForTransaction,
+  type HistoryReceiptView,
+} from "@/lib/payment/history-receipt"
+import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
+import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
+import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
 import type { Transaction } from "@/hooks/use-wallet-data"
 import type { ReceiptModalVariant } from "@/components/wallet/success-modal"
 
@@ -83,7 +91,8 @@ export function WalletScreen({
   shellLayout,
 }: WalletScreenProps) {
   const searchParams = useSearchParams()
-  const { t } = useWalletLanguage()
+  const { t, language } = useWalletLanguage()
+  const merchLanguage = language === "en" ? "en" : "es"
 
   // Wallet data hook
   const walletData = useWalletDataContext()
@@ -166,6 +175,7 @@ export function WalletScreen({
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
   const [receiptModalVariant, setReceiptModalVariant] = useState<ReceiptModalVariant>("success")
+  const [collectibleReceipt, setCollectibleReceipt] = useState<CollectibleReceiptModel | null>(null)
   const [welcomeNeeded, setWelcomeNeeded] = useState(false)
   const [activationNeeded, setActivationNeeded] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
@@ -371,28 +381,52 @@ export function WalletScreen({
     [setSendModalOpen, refreshWalletData],
   )
 
+  const presentReceipt = useCallback((view: HistoryReceiptView | null) => {
+    if (!view) return
+    if (view.kind === "collectible") {
+      setShowSuccessModal(false)
+      setPaymentReceipt(null)
+      setCollectibleReceipt(view.receipt)
+      return
+    }
+    setCollectibleReceipt(null)
+    setPaymentReceipt(view.receipt)
+    setReceiptModalVariant("success")
+    setShowSuccessModal(true)
+  }, [])
+
   const handleTransactionSelect = useCallback(
     (tx: Transaction) => {
-      const receipt = transactionToPaymentReceipt(
-        tx,
-        walletAddress,
-        walletNetwork,
-        addressToTagMap,
+      presentReceipt(
+        historyReceiptForTransaction({
+          tx,
+          walletAddress,
+          walletNetwork,
+          addressToTagMap,
+          saved: readSavedPurchases(),
+          language: merchLanguage,
+        }),
       )
-      if (!receipt) return
-      setPaymentReceipt(receipt)
-      setReceiptModalVariant("history")
-      setShowSuccessModal(true)
     },
-    [walletAddress, walletNetwork, addressToTagMap],
+    [addressToTagMap, merchLanguage, presentReceipt, walletAddress, walletNetwork],
   )
 
   const handleActivitySelect = useCallback(
     (item: WalletActivityItem) => {
-      if (!item.chainTx) return
-      handleTransactionSelect(item.chainTx)
+      if (item.chainTx) {
+        handleTransactionSelect(item.chainTx)
+        return
+      }
+      if (!item.purchase) return
+      presentReceipt(
+        historyReceiptForPurchase({
+          purchase: item.purchase,
+          walletNetwork,
+          language: merchLanguage,
+        }),
+      )
     },
-    [handleTransactionSelect],
+    [handleTransactionSelect, merchLanguage, presentReceipt, walletNetwork],
   )
 
   const handleDepositClose = useCallback(() => {
@@ -717,6 +751,27 @@ export function WalletScreen({
           variant={receiptModalVariant}
         />
       </Suspense>
+
+      <Dialog
+        open={collectibleReceipt != null}
+        onOpenChange={(open) => {
+          if (!open) setCollectibleReceipt(null)
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/20 bg-black/80 text-white backdrop-blur-md sm:max-w-md">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{t.receiptDetailTitle}</DialogTitle>
+            <DialogDescription>{t.receiptDetailDesc}</DialogDescription>
+          </DialogHeader>
+          {collectibleReceipt ? <CollectibleReceipt model={collectibleReceipt} /> : null}
+          <Button
+            onClick={() => setCollectibleReceipt(null)}
+            className="h-14 w-full bg-white text-lg font-semibold text-black hover:bg-white/90"
+          >
+            {t.done}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <Suspense fallback={null}>
         <ProfileSheet

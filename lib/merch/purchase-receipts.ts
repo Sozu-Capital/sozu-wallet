@@ -27,8 +27,8 @@ function placeholderName(language: MerchLanguage): string {
 }
 
 /**
- * One pending collectible receipt per outgoing USDC payment.
- * The NFT has not been minted yet, so the card stays on "receipt pending".
+ * Collectible cards only for product payments whose link opted in.
+ * Drinks and peer-to-peer transfers stay a simple confirmation.
  */
 export function purchasePlaceholderReceipts(input: {
   wallet: string
@@ -57,6 +57,7 @@ export function purchasePlaceholderReceipts(input: {
     seen.add(hash)
 
     const saved = savedByHash.get(hash)
+    if (!saved?.collectible) continue
     const itemName = saved?.itemName.trim() || placeholderName(input.language)
     const merchant = saved?.merchantName.trim() || shortAddress(transfer.to)
     const price = saved?.amount.trim() || transfer.amount.toFixed(2)
