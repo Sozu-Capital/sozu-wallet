@@ -2,21 +2,35 @@ import "server-only";
 
 import {
   Contract,
+  Keypair,
   Networks,
   TransactionBuilder,
   rpc,
   scValToNative,
 } from "@stellar/stellar-sdk";
 import { Api } from "@stellar/stellar-sdk/rpc";
+import { isFaucetContractConfigured, vaultCoversClaim } from "@/lib/faucet/network-policy";
 import { getConfiguredFunderPublicKey } from "@/lib/stellar/soroban-fee-payer";
 import { getStellarConfig } from "@/lib/turnkey/config";
 
 const TOKEN_DECIMALS = 7;
 
 function getFaucetContractId(): string | null {
-  const id = process.env.FAUCET_CONTRACT_ID?.trim().toUpperCase();
-  if (id?.startsWith("C") && id.length === 56) return id;
-  return null;
+  if (!isFaucetContractConfigured()) return null;
+  return process.env.FAUCET_CONTRACT_ID!.trim().toUpperCase();
+}
+
+/** Simulation source: the faucet treasury when it is set, else the testnet funder. */
+function simulationSourcePublicKey(): string | null {
+  const treasury = process.env.FAUCET_TREASURY_SECRET?.trim();
+  if (treasury) {
+    try {
+      return Keypair.fromSecret(treasury).publicKey();
+    } catch {
+      return null;
+    }
+  }
+  return getConfiguredFunderPublicKey();
 }
 
 function getSorobanRpcUrl(): string {
@@ -54,19 +68,19 @@ export async function getFaucetVaultBalanceMinor(
 
 async function readFaucetVaultBalanceMinor(): Promise<bigint | null> {
   const contractId = getFaucetContractId();
-  const funderPk = getConfiguredFunderPublicKey();
-  if (!contractId || !funderPk) return null;
+  const sourcePk = simulationSourcePublicKey();
+  if (!contractId || !sourcePk) return null;
 
   const cfg = getStellarConfig();
-  if (cfg.network !== "testnet") return null;
+  const network = cfg.network === "mainnet" ? "mainnet" : "testnet";
 
-  const server = new rpc.Server(getSorobanRpcUrl(), { allowHttp: true });
-  const account = await server.getAccount(funderPk);
+  const server = new rpc.Server(getSorobanRpcUrl(), { allowHttp: network === "testnet" });
+  const account = await server.getAccount(sourcePk);
   const faucet = new Contract(contractId);
 
   const tx = new TransactionBuilder(account, {
     fee: "100",
-    networkPassphrase: Networks.TESTNET,
+    networkPassphrase: network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
   })
     .addOperation(faucet.call("balance"))
     .setTimeout(30)
@@ -82,14 +96,21 @@ async function readFaucetVaultBalanceMinor(): Promise<bigint | null> {
   return null;
 }
 
-/** True when the vault contract can cover a claim of `amountUsdc`. */
+/**
+ * True when the vault can cover `amountUsdc`.
+ * Unreadable balance with a configured contract refuses the claim.
+ */
 export async function vaultCanCoverClaim(
   amountUsdc: number,
   opts: { cached?: boolean } = {},
 ): Promise<boolean> {
-  const minor = await getFaucetVaultBalanceMinor(opts);
-  if (minor === null) return true; // no contract configured — skip on-chain check
-  return minor >= usdcToMinor(amountUsdc);
+  const contractConfigured = isFaucetContractConfigured();
+  const minor = contractConfigured ? await getFaucetVaultBalanceMinor(opts) : null;
+  return vaultCoversClaim({
+    contractConfigured,
+    balanceMinor: minor,
+    amountUsdc,
+  });
 }
 
 export function minorToUsdc(minor: bigint): number {

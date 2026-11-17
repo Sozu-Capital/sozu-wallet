@@ -55,9 +55,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Faucet claim page + map are public NFC entry points (covers /faucet/* and /faucets/*).
-  // Unauthenticated users see the "create wallet" state and bounce through /auth?faucet=<slug>.
+  // Faucet map stays reachable. The claim itself is /tap, opened from the chip.
   if (pathname.startsWith("/faucet")) {
+    return NextResponse.next()
+  }
+
+  if (pathname === "/tap") {
     return NextResponse.next()
   }
 

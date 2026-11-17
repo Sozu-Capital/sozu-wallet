@@ -29,6 +29,7 @@ describe("waitlist mode", () => {
     expect(waitlistGate("/fonts/SCHABO-XCondensed.woff2", false)).toBe("pass")
     expect(waitlistGate("/robots.txt", false)).toBe("pass")
     expect(waitlistGate("/item/liquid-society", false)).toBe("pass")
+    expect(waitlistGate("/tap", false)).toBe("pass")
   })
 
   it("does not let dotted page URLs skip the gate", () => {

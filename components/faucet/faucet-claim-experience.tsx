@@ -1,11 +1,8 @@
 "use client";
 
 /**
- * /faucet/[slug] — the full claim ritual.
- * Choreography per docs/FAUCET_motion_design_system.md:
- * black screen → distant orb → pulse → text emerges → claim →
- * button dissolves → orb gathers energy → transfer → soft white flash →
- * living amber success state. No toasts, no confetti, no tx hashes.
+ * Secret tap claim. The wallet's blue wave sits behind a generative tree.
+ * No toasts, no confetti, no tx hashes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,8 +10,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { FaucetPwaHandler } from "@/components/faucet/faucet-pwa-handler";
-import { Orb } from "@/components/faucet/orb";
+import { ShaderBackground } from "@/components/ui/adisyon-shader";
+import { GenerativeTree } from "@/components/ui/generative-tree";
 import { isClientAuthed } from "@/lib/client-auth-gate";
+import { FAUCET_TAP_PATH } from "@/lib/faucet/tap-path";
 import { getFaucetTexts, readFaucetLanguage } from "@/lib/faucet/texts";
 import {
   hapticClaimError,
@@ -25,7 +24,6 @@ import {
 import type {
   FaucetClaimResponse,
   FaucetStatusResponse,
-  OrbState,
 } from "@/lib/faucet/types";
 
 const FAUCET_RETURN_KEY = "sozu_faucet_return";
@@ -43,25 +41,6 @@ type Phase =
   | "inactive"
   | "not_found"
   | "error";
-
-function orbStateFor(phase: Phase): OrbState {
-  switch (phase) {
-    case "claiming":
-      return "claiming";
-    case "success":
-      return "success";
-    case "empty":
-      return "empty";
-    case "inactive":
-    case "not_found":
-      return "inactive";
-    case "global_cooldown":
-    case "user_cooldown":
-      return "cooldown";
-    default:
-      return "available";
-  }
-}
 
 function getStoredUserId(): string | null {
   if (typeof window === "undefined") return null;
@@ -97,6 +76,8 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
       switch (data.availability.reason) {
         case "empty_today":
         case "insufficient_vault":
+        case "pilot_cap":
+        case "pilot_contract_required":
           setPhase("empty");
           break;
         case "global_cooldown":
@@ -104,6 +85,10 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
           break;
         case "user_cooldown":
           setPhase("user_cooldown");
+          break;
+        case "mainnet_refused":
+        case "pilot_slug":
+          setPhase("inactive");
           break;
         default:
           setPhase("inactive");
@@ -190,12 +175,12 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
   const goCreateWallet = useCallback(() => {
     hapticClaimPress();
     try {
-      sessionStorage.setItem(FAUCET_RETURN_KEY, `/faucet/${slug}`);
+      sessionStorage.setItem(FAUCET_RETURN_KEY, FAUCET_TAP_PATH);
     } catch {
       /* private browsing */
     }
-    router.push(`/auth?faucet=${encodeURIComponent(slug)}`);
-  }, [router, slug]);
+    router.push(`/auth?redirect=${encodeURIComponent(FAUCET_TAP_PATH)}`);
+  }, [router]);
 
   const handleClaim = useCallback(async () => {
     if (claimingRef.current) return;
@@ -232,7 +217,13 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
       switch (data.reason) {
         case "empty_today":
         case "insufficient_vault":
+        case "pilot_cap":
+        case "pilot_contract_required":
           setPhase("empty");
+          break;
+        case "mainnet_refused":
+        case "pilot_slug":
+          setPhase("inactive");
           break;
         case "global_cooldown":
           setPhase("global_cooldown");
@@ -254,67 +245,21 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
     }
   }, [slug]);
 
-  const orbState = orbStateFor(phase);
-  const isSuccess = phase === "success";
   const amount = claimedAmount ?? status?.faucet.claimAmount ?? 1;
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden bg-black">
-      <FaucetPwaHandler slug={slug} />
-      {/* Activation wash: ambient warmth in the orb texture's palette */}
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(to top, hsl(26,100%,16%) 0%, hsl(22,80%,9%) 28%, hsl(14,40%,3%) 52%, #000 74%)",
-        }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: phase === "claiming" ? 1 : 0 }}
-        transition={{ duration: 2.2, ease: "easeInOut" }}
+    <div className="fixed inset-0 flex flex-col items-center justify-end overflow-hidden bg-[#021018]">
+      <FaucetPwaHandler />
+      <ShaderBackground className="pointer-events-none absolute inset-0 h-full w-full" />
+      <GenerativeTree
+        hue={188}
+        saturation={1.15}
+        brightness={1.15}
+        speed={phase === "claiming" ? 1.5 : 1}
+        className="absolute inset-0"
       />
 
-      {/* Success: deep living amber — crossfades in, no flash in between */}
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(120% 120% at 50% 30%, hsl(26,90%,13%) 0%, hsl(20,80%,6%) 55%, hsl(14,60%,2%) 100%)",
-        }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: isSuccess ? 1 : 0 }}
-        transition={{ duration: 1.8, ease: "easeInOut" }}
-      />
-
-      {/* Success: slow breathing amber waves */}
-      {isSuccess && (
-        <motion.div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(80% 60% at 50% 40%, rgba(217,119,6,0.18) 0%, rgba(0,0,0,0) 70%)",
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.08, 1] }}
-          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-        />
-      )}
-
-      {/* The orb */}
-      <motion.div
-        layout
-        initial={{ scale: 0.12, opacity: 0 }}
-        animate={{
-          scale: phase === "loading" ? 0.35 : isSuccess ? 1.35 : 1,
-          opacity: 1,
-        }}
-        transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
-        className="z-10"
-      >
-        <Orb state={orbState} size="min(40vw, 230px)" />
-      </motion.div>
-
-      {/* Content emerges from the orb */}
-      <div className="z-20 mt-10 flex w-full max-w-sm flex-col items-center px-8 text-center">
+      <div className="relative z-20 mb-[max(2rem,env(safe-area-inset-bottom))] flex w-full max-w-sm flex-col items-center px-8 text-center">
         <AnimatePresence mode="wait">
           {phase === "loading" && (
             <motion.p
@@ -323,7 +268,7 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
               transition={{ delay: 0.8, duration: 1 }}
-              className="text-sm tracking-wide text-amber-100/60"
+              className="text-sm tracking-wide text-white/60"
             >
               {t.loadingLabel}
             </motion.p>
@@ -338,15 +283,15 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50">
+              <h1 className="text-2xl font-semibold text-white">
                 {t.noWalletTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/70">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/70">
                 {t.noWalletBody}
               </p>
               <button
                 onClick={goCreateWallet}
-                className="mt-2 w-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-8 py-3.5 text-base font-semibold text-black shadow-[0_0_30px_rgba(251,146,60,0.4)] transition-transform active:scale-95"
+                className="mt-2 w-full rounded-full border border-white/15 bg-white px-8 py-3.5 text-base font-semibold text-[#042433] shadow-[0_0_30px_rgba(90,190,230,0.35)] transition-transform active:scale-95"
               >
                 {t.createWalletCta}
               </button>
@@ -362,21 +307,21 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50">
+              <h1 className="text-2xl font-semibold text-white">
                 {t.availableTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/70">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/70">
                 {t.availableBody}
               </p>
               <button
                 onClick={handleClaim}
-                className="mt-2 w-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-8 py-3.5 text-base font-semibold text-black shadow-[0_0_30px_rgba(251,146,60,0.4)] transition-transform active:scale-95"
+                className="mt-2 w-full rounded-full border border-white/15 bg-white px-8 py-3.5 text-base font-semibold text-[#042433] shadow-[0_0_30px_rgba(90,190,230,0.35)] transition-transform active:scale-95"
               >
                 {t.claimCta}
               </button>
               <button
                 onClick={() => setShowHow(true)}
-                className="text-sm text-amber-100/50 underline-offset-4 hover:underline"
+                className="text-sm text-white/50 underline-offset-4 hover:underline"
               >
                 {t.howItWorks}
               </button>
@@ -392,10 +337,10 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.6 }}
               className="flex flex-col items-center gap-3"
             >
-              <h1 className="text-xl font-medium text-amber-50">
+              <h1 className="text-xl font-medium text-white">
                 {t.claimingTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm text-amber-100/60">
+              <p className="whitespace-pre-line text-sm text-white/60">
                 {t.claimingBody}
               </p>
             </motion.div>
@@ -410,18 +355,18 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               className="flex flex-col items-center gap-5"
             >
               {/* Floating glass card — only the amount. No tx hash, no addresses. */}
-              <div className="rounded-3xl border border-amber-200/20 bg-amber-50/10 px-10 py-6 backdrop-blur-xl shadow-[0_0_60px_rgba(251,146,60,0.15)]">
-                <p className="text-3xl font-semibold tracking-tight text-amber-50">
+              <div className="rounded-3xl border border-white/15 bg-white/10 px-10 py-6 backdrop-blur-xl shadow-[0_0_60px_rgba(56,189,248,0.2)]">
+                <p className="text-3xl font-semibold tracking-tight text-white">
                   {t.successAmount(amount)}
                 </p>
-                <p className="mt-1 text-sm text-amber-100/70">{t.successReceived}</p>
+                <p className="mt-1 text-sm text-white/70">{t.successReceived}</p>
               </div>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/70">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/70">
                 {t.successBody}
               </p>
               <Link
                 href="/home"
-                className="mt-1 w-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-8 py-3.5 text-center text-base font-semibold text-black shadow-[0_0_30px_rgba(251,146,60,0.4)] transition-transform active:scale-95"
+                className="mt-1 w-full rounded-full border border-white/15 bg-white px-8 py-3.5 text-center text-base font-semibold text-[#042433] shadow-[0_0_30px_rgba(90,190,230,0.35)] transition-transform active:scale-95"
               >
                 {t.viewWalletCta}
               </Link>
@@ -437,19 +382,19 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50/90">
+              <h1 className="text-2xl font-semibold text-white/90">
                 {t.emptyTitle}
               </h1>
-              <p className="text-sm italic text-amber-100/50">{t.emptyPoetic}</p>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/60">
+              <p className="text-sm italic text-white/50">{t.emptyPoetic}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/60">
                 {t.emptyBody}
               </p>
               {countdown && (
-                <p className="text-lg font-medium text-amber-200/80">{countdown}</p>
+                <p className="text-lg font-medium text-sky-100">{countdown}</p>
               )}
               <Link
                 href="/faucets/map"
-                className="mt-1 rounded-full border border-amber-300/30 px-8 py-3 text-sm font-medium text-amber-100/80 transition-colors hover:bg-amber-300/10"
+                className="mt-1 rounded-full border border-white/25 px-8 py-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
               >
                 {t.viewMapCta}
               </Link>
@@ -465,18 +410,18 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50/90">
+              <h1 className="text-2xl font-semibold text-white/90">
                 {t.globalCooldownTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/60">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/60">
                 {t.globalCooldownBody}
               </p>
-              <p className="text-2xl font-semibold tracking-tight text-amber-200">
+              <p className="text-2xl font-semibold tracking-tight text-sky-100">
                 {countdown || "…"}
               </p>
               <Link
                 href="/faucets/map"
-                className="mt-1 rounded-full border border-amber-300/30 px-8 py-3 text-sm font-medium text-amber-100/80 transition-colors hover:bg-amber-300/10"
+                className="mt-1 rounded-full border border-white/25 px-8 py-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
               >
                 {t.viewMapCta}
               </Link>
@@ -492,16 +437,16 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50/90">
+              <h1 className="text-2xl font-semibold text-white/90">
                 {t.userCooldownTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/60">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/60">
                 {t.userCooldownBody}
               </p>
-              <p className="text-2xl font-semibold tracking-tight text-amber-200">
+              <p className="text-2xl font-semibold tracking-tight text-sky-100">
                 {countdown || "…"}
               </p>
-              <p className="text-sm italic text-amber-100/50">
+              <p className="text-sm italic text-white/50">
                 {t.userCooldownThanks}
               </p>
             </motion.div>
@@ -515,13 +460,13 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-xl font-medium text-amber-50/70">
+              <h1 className="text-xl font-medium text-white/70">
                 {t.inactiveTitle}
               </h1>
-              <p className="text-sm text-amber-100/50">{t.inactiveBody}</p>
+              <p className="text-sm text-white/50">{t.inactiveBody}</p>
               <Link
                 href="/faucets/map"
-                className="mt-1 rounded-full border border-amber-300/30 px-8 py-3 text-sm font-medium text-amber-100/80 transition-colors hover:bg-amber-300/10"
+                className="mt-1 rounded-full border border-white/25 px-8 py-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
               >
                 {t.viewMapCta}
               </Link>
@@ -536,13 +481,13 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-xl font-medium text-amber-50/70">
+              <h1 className="text-xl font-medium text-white/70">
                 {t.notFoundTitle}
               </h1>
-              <p className="text-sm text-amber-100/50">{t.notFoundBody}</p>
+              <p className="text-sm text-white/50">{t.notFoundBody}</p>
               <Link
                 href="/faucets/map"
-                className="mt-1 rounded-full border border-amber-300/30 px-8 py-3 text-sm font-medium text-amber-100/80 transition-colors hover:bg-amber-300/10"
+                className="mt-1 rounded-full border border-white/25 px-8 py-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
               >
                 {t.viewMapCta}
               </Link>
@@ -558,10 +503,10 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               transition={{ duration: 0.8 }}
               className="flex flex-col items-center gap-4"
             >
-              <h1 className="text-2xl font-semibold text-amber-50/90">
+              <h1 className="text-2xl font-semibold text-white/90">
                 {t.errorTitle}
               </h1>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-amber-100/60">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/60">
                 {t.errorBody}
               </p>
               <button
@@ -570,7 +515,7 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
                   setPhase("loading");
                   fetchStatus().catch(() => setPhase("error"));
                 }}
-                className="mt-2 w-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-8 py-3.5 text-base font-semibold text-black shadow-[0_0_30px_rgba(251,146,60,0.4)] transition-transform active:scale-95"
+                className="mt-2 w-full rounded-full border border-white/15 bg-white px-8 py-3.5 text-base font-semibold text-[#042433] shadow-[0_0_30px_rgba(90,190,230,0.35)] transition-transform active:scale-95"
               >
                 {t.retryCta}
               </button>
@@ -595,18 +540,18 @@ export function FaucetClaimExperience({ slug }: { slug: string }) {
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 260 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-t-3xl border-t border-amber-200/15 bg-zinc-950/95 px-7 pb-10 pt-6 backdrop-blur-xl"
+              className="w-full max-w-md rounded-t-3xl border-t border-white/15 bg-[#021018]/95 px-7 pb-10 pt-6 backdrop-blur-xl"
             >
-              <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-amber-100/20" />
-              <h2 className="text-lg font-semibold text-amber-50">
+              <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
+              <h2 className="text-lg font-semibold text-white">
                 {t.tooltipTitle}
               </h2>
-              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-amber-100/70">
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/70">
                 {t.tooltipBody}
               </p>
               <button
                 onClick={() => setShowHow(false)}
-                className="mt-6 w-full rounded-full border border-amber-300/30 px-8 py-3 text-sm font-medium text-amber-100/80"
+                className="mt-6 w-full rounded-full border border-white/25 px-8 py-3 text-sm font-medium text-white/80"
               >
                 OK
               </button>

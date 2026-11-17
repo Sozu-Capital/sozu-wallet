@@ -35,6 +35,8 @@ export function waitlistGate(pathname: string, hasBypass: boolean): WaitlistGate
   if (ROOT_FILE.test(pathname) || ASSET_FILE.test(pathname)) return "pass"
   // Hang tags open /item/<slug> on a phone that has not joined the waitlist.
   if (pathname === "/item" || pathname.startsWith("/item/")) return "pass"
+  // NFC/QR faucet. The secret is in the fragment; this path alone does not admit anyone.
+  if (pathname === "/tap") return "pass"
   if (hasBypass) return "pass"
   if (pathname === "/") return "rewrite"
   return "redirect"

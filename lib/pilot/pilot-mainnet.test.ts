@@ -108,6 +108,11 @@ describe("PILOT_MAINNET blocklist", () => {
       "/api/wallet/resolve-recipient",
       "/api/ramp/offramp",
       "/api/cron/ramp-sync",
+      // 300 USDC mainnet pilot is paid by the faucet vault, not the standalone testnet faucet.
+      "/tap",
+      "/faucet/mainnet-pilot",
+      "/api/faucets/mainnet-pilot/status",
+      "/api/faucets/mainnet-pilot/claim",
     ]) {
       expect(isPilotBlockedPath(pathname), pathname).toBe(false)
     }

@@ -39,6 +39,7 @@ import {
 } from "@/lib/sozu-faucet/return-allowlist"
 import { toast } from "sonner"
 import { nfcUsdcDropReturnPath } from "@/lib/faucet/nfc-usdc-drop"
+import { tapAuthReturnPath } from "@/lib/faucet/tap-path"
 import { itemAuthReturnPath } from "@/lib/merch/buy-gate"
 import { panelAuthReturnPath } from "@/lib/shell/panels"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
@@ -116,26 +117,10 @@ function AuthPageContent() {
   })()
 
   /**
-   * In-app NFC faucet return is only valid when this visit came from a faucet URL
-   * (`/auth?faucet=<slug>`). Stale sessionStorage alone must never yank a
-   * normal in-app signup to /faucet/test-orb-001.
-   * `faucet=1` is reserved for the Login-with-Sozu handoff (not a slug).
+   * Login-with-Sozu handoff stays on faucet=1. A slug in ?faucet= is not a return
+   * path — the chip secret is not something auth should put back in the URL.
    */
-  const faucetReturnPath = (() => {
-    if (faucetHandoffReturn) return faucetHandoffReturn
-    const slug = searchParams.get("faucet")?.trim()
-    if (slug && slug !== "1" && /^[a-z0-9-]+$/i.test(slug)) {
-      return `/faucet/${slug}`
-    }
-    if (typeof window !== "undefined") {
-      try {
-        sessionStorage.removeItem("sozu_faucet_return")
-      } catch {
-        /* private browsing */
-      }
-    }
-    return null
-  })()
+  const faucetReturnPath = faucetHandoffReturn
 
   /** SDP onboarding: middleware sends unauthenticated users to /auth?sdpInvite=1 */
   const postAuthPath =
@@ -162,8 +147,9 @@ function AuthPageContent() {
 
   const itemReturn = itemAuthReturnPath(searchParams.get("redirect"))
   const panelReturn = panelAuthReturnPath(searchParams.get("redirect"))
+  const tapReturn = tapAuthReturnPath(searchParams.get("redirect"))
 
-  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? itemReturn ?? panelReturn ?? postAuthPath
+  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? itemReturn ?? panelReturn ?? tapReturn ?? postAuthPath
   const pizzaAuth = resolvePizzaAuthSearch(searchParams)
   const stayOnAuthForPizza = pizzaAuth.kind !== "none"
   const pizzaHopReturnTo = pizzaAuth.kind === "hop" ? pizzaAuth.returnTo : null

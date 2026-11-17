@@ -1,6 +1,13 @@
 import "server-only";
 
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { resolveClaimAmount } from "@/lib/faucet/claim-amount";
+import {
+  effectiveDailyLimitUsdc,
+  effectiveUserCooldownHours,
+  readFaucetNetwork,
+  withinDailyBudget,
+} from "@/lib/faucet/network-policy";
 import type {
   FaucetAvailability,
   FaucetClaimRow,
@@ -9,12 +16,14 @@ import type {
   FaucetRow,
 } from "@/lib/faucet/types";
 
-/** Per-wallet cooldown. Override with FAUCET_USER_COOLDOWN_HOURS (0 disables — testing only). */
+/**
+ * Per-wallet cooldown. FAUCET_USER_COOLDOWN_HOURS=0 disables it on testnet only.
+ * Mainnet never goes below 24 hours.
+ */
 function userCooldownHours(): number {
   const raw = process.env.FAUCET_USER_COOLDOWN_HOURS?.trim();
-  if (raw === undefined || raw === "") return 24;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 24;
+  const configured = raw === undefined || raw === "" ? 24 : Number(raw);
+  return effectiveUserCooldownHours(readFaucetNetwork(), configured);
 }
 
 /** Non-negative numeric env override, else the per-faucet DB value. */
@@ -109,7 +118,10 @@ export async function computeFaucetAvailability(
   const now = new Date();
   const dayStart = startOfUtcDay(now).toISOString();
 
-  const dailyLimit = envNumberOverride("FAUCET_DAILY_LIMIT", faucet.daily_limit);
+  const dailyLimit = effectiveDailyLimitUsdc(
+    readFaucetNetwork(),
+    envNumberOverride("FAUCET_DAILY_LIMIT", faucet.daily_limit),
+  );
   const cooldownMinutes = envNumberOverride(
     "FAUCET_GLOBAL_COOLDOWN_MINUTES",
     faucet.cooldown_minutes,
@@ -135,7 +147,8 @@ export async function computeFaucetAvailability(
   );
   const remainingToday = Math.max(0, dailyLimit - claimedToday);
 
-  if (remainingToday < faucet.claim_amount) {
+  const payoutAmount = resolveClaimAmount(faucet.claim_amount);
+  if (!withinDailyBudget(remainingToday, payoutAmount)) {
     return {
       available: false,
       reason: "empty_today",
@@ -211,6 +224,19 @@ export async function computeFaucetAvailability(
   }
 
   return { available: true, remainingToday };
+}
+
+/** Pending and successful claims reserve USDC. Failed claims do not. */
+export async function sumReservedFaucetUsdc(faucetId: string): Promise<number> {
+  const db = getServiceClient();
+  const { data, error } = await db
+    .from("faucet_claims")
+    .select("amount")
+    .eq("faucet_id", faucetId)
+    .in("status", ["pending", "success"]);
+
+  if (error) throw new Error(`faucet_claims reserved: ${error.message}`);
+  return (data ?? []).reduce((sum, row) => sum + Number(row.amount), 0);
 }
 
 export async function createPendingClaim(params: {

@@ -45,7 +45,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Sozu Faucet is only available on testnet.",
+        error:
+          "The standalone faucet is testnet-only. Mainnet USDC is the 300 USDC pilot on the faucet vault.",
         reason: "mainnet_refused",
       },
       { status: 403 },
