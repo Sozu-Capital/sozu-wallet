@@ -30,6 +30,7 @@ export type MerchCopy = {
   claimSouvenir: string
   claimWithWallet: string
   claimFailed: string
+  claimClosed: string
   emptySouvenirs: string
 }
 
@@ -63,6 +64,7 @@ const es: MerchCopy = {
   claimSouvenir: "Reclamar",
   claimWithWallet: "Firma con tu billetera",
   claimFailed: "No se pudo reclamar el souvenir.",
+  claimClosed: "El tiempo para reclamar este souvenir ya pasó.",
   emptySouvenirs: "Todavía no reclamaste ni compraste un souvenir.",
 }
 
@@ -96,6 +98,7 @@ const en: MerchCopy = {
   claimSouvenir: "Claim",
   claimWithWallet: "Sign with your wallet",
   claimFailed: "The souvenir could not be claimed.",
+  claimClosed: "The window to claim this souvenir has closed.",
   emptySouvenirs: "You have not claimed or bought a souvenir yet.",
 }
 

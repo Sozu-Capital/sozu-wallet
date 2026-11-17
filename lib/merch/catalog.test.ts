@@ -62,6 +62,8 @@ describe("merch catalog", () => {
           name: "Collectible Souvenir",
           drop: LIQUID_SOCIETY_DROP,
           imagePath: "/merch/liquid-society-souvenir.svg",
+          claimStartsAt: "2026-11-17T00:00:00.000-03:00",
+          claimEndsAt: "2026-11-19T00:00:00.000-03:00",
         },
       },
     ])

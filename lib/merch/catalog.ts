@@ -12,6 +12,8 @@ export const FIVE_PANEL_SLUG = "five-panel"
 export const LIQUID_SOCIETY_DROP = "Liquid Society · 18 Nov 2026"
 export const LIQUID_SOCIETY_ACTIVATION_SLUG = "liquid-society-event"
 export const LIQUID_SOCIETY_SOUVENIR_SLUG = "liquid-society-souvenir"
+export const LIQUID_SOCIETY_SOUVENIR_CLAIM_STARTS_AT = "2026-11-17T00:00:00.000-03:00"
+export const LIQUID_SOCIETY_SOUVENIR_CLAIM_ENDS_AT = "2026-11-19T00:00:00.000-03:00"
 
 /** Placeholder shown until a USDC price is recorded. */
 export const UNRECORDED_PRICE_USDC = "0"
@@ -69,6 +71,10 @@ export type CollectibleSouvenir = {
   name: string
   drop: string
   imagePath: string
+  /** Inclusive start of the one-time claim window. */
+  claimStartsAt: string
+  /** Exclusive end of the claim window. After this, unclaimed copies disappear. */
+  claimEndsAt: string
 }
 
 export type MerchActivation = {
@@ -92,6 +98,8 @@ const LIQUID_SOCIETY_ACTIVATION: MerchActivation = {
     name: "Collectible Souvenir",
     drop: LIQUID_SOCIETY_DROP,
     imagePath: "/merch/liquid-society-souvenir.svg",
+    claimStartsAt: LIQUID_SOCIETY_SOUVENIR_CLAIM_STARTS_AT,
+    claimEndsAt: LIQUID_SOCIETY_SOUVENIR_CLAIM_ENDS_AT,
   },
 }
 
