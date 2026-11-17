@@ -247,6 +247,7 @@ export type WalletTexts = {
   homeFeedbackPlaceholder: string;
   homeFeedbackSend: string;
   homeFeedbackReady: string;
+  homeFeedbackFailed: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -837,7 +838,8 @@ export const walletTexts = {
     homeFeedbackBody: "Cuéntanos cómo se sintió",
     homeFeedbackPlaceholder: "Qué te gustó, qué faltó…",
     homeFeedbackSend: "Enviar",
-    homeFeedbackReady: "Gracias. Tu nota quedó lista para compartir.",
+    homeFeedbackReady: "Gracias. Recibimos tu nota.",
+    homeFeedbackFailed: "No pudimos enviar tu nota. Intentá de nuevo.",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -1394,7 +1396,8 @@ export const walletTexts = {
     homeFeedbackBody: "Tell us how it felt",
     homeFeedbackPlaceholder: "What worked, what was missing…",
     homeFeedbackSend: "Send",
-    homeFeedbackReady: "Thanks. Your note is ready to share.",
+    homeFeedbackReady: "Thanks. We received your note.",
+    homeFeedbackFailed: "We couldn't send your note. Try again.",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",
