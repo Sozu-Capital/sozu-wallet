@@ -16,14 +16,29 @@ const VIEWPORT_SYNC_INLINE = `(function(){function isStandalone(){return window.
 const BEFORE_PAINT_INLINE = `${VIEWPORT_SYNC_INLINE}${authRoutingInlineScript()}`
 
 export const metadata: Metadata = {
-  title: "Sozu Wallet",
+  metadataBase: new URL("https://app.sozu.capital"),
+  applicationName: "Sozu",
+  title: "Sozu",
   description: "Self-custodial Stellar wallet",
   generator: "v0.app",
   manifest: "/manifest.json",
+  openGraph: {
+    title: "Sozu",
+    description: "Self-custodial Stellar wallet",
+    siteName: "Sozu",
+    type: "website",
+    images: [{ url: "/icons/sozu_icon_512.png", width: 512, height: 512, alt: "Sozu" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Sozu",
+    description: "Self-custodial Stellar wallet",
+    images: ["/icons/sozu_icon_512.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Sozu Wallet",
+    title: "Sozu",
     startupImage: [
       // Universal splash — iOS uses the closest match by screen size
       { url: "/icons/sozu_splash.png" },
