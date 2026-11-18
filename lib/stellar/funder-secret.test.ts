@@ -124,7 +124,7 @@ describe("network endpoints", () => {
     process.env.SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org"
 
     expect(resolveSorobanRpcUrlForNetwork("testnet")).toBe("https://soroban-testnet.stellar.org")
-    expect(resolveSorobanRpcUrlForNetwork("mainnet")).toBe("https://soroban.stellar.org")
+    expect(resolveSorobanRpcUrlForNetwork("mainnet")).toBe("https://mainnet.sorobanrpc.com")
   })
 
   it("prefers the network-specific RPC", () => {
