@@ -223,6 +223,17 @@ export type WalletTexts = {
   p2pWithdrawBankPlaceholder: string;
   p2pWithdrawAccount: string;
   p2pWithdrawAccountPlaceholder: string;
+  p2pWithdrawChileBody: string;
+  p2pWithdrawChileAccount: string;
+  p2pWithdrawChileAccountPlaceholder: string;
+  p2pWithdrawAccountType: string;
+  p2pWithdrawBankSelect: string;
+  p2pWithdrawTypeSelect: string;
+  p2pWithdrawTypeCorriente: string;
+  p2pWithdrawTypeVista: string;
+  p2pWithdrawTypeAhorro: string;
+  p2pWithdrawTypeRut: string;
+  p2pWithdrawChileInvalid: string;
   p2pWithdrawAmount: string;
   p2pWithdrawQuoteUnavailable: string;
   p2pWithdrawSubmit: string;
@@ -815,12 +826,23 @@ export const walletTexts = {
     withdrawBankUnavailable: "El retiro a banco no está activo en este entorno.",
     p2pWithdrawTitle: "Retiro P2P",
     p2pWithdrawBody: "Dejá tus datos bancarios. Creamos un pedido para el mercado P2P.",
-    p2pWithdrawName: "Titular",
+    p2pWithdrawName: "Nombre completo",
     p2pWithdrawNamePlaceholder: "Nombre y apellido",
     p2pWithdrawBank: "Banco",
     p2pWithdrawBankPlaceholder: "Nombre del banco",
     p2pWithdrawAccount: "CBU, CVU o alias",
     p2pWithdrawAccountPlaceholder: "Tu cuenta",
+    p2pWithdrawChileBody: "Ingresa tu cuenta bancaria en Chile. Creamos un pedido para el mercado P2P.",
+    p2pWithdrawChileAccount: "Número de cuenta",
+    p2pWithdrawChileAccountPlaceholder: "Número de cuenta",
+    p2pWithdrawAccountType: "Tipo de cuenta",
+    p2pWithdrawBankSelect: "Selecciona el banco",
+    p2pWithdrawTypeSelect: "Selecciona el tipo",
+    p2pWithdrawTypeCorriente: "Cuenta corriente",
+    p2pWithdrawTypeVista: "Cuenta vista",
+    p2pWithdrawTypeAhorro: "Cuenta de ahorro",
+    p2pWithdrawTypeRut: "Cuenta RUT",
+    p2pWithdrawChileInvalid: "Completa nombre, banco, tipo de cuenta, número de cuenta y un monto.",
     p2pWithdrawAmount: "Monto en USDC",
     p2pWithdrawQuoteUnavailable: "Cotización no disponible",
     p2pWithdrawSubmit: "Crear pedido",
@@ -1381,12 +1403,23 @@ export const walletTexts = {
     withdrawBankUnavailable: "Bank withdrawal isn't turned on in this environment.",
     p2pWithdrawTitle: "P2P withdraw",
     p2pWithdrawBody: "Enter your bank details. We create a request on the P2P marketplace.",
-    p2pWithdrawName: "Account holder",
+    p2pWithdrawName: "Full name",
     p2pWithdrawNamePlaceholder: "Full name",
     p2pWithdrawBank: "Bank",
     p2pWithdrawBankPlaceholder: "Bank name",
     p2pWithdrawAccount: "CBU, CVU, or alias",
     p2pWithdrawAccountPlaceholder: "Your account",
+    p2pWithdrawChileBody: "Enter your Chilean bank account. We create a request on the P2P marketplace.",
+    p2pWithdrawChileAccount: "Account number",
+    p2pWithdrawChileAccountPlaceholder: "Account number",
+    p2pWithdrawAccountType: "Account type",
+    p2pWithdrawBankSelect: "Select the bank",
+    p2pWithdrawTypeSelect: "Select the type",
+    p2pWithdrawTypeCorriente: "Checking",
+    p2pWithdrawTypeVista: "Vista",
+    p2pWithdrawTypeAhorro: "Savings",
+    p2pWithdrawTypeRut: "Cuenta RUT",
+    p2pWithdrawChileInvalid: "Add full name, bank, account type, account number, and an amount.",
     p2pWithdrawAmount: "Amount in USDC",
     p2pWithdrawQuoteUnavailable: "Quote unavailable",
     p2pWithdrawSubmit: "Create request",

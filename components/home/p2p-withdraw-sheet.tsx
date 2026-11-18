@@ -9,6 +9,12 @@ import { formatReferenceAmount } from "@/lib/ledger/format-fiat"
 import { loadTreasuryPrefs } from "@/lib/treasury/prefs-storage"
 import { TREASURY_PREFS_DEFAULTS, type ReferenceFiat } from "@/lib/treasury/types"
 import { useWalletLanguage } from "@/lib/wallet-language"
+import {
+  CHILE_ACCOUNT_TYPES,
+  CHILE_BANKS,
+  chileBankAccountReady,
+  type ChileAccountType,
+} from "@/lib/withdraw/chile-bank"
 
 const STORAGE_KEY = "p2pWithdrawRequests:v1"
 
@@ -18,6 +24,9 @@ type P2pWithdrawRequest = {
   holderName: string
   bank: string
   account: string
+  accountType?: ChileAccountType
+  bankId?: string
+  country?: "CL"
   createdAt: string
 }
 
@@ -48,10 +57,12 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
   const [holderName, setHolderName] = useState("")
   const [bank, setBank] = useState("")
   const [account, setAccount] = useState("")
+  const [accountType, setAccountType] = useState("")
   const [amount, setAmount] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState(false)
   const [referenceFiat, setReferenceFiat] = useState<ReferenceFiat>(TREASURY_PREFS_DEFAULTS.referenceFiat)
+  const chile = referenceFiat === "CLP"
   const quote = useLiveFiatQuote(open, referenceFiat)
   const parsedUsdc = Number(amount.replace(",", "."))
   const quoteLine = (() => {
@@ -65,6 +76,12 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
     }
     return `1 USDC ≈ ${formatted} ${referenceFiat}`
   })()
+  const accountTypeLabel: Record<ChileAccountType, string> = {
+    corriente: t.p2pWithdrawTypeCorriente,
+    vista: t.p2pWithdrawTypeVista,
+    ahorro: t.p2pWithdrawTypeAhorro,
+    rut: t.p2pWithdrawTypeRut,
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -78,6 +95,7 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
     setHolderName("")
     setBank("")
     setAccount("")
+    setAccountType("")
     setAmount("")
     setError(null)
     setCreated(false)
@@ -89,6 +107,34 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
   if (!open || !mounted) return null
 
   const submit = () => {
+    if (chile) {
+      const ready = chileBankAccountReady({
+        holderName,
+        bankId: bank,
+        accountType,
+        account,
+        amount,
+      })
+      if (!ready.ok) {
+        setError(t.p2pWithdrawChileInvalid)
+        return
+      }
+      saveRequest({
+        id: crypto.randomUUID(),
+        amount: ready.amount,
+        holderName: ready.holderName,
+        bank: ready.bank,
+        bankId: ready.bankId,
+        account: ready.account,
+        accountType: ready.accountType,
+        country: "CL",
+        createdAt: new Date().toISOString(),
+      })
+      setError(null)
+      setCreated(true)
+      return
+    }
+
     const parsed = Number(amount.replace(",", "."))
     if (!holderName.trim() || !bank.trim() || !account.trim() || !Number.isFinite(parsed) || parsed <= 0) {
       setError(t.p2pWithdrawInvalid)
@@ -108,6 +154,7 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
 
   const fieldClass =
     "w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/30"
+  const selectClass = `${fieldClass} appearance-none`
 
   const sheet = (
     <div
@@ -161,7 +208,9 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
               submit()
             }}
           >
-            <p className="text-[12px] leading-snug text-white/45">{t.p2pWithdrawBody}</p>
+            <p className="text-[12px] leading-snug text-white/45">
+              {chile ? t.p2pWithdrawChileBody : t.p2pWithdrawBody}
+            </p>
             <label className="flex flex-col gap-1.5">
               <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawAmount}</span>
               <input
@@ -183,26 +232,80 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
                 className={fieldClass}
               />
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawBank}</span>
-              <input
-                value={bank}
-                onChange={(event) => setBank(event.target.value)}
-                placeholder={t.p2pWithdrawBankPlaceholder}
-                autoComplete="organization"
-                className={fieldClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawAccount}</span>
-              <input
-                value={account}
-                onChange={(event) => setAccount(event.target.value)}
-                placeholder={t.p2pWithdrawAccountPlaceholder}
-                autoComplete="off"
-                className={fieldClass}
-              />
-            </label>
+            {chile ? (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawBank}</span>
+                  <select
+                    value={bank}
+                    onChange={(event) => setBank(event.target.value)}
+                    className={selectClass}
+                    aria-label={t.p2pWithdrawBank}
+                  >
+                    <option className="bg-zinc-950" value="">
+                      {t.p2pWithdrawBankSelect}
+                    </option>
+                    {CHILE_BANKS.map((row) => (
+                      <option className="bg-zinc-950" key={row.id} value={row.id}>
+                        {row.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawAccountType}</span>
+                  <select
+                    value={accountType}
+                    onChange={(event) => setAccountType(event.target.value)}
+                    className={selectClass}
+                    aria-label={t.p2pWithdrawAccountType}
+                  >
+                    <option className="bg-zinc-950" value="">
+                      {t.p2pWithdrawTypeSelect}
+                    </option>
+                    {CHILE_ACCOUNT_TYPES.map((type) => (
+                      <option className="bg-zinc-950" key={type} value={type}>
+                        {accountTypeLabel[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawChileAccount}</span>
+                  <input
+                    inputMode="numeric"
+                    value={account}
+                    onChange={(event) => setAccount(event.target.value)}
+                    placeholder={t.p2pWithdrawChileAccountPlaceholder}
+                    autoComplete="off"
+                    className={fieldClass}
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawBank}</span>
+                  <input
+                    value={bank}
+                    onChange={(event) => setBank(event.target.value)}
+                    placeholder={t.p2pWithdrawBankPlaceholder}
+                    autoComplete="organization"
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawAccount}</span>
+                  <input
+                    value={account}
+                    onChange={(event) => setAccount(event.target.value)}
+                    placeholder={t.p2pWithdrawAccountPlaceholder}
+                    autoComplete="off"
+                    className={fieldClass}
+                  />
+                </label>
+              </>
+            )}
             {error ? <p className="text-[11px] text-rose-300">{error}</p> : null}
             <button
               type="submit"
