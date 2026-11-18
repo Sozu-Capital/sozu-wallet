@@ -18,6 +18,7 @@ describe("profile souvenirs", () => {
           amount: "15.00",
           createdAt: "2026-11-14T04:00:00.000Z",
           collectible: false,
+          imageUrl: "https://pay.sozu.capital/shirt.png",
         },
       ],
       claims: [],
@@ -34,6 +35,7 @@ describe("profile souvenirs", () => {
       expect(held[0].name).toBe("T-shirt")
       expect(held[0].receipt.editionLabel).toBe("1/10")
       expect(held[0].receipt.itemName).toBe("T-shirt")
+      expect(held[0].receipt.imageUrl).toBe("https://pay.sozu.capital/shirt.png")
     }
   })
 

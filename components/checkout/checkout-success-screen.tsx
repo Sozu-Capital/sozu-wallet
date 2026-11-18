@@ -1,9 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaymentConfetti } from "@/components/checkout/payment-confetti";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
+import { collectibleHomePath } from "@/lib/checkout/collectible-return";
+import { hapticPaymentConfirmed } from "@/lib/haptics/web-haptics";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 import { CollectibleReceipt } from "@/components/merch/collectible-receipt";
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt";
@@ -30,9 +34,16 @@ export function CheckoutSuccessScreen({
   collectible?: CollectibleReceiptModel | null;
 }) {
   const router = useRouter();
+  const celebrated = useRef(false);
+
+  useEffect(() => {
+    if (!collectible || celebrated.current) return;
+    celebrated.current = true;
+    hapticPaymentConfirmed();
+  }, [collectible]);
 
   const handleDone = () => {
-    router.push("/home");
+    router.push(collectible ? collectibleHomePath(transactionHash) : "/home");
   };
 
   if (collectible) {
@@ -48,8 +59,9 @@ export function CheckoutSuccessScreen({
         interactive={false}
         containerClassName="min-h-screen"
       >
-        <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10 text-white">
-          <div className="w-full max-w-md space-y-6">
+        <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-10 text-white">
+          <PaymentConfetti />
+          <div className="relative z-10 w-full max-w-md space-y-6">
             <CollectibleReceipt model={collectible} />
             {transactionHash ? (
               <div className="break-all px-2 text-center font-mono text-[11px] text-white/45">
