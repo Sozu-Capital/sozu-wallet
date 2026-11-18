@@ -4,6 +4,7 @@ import type { SmartAccountKit } from "smart-account-kit"
 import type { xdr } from "@stellar/stellar-sdk"
 import { ensureKitConnectedForSend } from "@/lib/stellar/smartAccounts/ensureKitConnected"
 import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
+import { readAddressCredentials } from "@/lib/stellar/smartAccounts/ozAuthPayload"
 import {
   shouldFallbackPasskeySign,
   signAuthEntryWithResolvedKeyData,
@@ -108,14 +109,14 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   })
 
   const signOne = async (entry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry> => {
-    const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
-    const creds =
-      xdrType(credentials) === "sorobanCredentialsAddress"
-        ? xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
-        : null
-    const fromEntry = creds ? xdrField<number>(creds, "signatureExpirationLedger") : undefined
-    const expirationFromPrepare =
-      fromEntry != null && Number(fromEntry) > 0 ? Number(fromEntry) : undefined
+    let expirationFromPrepare: number | undefined
+    try {
+      const creds = readAddressCredentials(entry)
+      const fromEntry = Number(xdrField<number>(creds, "signatureExpirationLedger"))
+      expirationFromPrepare = Number.isFinite(fromEntry) && fromEntry > 0 ? fromEntry : undefined
+    } catch {
+      expirationFromPrepare = undefined
+    }
 
     if (isDev) {
       console.log("[signSorobanUsdc] auth entry", {
@@ -145,6 +146,7 @@ export async function signSorobanPreparedTxWithPasskey(params: {
       webauthnVerifierAddress: webauthnVerifier,
       smartAccountContractId: contractId,
       expiration: expirationFromPrepare,
+      rpc: params.kit.rpc,
     })
     if (isDev) console.log("[signSorobanUsdc] resolved-keyData signing completed")
     return result
@@ -181,6 +183,11 @@ export async function signSorobanPreparedTxWithPasskey(params: {
         const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
         if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
           throw new Error("The smart account rejected this passkey signature.")
+        }
+        if (detail.includes("Error(Auth, InvalidInput)")) {
+          throw new Error(
+            "The network rejected this passkey authorization (Auth InvalidInput). Its expiration ledger was not valid on this network. Send again.",
+          )
         }
         throw new Error(`Post-sign simulation failed: ${detail.slice(0, 800)}`)
       }

@@ -86,6 +86,38 @@ export function sorobanSignaturePayloadFromEntry(params: {
   return Buffer.from(hash(preimage.toXDR()))
 }
 
+/** Ledgers of headroom required before we trust a prepared expiration (~1 minute). */
+export const AUTH_EXPIRATION_LEDGER_BUFFER = 12
+/** How far ahead to set expiration when the prepared value is missing or stale (~5 minutes). */
+export const AUTH_EXPIRATION_LEDGER_TTL = 60
+
+/**
+ * Pick the ledger the passkey signature expires on.
+ * Simulation returns `signatureExpirationLedger: 0`. The replacement must be
+ * computed from the same network that will enforce the signature. A testnet
+ * ledger is already in the past on mainnet, and the host rejects it as
+ * `Error(Auth, InvalidInput)` ("signature has expired").
+ */
+export function chooseSignatureExpirationLedger(params: {
+  preferred?: number
+  entryExpiration?: number
+  currentLedger: number
+}): number {
+  const minValid = params.currentLedger + AUTH_EXPIRATION_LEDGER_BUFFER
+  let expiration = params.preferred
+  if (expiration == null || !Number.isFinite(expiration) || expiration <= 0) {
+    const fromEntry = params.entryExpiration ?? 0
+    expiration =
+      Number.isFinite(fromEntry) && fromEntry > 0
+        ? fromEntry
+        : params.currentLedger + AUTH_EXPIRATION_LEDGER_TTL
+  }
+  if (expiration < minValid) {
+    expiration = params.currentLedger + AUTH_EXPIRATION_LEDGER_TTL
+  }
+  return expiration
+}
+
 /** WebAuthn challenge (base64url) for OZ passkey signing on new smart-account WASM. */
 export function ozWebAuthnChallengeFromEntry(params: {
   networkPassphrase: string

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Address, Asset, Contract, Keypair, Networks, xdr } from "@stellar/stellar-sdk"
 import {
+  chooseSignatureExpirationLedger,
   replaceAddressCredentials,
   sorobanSignaturePayloadFromEntry,
 } from "@/lib/stellar/smartAccounts/ozAuthPayload"
@@ -91,5 +92,37 @@ describe("sorobanSignaturePayloadFromEntry", () => {
     const creds = xdrField<xdr.SorobanCredentials>(replaced, "credentials")
     expect(xdrType(creds)).toBe("sorobanCredentialsAddressV2")
     expect(xdrType(xdrField(xdrField(creds, "addressV2"), "signature"))).toBe("scvU32")
+  })
+})
+
+describe("chooseSignatureExpirationLedger", () => {
+  const mainnetLedger = 60_000_000
+
+  it("fills a simulation placeholder from the network that will enforce the signature", () => {
+    expect(
+      chooseSignatureExpirationLedger({
+        preferred: 0,
+        entryExpiration: 0,
+        currentLedger: mainnetLedger,
+      }),
+    ).toBe(mainnetLedger + 60)
+  })
+
+  it("replaces a testnet-scale expiration when the enforcing ledger is mainnet", () => {
+    expect(
+      chooseSignatureExpirationLedger({
+        preferred: 8_000_100,
+        currentLedger: mainnetLedger,
+      }),
+    ).toBe(mainnetLedger + 60)
+  })
+
+  it("keeps a prepared expiration that is still ahead of the enforcing ledger", () => {
+    expect(
+      chooseSignatureExpirationLedger({
+        preferred: mainnetLedger + 100,
+        currentLedger: mainnetLedger,
+      }),
+    ).toBe(mainnetLedger + 100)
   })
 })

@@ -3,7 +3,7 @@
 import { startAuthentication } from "@simplewebauthn/browser"
 import type { SmartAccountKit } from "smart-account-kit"
 import base64url from "base64url"
-import { Address, hash, rpc, xdr } from "@stellar/stellar-sdk"
+import { Address, xdr } from "@stellar/stellar-sdk"
 import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import {
   credentialIdToBuffer,
@@ -14,6 +14,7 @@ import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
 import { getUserId } from "@/lib/wallet-utils"
 import {
   buildOzAuthPayloadScVal,
+  chooseSignatureExpirationLedger,
   defaultContextRuleIdsForEntry,
   ozWebAuthnChallengeFromEntry,
   readAddressCredentials,
@@ -29,37 +30,36 @@ const AUTH_DATA_FLAGS_UP = 0x01
 const AUTH_DATA_FLAGS_UV = 0x04
 const AUTH_DATA_FLAGS_BE = 0x08
 const AUTH_DATA_FLAGS_BS = 0x10
-const AUTH_EXPIRATION_LEDGER_BUFFER = 12
-const AUTH_EXPIRATION_LEDGER_TTL = 60
 
-/** Bump stale prepare expiration so __check_auth does not fail after the user approves Touch ID. */
+type LedgerRpc = {
+  getLatestLedger: () => Promise<{ sequence: number }>
+}
+
+/**
+ * Simulation writes signatureExpirationLedger as 0. Fill it from the same RPC
+ * that will enforce the signature. A testnet ledger is already expired on mainnet
+ * and the host returns Error(Auth, InvalidInput).
+ */
 async function resolveSignatureExpirationLedger(
   preferred: number | undefined,
   credentials: xdr.SorobanAddressCredentials,
+  ledgerRpc: LedgerRpc,
 ): Promise<number> {
-  const rpcUrl =
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    "https://soroban-testnet.stellar.org"
-  const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
-  const latest = await server.getLatestLedger()
+  const latest = await ledgerRpc.getLatestLedger()
   const ledger = latest.sequence
-  const minValid = ledger + AUTH_EXPIRATION_LEDGER_BUFFER
-
-  let expiration = preferred
-  if (expiration == null || expiration <= 0) {
-    const fromEntry = xdrField<number>(credentials, "signatureExpirationLedger")
-    const entryExp = fromEntry != null ? Number(fromEntry) : 0
-    expiration = entryExp > 0 ? entryExp : ledger + AUTH_EXPIRATION_LEDGER_TTL
-  }
-  if (expiration < minValid) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[signSorobanWebAuthnAuth] bumped auth expiration ledger", {
-        previous: preferred,
-        next: ledger + AUTH_EXPIRATION_LEDGER_TTL,
-        currentLedger: ledger,
-      })
-    }
-    expiration = ledger + AUTH_EXPIRATION_LEDGER_TTL
+  const fromEntry = Number(xdrField<number>(credentials, "signatureExpirationLedger"))
+  const expiration = chooseSignatureExpirationLedger({
+    preferred,
+    entryExpiration: Number.isFinite(fromEntry) ? fromEntry : 0,
+    currentLedger: ledger,
+  })
+  if (process.env.NODE_ENV === "development" && expiration !== preferred) {
+    console.log("[signSorobanWebAuthnAuth] auth expiration ledger", {
+      previous: preferred,
+      entry: fromEntry,
+      next: expiration,
+      currentLedger: ledger,
+    })
   }
   return expiration
 }
@@ -459,13 +459,14 @@ export async function signAuthEntryWithResolvedKeyData(params: {
   webauthnVerifierAddress: string
   smartAccountContractId: string
   expiration?: number
+  /** RPC for the network this auth entry will be simulated and submitted on. */
+  rpc: LedgerRpc
 }): Promise<xdr.SorobanAuthorizationEntry> {
   const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
   const preparedCredentials = readAddressCredentials(normalizedEntry)
 
-  // Use the server-prepared expiration directly when it looks valid (> 0).
-  // Only hit `getLatestLedger` if it's missing or zero — skipping the RPC call
-  // means the passkey prompt can appear as soon as the challenge is ready.
+  // Simulation leaves signatureExpirationLedger at 0. Always read this network's
+  // ledger before signing so a testnet sequence cannot be enforced on mainnet.
   const entryExpiration = Number(xdrField(preparedCredentials, "signatureExpirationLedger"))
   const preferred =
     params.expiration && params.expiration > 0
@@ -473,8 +474,13 @@ export async function signAuthEntryWithResolvedKeyData(params: {
       : entryExpiration > 0
         ? entryExpiration
         : undefined
-  // A prepare from a few ledgers ago fails __check_auth once Touch ID returns.
-  const expiration = await resolveSignatureExpirationLedger(preferred, preparedCredentials)
+  // A prepare from a few ledgers ago fails once Touch ID returns. Ledger 0 from
+  // simulation must be replaced using this network's RPC, not a testnet fallback.
+  const expiration = await resolveSignatureExpirationLedger(
+    preferred,
+    preparedCredentials,
+    params.rpc,
+  )
   const entryForChallenge = replaceAddressCredentials(
     normalizedEntry,
     credentialsWithExpiration(preparedCredentials, expiration),
@@ -563,10 +569,15 @@ export async function signAuthEntryWithStoredPasskey(params: {
   smartAccountContractId?: string
   kit?: SmartAccountKit
   expiration?: number
+  rpc: LedgerRpc
 }): Promise<xdr.SorobanAuthorizationEntry> {
   const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(params.entry.toXDR())
   const preparedCredentials = readAddressCredentials(normalizedEntry)
-  const expiration = await resolveSignatureExpirationLedger(params.expiration, preparedCredentials)
+  const expiration = await resolveSignatureExpirationLedger(
+    params.expiration,
+    preparedCredentials,
+    params.rpc,
+  )
   const entryForChallenge = replaceAddressCredentials(
     normalizedEntry,
     credentialsWithExpiration(preparedCredentials, expiration),
