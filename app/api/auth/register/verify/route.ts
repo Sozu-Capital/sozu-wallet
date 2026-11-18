@@ -7,6 +7,7 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 import { setSessionCookie } from "@/lib/auth/session"
 import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
+import { accountEmailLocale, sendAccountCreatedEmail } from "@/lib/auth/account-created-email"
 import { isNewAccountAllowed } from "@/lib/waitlist/signup-window"
 
 export async function OPTIONS(request: NextRequest) {
@@ -22,9 +23,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { username, credential, challenge, referralCode, clientPublicKey65b, recoveryEmail: recoveryEmailRaw } =
+    const { username, credential, challenge, referralCode, clientPublicKey65b, recoveryEmail: recoveryEmailRaw, locale } =
       await request.json()
     const recoveryEmail = normalizeRecoveryEmail(recoveryEmailRaw)
+    const emailLocale = accountEmailLocale(locale)
     
     // Log referral code for debugging
     console.log("[Register] Referral code received:", referralCode || "none")
@@ -524,6 +526,17 @@ export async function POST(request: NextRequest) {
     console.log("[Register] Wallet will be registered client-side after key derivation (non-custodial)")
 
     console.log("[Register] Registration successful for user:", authData.user.id)
+
+    if (recoveryEmail) {
+      const confirmation = await sendAccountCreatedEmail({
+        email: recoveryEmail,
+        locale: emailLocale,
+        tag: typeof username === "string" ? username : "",
+      })
+      if (!confirmation.sent) {
+        console.error("[Register] account confirmation email", confirmation.error ?? "skipped")
+      }
+    }
 
     // Manually process referral if referral code was provided
     // The trigger should handle this, but we'll also do it manually as a backup

@@ -732,6 +732,7 @@ function AuthPageContent() {
         challenge.challenge,
         referralCode,
         recoveryEmail,
+        language,
       )
       console.log("[Auth] Reg Step 5: Verification result:", regResult)
       console.log("[Auth] Registration success:", regResult.success)
@@ -1189,6 +1190,7 @@ function AuthPageContent() {
           isOpen={showQRModal}
           username={qrUsername}
           recoveryEmail={pendingRecoveryEmail}
+          locale={language}
           onComplete={async (userId, username, credentialId) => {
             console.log("[Auth] QR flow completed:", { userId, username, credentialId })
             setShowQRModal(false)

@@ -11,6 +11,7 @@ interface QRCodeRegistrationModalProps {
   isOpen: boolean
   username: string
   recoveryEmail?: string | null
+  locale?: "en" | "es"
   onComplete: (userId: string, username: string, credentialId: string) => void
   onCancel: () => void
 }
@@ -19,6 +20,7 @@ export function QRCodeRegistrationModal({
   isOpen,
   username,
   recoveryEmail,
+  locale = "es",
   onComplete,
   onCancel
 }: QRCodeRegistrationModalProps) {
@@ -55,6 +57,7 @@ export function QRCodeRegistrationModal({
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
         const params = new URLSearchParams({ sid: data.sessionId, u: username })
         if (recoveryEmail) params.set("e", recoveryEmail)
+        params.set("l", locale === "en" ? "en" : "es")
         const mobileUrl = `${appUrl}/auth/cross-device?${params.toString()}`
         
         const qr = await import('qrcode')
@@ -78,7 +81,7 @@ export function QRCodeRegistrationModal({
     }
 
     initSession()
-  }, [isOpen, username, recoveryEmail])
+  }, [isOpen, username, recoveryEmail, locale])
 
   // Start polling when QR is ready
   useEffect(() => {

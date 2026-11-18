@@ -138,6 +138,7 @@ export async function verifyRegistration(
   challenge?: string,
   referralCode?: string | null,
   recoveryEmail?: string | null,
+  locale?: "en" | "es" | null,
 ): Promise<{ success: boolean; userId?: string; username?: string }> {
   try {
     let clientPublicKey65b: string | undefined
@@ -160,6 +161,7 @@ export async function verifyRegistration(
         challenge, // Pass challenge in case store doesn't have it
         referralCode: referralCode || null, // Pass referral code if provided
         recoveryEmail: recoveryEmail || null,
+        locale: locale === "en" ? "en" : "es",
         clientPublicKey65b,
         credential,
       }),

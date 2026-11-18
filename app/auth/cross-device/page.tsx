@@ -84,6 +84,7 @@ function CrossDeviceContent() {
           challenge.challenge,
           null,
           searchParams.get("e"),
+          searchParams.get("l") === "en" ? "en" : "es",
         )
 
         if (!regResult?.success || !regResult.userId) {
