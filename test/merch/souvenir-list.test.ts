@@ -9,7 +9,13 @@ describe("profile souvenir list", () => {
       createElement(SouvenirList, {
         label: "Souvenirs coleccionables",
         items: [
-          { id: "receipt:1", kind: "receipt", name: "T-shirt", drop: "Liquid Society" },
+          {
+            id: "receipt:1",
+            kind: "receipt",
+            name: "T-shirt",
+            drop: "UNBLCK",
+            imageUrl: "https://dev.pay.sozu.capital/api/public/stores/org/items/tee/image",
+          },
           {
             id: "badge:1",
             kind: "badge",
@@ -32,6 +38,8 @@ describe("profile souvenir list", () => {
     expect(html).toContain('aria-label="Souvenirs coleccionables"')
     expect(html).toContain('data-souvenir-kind="receipt"')
     expect(html).toContain('data-souvenir-preview="receipt"')
+    expect(html).toContain('src="https://dev.pay.sozu.capital/api/public/stores/org/items/tee/image"')
+    expect(html).not.toContain(">3D<")
     expect(html).toContain('data-souvenir-kind="badge"')
     expect(html).toContain('data-souvenir-kind="claim"')
     expect(html).toContain("Reclamar")

@@ -1,5 +1,4 @@
 import type { CollectibleSouvenir } from "@/lib/merch/catalog"
-import { listCollectibleSouvenirs } from "@/lib/merch/catalog"
 
 const TITLE_MAX = 80
 const DROP_MAX = 120
@@ -26,7 +25,7 @@ export function isSouvenirClaimOpen(
 
 export function mergeSouvenirCatalog(
   extra: readonly CollectibleSouvenir[],
-  seeded: readonly CollectibleSouvenir[] = listCollectibleSouvenirs(),
+  seeded: readonly CollectibleSouvenir[] = [],
 ): CollectibleSouvenir[] {
   const bySlug = new Map<string, CollectibleSouvenir>()
   for (const souvenir of seeded) {

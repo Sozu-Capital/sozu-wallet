@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { Check, X } from "lucide-react"
+import { useLiveFiatQuote } from "@/hooks/use-live-fiat-quote"
+import { localAmountFromUsdc } from "@/lib/fx/quote-display"
+import { formatReferenceAmount } from "@/lib/ledger/format-fiat"
+import { loadTreasuryPrefs } from "@/lib/treasury/prefs-storage"
+import { TREASURY_PREFS_DEFAULTS, type ReferenceFiat } from "@/lib/treasury/types"
 import { useWalletLanguage } from "@/lib/wallet-language"
 
 const STORAGE_KEY = "p2pWithdrawRequests:v1"
@@ -46,6 +51,20 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
   const [amount, setAmount] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState(false)
+  const [referenceFiat, setReferenceFiat] = useState<ReferenceFiat>(TREASURY_PREFS_DEFAULTS.referenceFiat)
+  const quote = useLiveFiatQuote(open, referenceFiat)
+  const parsedUsdc = Number(amount.replace(",", "."))
+  const quoteLine = (() => {
+    if (quote.status === "loading") return "…"
+    if (quote.status !== "ok") return t.p2pWithdrawQuoteUnavailable
+    const usdc = Number.isFinite(parsedUsdc) && parsedUsdc > 0 ? parsedUsdc : 1
+    const local = localAmountFromUsdc(usdc, quote.localPerUsdc, referenceFiat)
+    const formatted = formatReferenceAmount(local, referenceFiat)
+    if (Number.isFinite(parsedUsdc) && parsedUsdc > 0) {
+      return `≈ ${formatted} ${referenceFiat}`
+    }
+    return `1 USDC ≈ ${formatted} ${referenceFiat}`
+  })()
 
   useEffect(() => {
     setMounted(true)
@@ -62,6 +81,7 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
     setAmount("")
     setError(null)
     setCreated(false)
+    setReferenceFiat(loadTreasuryPrefs().referenceFiat)
     const frame = requestAnimationFrame(() => setVisible(true))
     return () => cancelAnimationFrame(frame)
   }, [open])
@@ -151,6 +171,7 @@ export function P2pWithdrawSheet({ open, onClose }: P2pWithdrawSheetProps) {
                 placeholder="0.00"
                 className={fieldClass}
               />
+              <span className="text-[12px] tabular-nums text-white/45">{quoteLine}</span>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-[10px] uppercase tracking-wider text-white/35">{t.p2pWithdrawName}</span>

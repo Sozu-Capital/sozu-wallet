@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
 export type SouvenirListItem =
-  | { id: string; kind: "receipt"; name: string; drop: string }
+  | { id: string; kind: "receipt"; name: string; drop: string; imageUrl?: string | null }
   | { id: string; kind: "badge"; name: string; drop: string; imagePath: string }
   | { id: string; kind: "claim"; name: string; drop: string; imagePath: string; claimLabel: string; signingLabel: string }
 
@@ -56,15 +56,25 @@ export function SouvenirList({
 }
 
 function SouvenirMark({ item }: { item: SouvenirListItem }): ReactNode {
-  if (item.kind === "receipt") {
+  const photo = item.kind === "receipt" ? item.imageUrl : item.imagePath
+  if (photo) {
     return (
-      <span
-        data-souvenir-preview="receipt"
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70"
-      >
-        3D
-      </span>
+      // Merchant photo, not a Next image: SozuPay may serve a data URL or another host.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photo}
+        alt=""
+        data-souvenir-preview={item.kind}
+        className="h-14 w-14 shrink-0 rounded-xl object-cover"
+      />
     )
   }
-  return <img src={item.imagePath} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+  return (
+    <span
+      data-souvenir-preview={item.kind}
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70"
+    >
+      {item.name.slice(0, 2).toUpperCase()}
+    </span>
+  )
 }

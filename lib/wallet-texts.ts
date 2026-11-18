@@ -224,6 +224,7 @@ export type WalletTexts = {
   p2pWithdrawAccount: string;
   p2pWithdrawAccountPlaceholder: string;
   p2pWithdrawAmount: string;
+  p2pWithdrawQuoteUnavailable: string;
   p2pWithdrawSubmit: string;
   p2pWithdrawSuccess: string;
   p2pWithdrawInvalid: string;
@@ -821,6 +822,7 @@ export const walletTexts = {
     p2pWithdrawAccount: "CBU, CVU o alias",
     p2pWithdrawAccountPlaceholder: "Tu cuenta",
     p2pWithdrawAmount: "Monto en USDC",
+    p2pWithdrawQuoteUnavailable: "Cotización no disponible",
     p2pWithdrawSubmit: "Crear pedido",
     p2pWithdrawSuccess: "Pedido creado. Queda en el mercado P2P.",
     p2pWithdrawInvalid: "Completá titular, banco, cuenta y un monto para crear el pedido.",
@@ -1386,6 +1388,7 @@ export const walletTexts = {
     p2pWithdrawAccount: "CBU, CVU, or alias",
     p2pWithdrawAccountPlaceholder: "Your account",
     p2pWithdrawAmount: "Amount in USDC",
+    p2pWithdrawQuoteUnavailable: "Quote unavailable",
     p2pWithdrawSubmit: "Create request",
     p2pWithdrawSuccess: "Request created. It is on the P2P marketplace.",
     p2pWithdrawInvalid: "Add the holder, bank, account, and an amount to create the request.",

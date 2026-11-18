@@ -13,9 +13,6 @@ export const FIVE_PANEL_SLUG = "five-panel"
 export const LIQUID_SOCIETY_TEE_URL = "https://pay.sozu.capital/pay/qr/unblck/defi-your-mind-tee"
 export const LIQUID_SOCIETY_DROP = "Liquid Society · 18 Nov 2026"
 export const LIQUID_SOCIETY_ACTIVATION_SLUG = "liquid-society-event"
-export const LIQUID_SOCIETY_SOUVENIR_SLUG = "liquid-society-souvenir"
-export const LIQUID_SOCIETY_SOUVENIR_CLAIM_STARTS_AT = "2026-11-17T00:00:00.000-03:00"
-export const LIQUID_SOCIETY_SOUVENIR_CLAIM_ENDS_AT = "2026-11-19T00:00:00.000-03:00"
 
 /** Placeholder shown until a USDC price is recorded. */
 export const UNRECORDED_PRICE_USDC = "0"
@@ -89,7 +86,6 @@ export type MerchActivation = {
   imagePath: string
   /** Physical items offered at the activation, in display order. */
   itemSlugs: readonly string[]
-  souvenir: CollectibleSouvenir
 }
 
 const LIQUID_SOCIETY_ACTIVATION: MerchActivation = {
@@ -98,14 +94,6 @@ const LIQUID_SOCIETY_ACTIVATION: MerchActivation = {
   drop: LIQUID_SOCIETY_DROP,
   imagePath: "/merch/liquid-society-event.svg",
   itemSlugs: [LIQUID_SOCIETY_SLUG, FIVE_PANEL_SLUG],
-  souvenir: {
-    slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
-    name: "Collectible Souvenir",
-    drop: LIQUID_SOCIETY_DROP,
-    imagePath: "/merch/liquid-society-souvenir.svg",
-    claimStartsAt: LIQUID_SOCIETY_SOUVENIR_CLAIM_STARTS_AT,
-    claimEndsAt: LIQUID_SOCIETY_SOUVENIR_CLAIM_ENDS_AT,
-  },
 }
 
 const ACTIVATIONS: readonly MerchActivation[] = [LIQUID_SOCIETY_ACTIVATION]
@@ -118,9 +106,9 @@ export function listActivations(): readonly MerchActivation[] {
   return ACTIVATIONS
 }
 
-/** Event badges a wallet can claim. Holding one is a separate signed claim. */
+/** Event badges come from SozuPay launches, not this hang-tag catalog. */
 export function listCollectibleSouvenirs(): readonly CollectibleSouvenir[] {
-  return ACTIVATIONS.map((activation) => activation.souvenir)
+  return []
 }
 
 export function getMerchItem(slug: string): MerchItemRecord | null {
