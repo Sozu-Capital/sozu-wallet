@@ -3,6 +3,7 @@ import "server-only"
 import { Address, xdr } from "@stellar/stellar-sdk"
 import * as rpc from "@stellar/stellar-sdk/rpc"
 import { getAssetRegistry } from "@/lib/stellar/asset-registry"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
@@ -69,13 +70,7 @@ function stroopsToAmount(stroops: bigint): number {
 }
 
 function resolveSorobanRpcUrl(network: StellarNetwork): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "mainnet"
-      ? "https://soroban.stellar.org"
-      : "https://soroban-testnet.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork(network)
 }
 
 /**

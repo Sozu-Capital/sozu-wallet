@@ -29,8 +29,14 @@ function loadEnv() {
 loadEnv()
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3001"
-const NETWORK = process.env.STELLAR_NETWORK === "public" ? Networks.PUBLIC : Networks.TESTNET
-const FUNDER_SECRET = process.env.STELLAR_FUNDER_SECRET?.trim()
+const NETWORK_NAME = (process.env.STELLAR_NETWORK || "testnet").trim().toLowerCase()
+const IS_MAINNET = ["mainnet", "public", "pubnet"].includes(NETWORK_NAME)
+const NETWORK = IS_MAINNET ? Networks.PUBLIC : Networks.TESTNET
+const FUNDER_SECRET = (
+  IS_MAINNET
+    ? process.env.STELLAR_FUNDER_SECRET_MAINNET || process.env.STELLAR_FUNDER_SECRET_PUBLIC
+    : process.env.STELLAR_FUNDER_SECRET_TESTNET
+)?.trim() || process.env.STELLAR_FUNDER_SECRET?.trim()
 const CIRCLE_SAC = process.env.SOROBAN_USDC_TOKEN_ID?.trim() ||
   "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
 

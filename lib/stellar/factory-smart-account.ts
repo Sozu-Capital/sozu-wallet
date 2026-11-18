@@ -9,6 +9,8 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk"
+import { readFunderSecret } from "@/lib/stellar/funder-secret"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 import { getStellarConfig } from "@/lib/turnkey/config"
 
 function getNetworkPassphrase(): string {
@@ -17,11 +19,14 @@ function getNetworkPassphrase(): string {
 }
 
 function getSorobanRpcUrl(): string | null {
-  return (
+  const configured = Boolean(
     process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    null
+      process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
+      process.env.SOROBAN_RPC_URL_TESTNET?.trim() ||
+      process.env.SOROBAN_RPC_URL_MAINNET?.trim(),
   )
+  if (!configured) return null
+  return resolveSorobanRpcUrlForNetwork(getStellarConfig().network)
 }
 
 /**
@@ -34,7 +39,7 @@ export async function contractIsFactoryForSigner(
   const factoryId = process.env.SMART_ACCOUNT_FACTORY_ID?.trim()
   const viewMethod = process.env.SMART_ACCOUNT_GET_ADDRESS_VIEW?.trim()
   const rpcUrl = getSorobanRpcUrl()
-  const funderSecret = process.env.STELLAR_FUNDER_SECRET?.trim()
+  const funderSecret = readFunderSecret(getStellarConfig().network)
 
   const c = contractId.trim().toUpperCase()
   const g = signerG.trim().toUpperCase()

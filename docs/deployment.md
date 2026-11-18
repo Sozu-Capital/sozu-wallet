@@ -87,9 +87,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 AUTH_SECRET=
 
-STELLAR_FUNDER_SECRET=
+# One name cannot hold both keys. Set both; each deploy's STELLAR_NETWORK selects one.
+STELLAR_FUNDER_SECRET_TESTNET=
+STELLAR_FUNDER_SECRET_MAINNET=
+# Optional legacy fallback when the network-specific secret is unset.
+# STELLAR_FUNDER_SECRET=
 STELLAR_NETWORK=testnet
 SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+# Production mainnet: STELLAR_NETWORK=mainnet (or public) and SOROBAN_RPC_URL_MAINNET.
+# SOROBAN_RPC_URL_MAINNET=https://soroban.stellar.org
 SMART_ACCOUNT_FACTORY_ID=
 SMART_ACCOUNT_FACTORY_METHOD=create_account
 SMART_ACCOUNT_GET_ADDRESS_VIEW=get_address

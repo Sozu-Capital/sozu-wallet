@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Fingerprint } from "lucide-react";
-import { Transaction, Networks } from "@stellar/stellar-sdk";
+import { Transaction } from "@stellar/stellar-sdk";
+import { stellarNetworkPassphrase } from "@/lib/stellar/network-env";
 import {
   loadClientWalletSession,
   persistClientWalletSession,
@@ -328,9 +329,7 @@ export function SdpRegisterFlow() {
 
       const networkPassphrase =
         chData.network_passphrase ??
-        (process.env.NEXT_PUBLIC_STELLAR_NETWORK === "public"
-          ? Networks.PUBLIC
-          : Networks.TESTNET);
+        stellarNetworkPassphrase(process.env.NEXT_PUBLIC_STELLAR_NETWORK || "testnet");
 
       const tx = new Transaction(chData.transaction_xdr as string, networkPassphrase);
       const userSignerG = syncedSigner.publicKey.trim().toUpperCase();

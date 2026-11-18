@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { hasFunderSecret } from "@/lib/stellar/funder-secret"
 import {
   describeMissingSmartWalletEnv,
   isFactorySmartAccountConfigured,
@@ -14,7 +15,7 @@ export async function GET() {
     sorobanRpcUrl: resolveSorobanRpcUrl(),
     factory: isFactorySmartAccountConfigured(),
     oz: isOzSmartAccountConfigured(),
-    hasFunder: Boolean(process.env.STELLAR_FUNDER_SECRET?.trim()),
+    hasFunder: hasFunderSecret(),
     missingEnv: missing || null,
   })
 }

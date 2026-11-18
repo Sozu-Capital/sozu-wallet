@@ -1,5 +1,7 @@
 import "server-only"
 
+import { normalizeStellarNetwork } from "@/lib/stellar/network-env"
+
 export type OzSmartAccountNetworkConfig = {
   accountWasmHash: string
   webauthnVerifierContractId: string
@@ -7,7 +9,7 @@ export type OzSmartAccountNetworkConfig = {
 }
 
 export function getOzSmartAccountConfig(): OzSmartAccountNetworkConfig {
-  const isPublic = process.env.STELLAR_NETWORK === "public"
+  const isPublic = normalizeStellarNetwork(process.env.STELLAR_NETWORK || "testnet") === "mainnet"
   const suffix = isPublic ? "PUBLIC" : "TESTNET"
 
   const accountWasmHash =

@@ -12,6 +12,7 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk"
+import { resolveFunderSecret } from "@/lib/stellar/funder-secret"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
 
@@ -81,16 +82,17 @@ export async function deploySmartAccountForSigner(
     }
   }
 
-  const funderSecret = process.env.STELLAR_FUNDER_SECRET?.trim()
+  const funderResolved = resolveFunderSecret()
+  const funderSecret = funderResolved.secret
   if (!funderSecret) {
-    return { error: "STELLAR_FUNDER_SECRET is not set." }
+    return { error: `${funderResolved.expectedEnvName} is not set.` }
   }
 
   let funder: Keypair
   try {
     funder = Keypair.fromSecret(funderSecret)
   } catch {
-    return { error: "Invalid STELLAR_FUNDER_SECRET." }
+    return { error: `${funderResolved.envName} is not a valid Stellar secret key.` }
   }
 
   const server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
@@ -145,14 +147,15 @@ export async function fundSmartAccountWithXlm(
   const c = contractId.trim().toUpperCase()
   if (!c.startsWith("C")) return { error: "contractId must be C…" }
 
-  const funderSecret = process.env.STELLAR_FUNDER_SECRET?.trim()
-  if (!funderSecret) return { error: "STELLAR_FUNDER_SECRET is not set." }
+  const funderResolved = resolveFunderSecret()
+  const funderSecret = funderResolved.secret
+  if (!funderSecret) return { error: `${funderResolved.expectedEnvName} is not set.` }
 
   let funder: Keypair
   try {
     funder = Keypair.fromSecret(funderSecret)
   } catch {
-    return { error: "Invalid STELLAR_FUNDER_SECRET." }
+    return { error: `${funderResolved.envName} is not a valid Stellar secret key.` }
   }
 
   const cfg = getStellarConfig()

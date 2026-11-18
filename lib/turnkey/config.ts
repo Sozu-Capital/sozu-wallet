@@ -1,3 +1,5 @@
+import { resolveHorizonUrlForNetwork, normalizeStellarNetwork } from "@/lib/stellar/network-env"
+
 // Turnkey configuration
 export const TURNKEY_CONFIG = {
   apiBaseUrl: process.env.NEXT_PUBLIC_TURNKEY_API_BASE_URL || "https://api.turnkey.com",
@@ -11,14 +13,24 @@ export const TURNKEY_CONFIG = {
   rpName: "Sozu Wallet",
 }
 
-// Stellar configuration
+// Stellar configuration. Read through getStellarConfig() so `public` / `mainnet`
+// and per-network Horizon URLs stay in sync with the process env.
+export function getStellarConfig() {
+  const network = normalizeStellarNetwork(process.env.STELLAR_NETWORK || "testnet")
+  return {
+    network,
+    horizonUrl: resolveHorizonUrlForNetwork(network),
+  }
+}
+
+/** @deprecated Prefer getStellarConfig() — this object reads env on each access. */
 export const STELLAR_CONFIG = {
-  network: (process.env.STELLAR_NETWORK || "testnet") as "testnet" | "mainnet",
-  horizonUrl:
-    process.env.STELLAR_HORIZON_URL ||
-    (process.env.STELLAR_NETWORK === "mainnet"
-      ? "https://horizon.stellar.org"
-      : "https://horizon-testnet.stellar.org"),
+  get network() {
+    return getStellarConfig().network
+  },
+  get horizonUrl() {
+    return getStellarConfig().horizonUrl
+  },
 }
 
 export function getTurnkeyConfig() {
@@ -68,7 +80,4 @@ export function getTurnkeyConfig() {
   return TURNKEY_CONFIG
 }
 
-export function getStellarConfig() {
-  return STELLAR_CONFIG
-}
 

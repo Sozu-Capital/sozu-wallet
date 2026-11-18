@@ -8,6 +8,7 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 import { Api } from "@stellar/stellar-sdk/rpc";
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env";
 import { getConfiguredFunderPublicKey } from "@/lib/stellar/soroban-fee-payer";
 import { getStellarConfig } from "@/lib/turnkey/config";
 
@@ -20,20 +21,13 @@ function getFaucetContractId(): string | null {
 }
 
 function getSorobanRpcUrl(): string {
-  const network = getStellarConfig().network;
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "testnet"
-      ? "https://soroban-testnet.stellar.org"
-      : "https://soroban.stellar.org")
-  );
+  return resolveSorobanRpcUrlForNetwork("testnet");
 }
 
 /** On-chain USDC balance held by the faucet vault contract (minor units). */
 export async function getFaucetVaultBalanceMinor(): Promise<bigint | null> {
   const contractId = getFaucetContractId();
-  const funderPk = getConfiguredFunderPublicKey();
+  const funderPk = getConfiguredFunderPublicKey("testnet");
   if (!contractId || !funderPk) return null;
 
   const cfg = getStellarConfig();

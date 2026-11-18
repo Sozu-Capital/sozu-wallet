@@ -27,18 +27,22 @@ import {
 } from "@stellar/stellar-sdk"
 import { Api } from "@stellar/stellar-sdk/rpc"
 import { getAssetById, getBlendUsdcAsset } from "@/lib/stellar/asset-registry"
+import { readFunderSecret } from "@/lib/stellar/funder-secret"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 import { ensureTestnetAccountFunded } from "@/lib/stellar/soroban-fee-payer"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getEtherfuseConfig } from "@/lib/ramp/config"
 import { minorToDecimalString } from "@/lib/ramp/decimal"
 
 export function getRampTreasuryKeypair(): Keypair {
+  const network = getStellarConfig().network
   const secret =
     process.env.RAMP_TREASURY_SECRET?.trim() ||
     process.env.FAUCET_TREASURY_SECRET?.trim() ||
-    process.env.STELLAR_FUNDER_SECRET?.trim()
+    readFunderSecret(network)
   if (!secret) {
-    throw new Error("Ramp treasury not configured. Set RAMP_TREASURY_SECRET (or FAUCET_TREASURY_SECRET / STELLAR_FUNDER_SECRET).")
+    const funderEnv = network === "mainnet" ? "STELLAR_FUNDER_SECRET_MAINNET" : "STELLAR_FUNDER_SECRET_TESTNET"
+    throw new Error(`Ramp treasury not configured. Set RAMP_TREASURY_SECRET (or FAUCET_TREASURY_SECRET / ${funderEnv}).`)
   }
   try {
     return Keypair.fromSecret(secret)
@@ -60,11 +64,7 @@ export function decodeAnchorMemo(memoBase64: string): Buffer {
 }
 
 function getSorobanRpcUrl(network: "testnet" | "mainnet"): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "testnet" ? "https://soroban-testnet.stellar.org" : "https://soroban.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork(network)
 }
 
 /** Circle USDC SAC contract for the network — same resolution the off-ramp order build uses. */

@@ -1,22 +1,16 @@
 import "server-only"
 
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
-import { Networks } from "@stellar/stellar-sdk"
 import { contractIsFactoryForSigner } from "@/lib/stellar/factory-smart-account"
+import { resolveSorobanRpcUrlForNetwork, stellarNetworkPassphrase } from "@/lib/stellar/network-env"
 import { getOzSmartAccountConfig } from "@/lib/stellar/smartAccounts/ozConfig"
 
 function sorobanRpcUrl(): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (process.env.STELLAR_NETWORK === "public"
-      ? "https://soroban-mainnet.stellar.org"
-      : "https://soroban-testnet.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork()
 }
 
 function networkPassphrase(): string {
-  return process.env.STELLAR_NETWORK === "public" ? Networks.PUBLIC : Networks.TESTNET
+  return stellarNetworkPassphrase()
 }
 
 export type SmartAccountProbe = {

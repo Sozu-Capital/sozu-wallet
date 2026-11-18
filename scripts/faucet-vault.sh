@@ -9,7 +9,7 @@
 #   ./scripts/faucet-vault.sh set-amount 0.5   # set contract default claim amount
 #
 # Reads FAUCET_CONTRACT_ID / FAUCET_TOKEN_CONTRACT_ID / FAUCET_TREASURY_SECRET
-# (fallback STELLAR_FUNDER_SECRET) from .env.local. Requires the stellar CLI.
+# (fallback STELLAR_FUNDER_SECRET_TESTNET, then STELLAR_FUNDER_SECRET) from .env.local. Requires the stellar CLI.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,10 +19,11 @@ envval() { grep -E "^\s*$1=" .env.local | tail -1 | cut -d= -f2- | tr -d '"' | t
 CONTRACT_ID="$(envval FAUCET_CONTRACT_ID)"
 TOKEN_ID="$(envval FAUCET_TOKEN_CONTRACT_ID)"
 SECRET="$(envval FAUCET_TREASURY_SECRET)"
+[ -z "$SECRET" ] && SECRET="$(envval STELLAR_FUNDER_SECRET_TESTNET)"
 [ -z "$SECRET" ] && SECRET="$(envval STELLAR_FUNDER_SECRET)"
 
 [ -z "$CONTRACT_ID" ] && { echo "FAUCET_CONTRACT_ID missing in .env.local" >&2; exit 1; }
-[ -z "$SECRET" ] && { echo "FAUCET_TREASURY_SECRET / STELLAR_FUNDER_SECRET missing in .env.local" >&2; exit 1; }
+[ -z "$SECRET" ] && { echo "FAUCET_TREASURY_SECRET / STELLAR_FUNDER_SECRET_TESTNET missing in .env.local" >&2; exit 1; }
 
 TREASURY_PK="$(node -e "const{Keypair}=require('@stellar/stellar-sdk');console.log(Keypair.fromSecret('$SECRET').publicKey())")"
 

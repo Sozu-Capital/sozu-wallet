@@ -1,35 +1,32 @@
 import "server-only"
 
+import type { Keypair } from "@stellar/stellar-sdk"
 import * as rpc from "@stellar/stellar-sdk/rpc"
-import { Keypair } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
-import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
+import {
+  funderKeypairFromResolution,
+  resolveFunderSecret,
+  type FunderSecretResolution,
+} from "@/lib/stellar/funder-secret"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
-/** Classic G that pays Soroban fees (STELLAR_FUNDER_SECRET). */
-export function getConfiguredFunderPublicKey(): string | null {
-  const secret = process.env.STELLAR_FUNDER_SECRET?.trim()
-  if (!secret) return null
-  try {
-    return Keypair.fromSecret(secret).publicKey()
-  } catch {
-    return null
-  }
+function funderResolution(network?: string | null): FunderSecretResolution {
+  return resolveFunderSecret(network)
+}
+
+/** Classic G that pays Soroban fees for `network` (or the deployment network). */
+export function getConfiguredFunderPublicKey(network?: string | null): string | null {
+  return funderKeypairFromResolution(funderResolution(network))?.publicKey() ?? null
 }
 
 /** Server keypair for co-signing Soroban envelopes whose `source` is the funder G. */
-export function getFunderKeypair(): Keypair | null {
-  const secret = process.env.STELLAR_FUNDER_SECRET?.trim()
-  if (!secret) return null
-  try {
-    return Keypair.fromSecret(secret)
-  } catch {
-    return null
-  }
+export function getFunderKeypair(network?: string | null): Keypair | null {
+  return funderKeypairFromResolution(funderResolution(network))
 }
 
 async function sorobanAccountExists(publicKey: string, network: StellarNetwork): Promise<boolean> {
-  const rpcUrl = resolveSorobanRpcUrl()
+  const rpcUrl = resolveSorobanRpcUrlForNetwork(network)
   const server = new rpc.Server(rpcUrl, { allowHttp: network === "testnet" })
   try {
     await server.getAccount(publicKey.trim().toUpperCase())
@@ -73,49 +70,68 @@ export async function ensureTestnetAccountFunded(publicKey: string): Promise<voi
   }
 }
 
+function funderMissingOnNetworkMessage(
+  resolved: FunderSecretResolution,
+  publicKey: string,
+): string {
+  const prefix = publicKey.slice(0, 8)
+  const where = `${resolved.envName ?? resolved.expectedEnvName} account ${prefix}… is not on ${resolved.network}.`
+  if (resolved.envName === "STELLAR_FUNDER_SECRET") {
+    return (
+      `${where} Set ${resolved.expectedEnvName} to a classic G funded with XLM on ${resolved.network}. ` +
+      "A single STELLAR_FUNDER_SECRET cannot pay fees on both testnet and mainnet."
+    )
+  }
+  return `${where} Fund ${prefix}… with XLM on ${resolved.network}.`
+}
+
 /**
  * Soroban txs need a funded classic G as `source` (fee payer).
  * OZ smart accounts (C) authorize via passkey; signer G does not need USDC.
  *
- * - Default: use STELLAR_FUNDER_SECRET G when configured (passkey G may be unfunded).
+ * - Default: use the fee-payer G for this network (passkey G may be unfunded).
  * - Factory G-signer path: must use passkey G as source → fund on testnet if needed.
  */
 export async function resolveSorobanFeePayer(params: {
   signerPublicKey: string
-  network: StellarNetwork
+  network: StellarNetwork | string
   requireSignerAsSource?: boolean
 }): Promise<{ feePayer: string; usedFunder: boolean }> {
+  const resolved = resolveFunderSecret(params.network)
+  const network = resolved.network
   const signer = params.signerPublicKey.trim().toUpperCase()
   if (!signer.startsWith("G") || signer.length !== 56) {
     throw new Error("Passkey signer (G…) is required for Soroban payments.")
   }
 
   if (params.requireSignerAsSource) {
-    if (params.network === "testnet") {
+    if (network === "testnet") {
       await ensureTestnetAccountFunded(signer)
-    } else if (!(await sorobanAccountExists(signer, params.network))) {
+    } else if (!(await sorobanAccountExists(signer, network))) {
       throw new Error(
-        `Signer account ${signer.slice(0, 8)}… is not on ${params.network}. Fund it with XLM first.`,
+        `Signer account ${signer.slice(0, 8)}… is not on ${network}. Fund it with XLM first.`,
       )
     }
     return { feePayer: signer, usedFunder: false }
   }
 
-  const funder = getConfiguredFunderPublicKey()
-  if (funder) {
-    if (!(await sorobanAccountExists(funder, params.network))) {
-      throw new Error(
-        `STELLAR_FUNDER_SECRET account ${funder.slice(0, 8)}… is not on ${params.network}. Fund the funder or fix .env.local.`,
-      )
+  if (resolved.secret) {
+    const funderKp = funderKeypairFromResolution(resolved)
+    if (!funderKp) {
+      throw new Error(`${resolved.envName} is not a valid Stellar secret key.`)
+    }
+    const funder = funderKp.publicKey()
+    if (!(await sorobanAccountExists(funder, network))) {
+      throw new Error(funderMissingOnNetworkMessage(resolved, funder))
     }
     return { feePayer: funder, usedFunder: true }
   }
 
-  if (params.network === "testnet") {
+  if (network === "testnet") {
     await ensureTestnetAccountFunded(signer)
-  } else if (!(await sorobanAccountExists(signer, params.network))) {
+  } else if (!(await sorobanAccountExists(signer, network))) {
     throw new Error(
-      `No STELLAR_FUNDER_SECRET configured and signer ${signer.slice(0, 8)}… is not on mainnet.`,
+      `No ${resolved.expectedEnvName} configured and signer ${signer.slice(0, 8)}… is not on mainnet.`,
     )
   }
 
