@@ -10,7 +10,9 @@
 export const LIQUID_SOCIETY_SLUG = "liquid-society"
 export const FIVE_PANEL_SLUG = "five-panel"
 /** Final checkout for the Liquid Society shirt. */
-export const LIQUID_SOCIETY_TEE_URL = "https://pay.sozu.capital/pay/qr/unblck/defi-your-mind-tee"
+export const LIQUID_SOCIETY_TEE_URL = "https://pay.sozu.capital/pay/qr/unblckstore/polera"
+/** Final checkout for every 5-panel. */
+export const FIVE_PANEL_URL = "https://pay.sozu.capital/pay/qr/unblckstore/5panel"
 export const LIQUID_SOCIETY_DROP = "Liquid Society · 18 Nov 2026"
 export const LIQUID_SOCIETY_ACTIVATION_SLUG = "liquid-society-event"
 export const LIQUID_SOCIETY_SOUVENIR_SLUG = "liquid-society-souvenir"
@@ -66,6 +68,7 @@ const FIVE_PANEL: MerchItemRecord = {
   network: "testnet",
   contractId: null,
   distributorAddress: null,
+  productUrl: FIVE_PANEL_URL,
 }
 
 const ITEMS: readonly MerchItemRecord[] = [SHIRT, FIVE_PANEL]
