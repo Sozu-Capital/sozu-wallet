@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-
-const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital"
+import { sozuPayOriginFromRequest } from "@/lib/sozupay-origin"
 
 /** GET /api/stores?q= — store names from Sozu Pay. */
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q") ?? ""
   try {
     const res = await fetch(
-      `${SOZUPAY_URL}/api/public/stores?q=${encodeURIComponent(q)}`,
+      `${sozuPayOriginFromRequest(request)}/api/public/stores?q=${encodeURIComponent(q)}`,
       { cache: "no-store" },
     )
     const data = await res.json().catch(() => ({ stores: [] }))
