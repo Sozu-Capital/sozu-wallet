@@ -19,6 +19,11 @@ import {
 import * as rpc from "@stellar/stellar-sdk/rpc"
 import { Api } from "@stellar/stellar-sdk/rpc"
 import { getBlendUsdcAsset } from "@/lib/stellar/asset-registry"
+import { readFunderSecret, resolveFunderSecret } from "@/lib/stellar/funder-secret"
+import {
+  resolveSorobanRpcUrlForNetwork,
+  stellarNetworkPassphrase,
+} from "@/lib/stellar/network-env"
 
 const DUMMY_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
 const DEFAULT_TOKEN_DECIMALS = 7
@@ -29,17 +34,11 @@ function unitsToDecimal(raw: bigint, decimals: number): number {
 }
 
 function resolveSorobanRpcUrl(network: "testnet" | "mainnet"): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "mainnet"
-      ? "https://soroban.stellar.org"
-      : "https://soroban-testnet.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork(network)
 }
 
 function getNetworkPassphrase(network: "testnet" | "mainnet"): string {
-  return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
+  return stellarNetworkPassphrase(network)
 }
 
 function scValToBalanceStroops(val: xdr.ScVal): bigint {
@@ -75,10 +74,16 @@ function normalizeHolderAddress(holderAddress: string): string {
 
 async function getSimulationSourceAccount(
   server: rpc.Server,
+  network: "testnet" | "mainnet",
 ): Promise<{ account: Account; publicKey: string }> {
-  const secret = process.env.STELLAR_FUNDER_SECRET?.trim()
-  if (secret) {
-    const kp = Keypair.fromSecret(secret)
+  const resolved = resolveFunderSecret(network)
+  if (resolved.secret) {
+    let kp: Keypair
+    try {
+      kp = Keypair.fromSecret(resolved.secret)
+    } catch {
+      throw new Error(`${resolved.envName} is not a valid Stellar secret key.`)
+    }
     const loaded = await server.getAccount(kp.publicKey())
     return { account: loaded, publicKey: kp.publicKey() }
   }
@@ -113,7 +118,7 @@ async function readBalanceViaSimulate(
   const rpcUrl = resolveSorobanRpcUrl(network)
   const server = new rpc.Server(rpcUrl, { allowHttp: network === "testnet" })
   const networkPassphrase = getNetworkPassphrase(network)
-  const { account } = await getSimulationSourceAccount(server)
+  const { account } = await getSimulationSourceAccount(server, network)
   const contract = new Contract(tokenAddress)
   const holder = normalizeHolderAddress(holderAddress)
 
@@ -185,7 +190,7 @@ export async function getSorobanTokenBalance(
   const holder = normalizeHolderAddress(userAddress)
   const token = tokenAddress.trim().toUpperCase()
 
-  const hasFunder = Boolean(process.env.STELLAR_FUNDER_SECRET?.trim())
+  const hasFunder = Boolean(readFunderSecret(network))
   const attempts = hasFunder
     ? [
         () => readBalanceViaSimulate(token, holder, network, decimals),

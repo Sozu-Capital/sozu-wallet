@@ -2,10 +2,10 @@ import "server-only";
 
 import {
   Keypair,
-  Networks,
   Transaction,
   WebAuth,
 } from "@stellar/stellar-sdk";
+import { stellarNetworkPassphrase } from "@/lib/stellar/network-env";
 
 function webAuthHostFromEndpoint(webAuthEndpoint: string): string {
   try {
@@ -92,9 +92,7 @@ export async function requestSep10Challenge(params: {
 
   const networkPassphrase =
     (typeof data.network_passphrase === "string" && data.network_passphrase) ||
-    (process.env.STELLAR_NETWORK === "public"
-      ? Networks.PUBLIC
-      : Networks.TESTNET);
+    stellarNetworkPassphrase(process.env.STELLAR_NETWORK);
 
   if (!transactionXdr) {
     return { ok: false, error: "Challenge missing transaction" };

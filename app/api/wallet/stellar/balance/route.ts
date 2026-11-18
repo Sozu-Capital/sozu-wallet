@@ -7,6 +7,8 @@ import {
   getBlendUsdcContractId,
   getCircleTestnetUsdcSacContractId,
 } from "@/lib/stellar/soroban-token"
+import { hasFunderSecret } from "@/lib/stellar/funder-secret"
+import { normalizeStellarNetwork } from "@/lib/stellar/network-env"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { Horizon } from "@stellar/stellar-sdk"
 import { isUsdcSpendableCategory } from "@/lib/stellar/asset-types"
@@ -169,7 +171,7 @@ export async function GET(request: NextRequest) {
       classicOnSigner: usdcBreakdown.classicOnSigner,
       legacyUsdcOnSigner: usdcBreakdown.legacyUsdcOnSigner,
       asset: usdcBreakdown.spendableAssetLabel,
-      hasFunder: Boolean(process.env.STELLAR_FUNDER_SECRET?.trim()),
+      hasFunder: hasFunderSecret(usdcBreakdown.network),
       rpcUrl: process.env.SOROBAN_RPC_URL?.trim() ? "SOROBAN_RPC_URL" : "default/public",
     })
 
@@ -231,7 +233,7 @@ export async function GET(request: NextRequest) {
     const autoDepositTriggered = false
 
     const cfg = getStellarConfig()
-    const network = (wallet?.network || cfg.network) as "testnet" | "mainnet"
+    const network = normalizeStellarNetwork(wallet?.network || cfg.network)
 
     return NextResponse.json(
       {
@@ -286,7 +288,7 @@ export async function GET(request: NextRequest) {
             process.env.SOROBAN_RPC_URL?.trim() ||
               process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim(),
           ),
-          funderConfigured: Boolean(process.env.STELLAR_FUNDER_SECRET?.trim()),
+          funderConfigured: hasFunderSecret(network),
         },
       },
       { headers: corsHeaders(request as any) }

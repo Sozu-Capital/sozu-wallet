@@ -11,6 +11,7 @@ import {
   pickSendToken,
 } from "@/lib/stellar/pick-send-token"
 import { contractIsFactoryForSigner } from "@/lib/stellar/factory-smart-account"
+import { normalizeStellarNetwork } from "@/lib/stellar/network-env"
 import { contractSupportsOzKitSigning } from "@/lib/stellar/supports-oz-kit-contract"
 
 /**
@@ -557,7 +558,7 @@ export async function POST(request: NextRequest) {
     const stellarConfig = getStellarConfig()
     
     // Verify network matches wallet network
-    if (wallet.network !== stellarConfig.network) {
+    if (normalizeStellarNetwork(wallet.network) !== stellarConfig.network) {
       console.error("[Payment API] Network mismatch:", {
         walletNetwork: wallet.network,
         configNetwork: stellarConfig.network,

@@ -51,7 +51,8 @@ Run in Supabase:
 SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 STELLAR_NETWORK=testnet
-STELLAR_FUNDER_SECRET=<funded G keypair secret>
+STELLAR_FUNDER_SECRET_TESTNET=<testnet G keypair secret, funded with XLM>
+STELLAR_FUNDER_SECRET_MAINNET=<mainnet G keypair secret, funded with XLM>
 TESTNET_USDC_CONTRACT_ADDRESS=CBIELTK6...   # Circle SAC
 OZ_SMART_ACCOUNT_WASM_HASH_TESTNET=3e51f5b2...
 OZ_WEBAUTHN_VERIFIER_CONTRACT_ID_TESTNET=CATPTBRW...
@@ -129,12 +130,12 @@ Paste **C** or **G** explicitly. **G** recipients show a legacy notice and use H
 ## Mainnet readiness checklist
 
 - [ ] Separate `OZ_*_PUBLIC` vars (different wasm hash, verifier, policy from testnet)
-- [ ] Separate `STELLAR_FUNDER_SECRET` for mainnet (funded with XLM on PUBLIC)
-- [ ] `STELLAR_NETWORK=public`
+- [ ] `STELLAR_FUNDER_SECRET_MAINNET` funded with XLM on PUBLIC (keep `STELLAR_FUNDER_SECRET_TESTNET` for testnet)
+- [ ] `STELLAR_NETWORK=mainnet` or `public`
 - [ ] Circle SAC contract ID for mainnet (not testnet `CBIELTK6…`)
 - [ ] `NEXT_PUBLIC_APP_URL` = production domain (e.g. `https://app.sozucredit.com`)
 - [ ] `NEXT_PUBLIC_RP_ID` = production domain hostname (e.g. `app.sozucredit.com`)
-- [ ] `STELLAR_FUNDER_SECRET` stored in secrets manager, not in `.env` file
+- [ ] Fee-payer secrets stored in the secrets manager, not in `.env` file
 - [ ] CI smoke: `node scripts/probe-wallet.mjs <known-test-C>` returns `oz_kit`
 - [ ] CI smoke: `node scripts/validate-prepared-envelope.mjs ...` exits 0
 - [ ] 3× consecutive testnet sends with new passkeys before mainnet deploy

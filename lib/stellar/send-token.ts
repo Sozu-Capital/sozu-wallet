@@ -16,9 +16,10 @@ import type { SozuAsset, StellarNetwork } from "@/lib/stellar/asset-types"
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import {
-  getConfiguredFunderPublicKey,
-  getFunderKeypair,
-} from "@/lib/stellar/soroban-fee-payer"
+  funderKeypairFromResolution,
+  resolveFunderSecret,
+} from "@/lib/stellar/funder-secret"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
 
 function getNetworkPassphrase(network: StellarNetwork): string {
@@ -26,13 +27,7 @@ function getNetworkPassphrase(network: StellarNetwork): string {
 }
 
 function getSorobanRpcUrl(network: StellarNetwork): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "testnet"
-      ? "https://soroban-testnet.stellar.org"
-      : "https://soroban.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork(network)
 }
 
 function amountToI128ScVal(amount: string, decimals: number): xdr.ScVal {
@@ -138,7 +133,8 @@ function formatSorobanSubmitError(result: {
         return "passkey signature was rejected. Sign out, sign in on the same URL, then retry."
       }
       if (txResult === "txInsufficientFee") {
-        return "insufficient fee on the fee-payer account. Fund STELLAR_FUNDER_SECRET with XLM."
+        const { expectedEnvName, network } = resolveFunderSecret()
+        return `insufficient fee on the fee-payer account. Fund ${expectedEnvName} with XLM on ${network}.`
       }
       const opResults = result.errorResult.result()?.results()
       const first = opResults?.[0]
@@ -205,8 +201,12 @@ export async function submitSignedSorobanEnvelope(
     }
   }
 
-  const funderPk = getConfiguredFunderPublicKey()
-  const funderKp = getFunderKeypair()
+  const funder = resolveFunderSecret(network)
+  const funderKp = funderKeypairFromResolution(funder)
+  if (funder.secret && !funderKp) {
+    throw new Error(`${funder.envName} is not a valid Stellar secret key.`)
+  }
+  const funderPk = funderKp?.publicKey() ?? null
   const txSource =
     preparedTx instanceof FeeBumpTransaction
       ? (preparedTx as any).innerTransaction?.source ?? ""
@@ -215,7 +215,7 @@ export async function submitSignedSorobanEnvelope(
     preparedTx.sign(funderKp)
   } else if (funderPk && txSource === funderPk && !funderKp) {
     throw new Error(
-      "Fee payer signature missing and STELLAR_FUNDER_SECRET is not configured on the server.",
+      `Fee payer signature missing and ${funder.expectedEnvName} is not configured on the server.`,
     )
   }
 

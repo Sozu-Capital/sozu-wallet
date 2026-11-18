@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { parseInviteCookie, SDP_INVITE_COOKIE_NAME } from "@/lib/sdp/invitePayload";
 import { decodeSdpOrganizationName } from "@/lib/sdp/displayName";
 import { getSdpSep24JwtCookie } from "@/lib/sdp/jwtCookie";
+import { normalizeStellarNetwork } from "@/lib/stellar/network-env";
 
 /**
  * GET /api/sdp/context
@@ -57,7 +58,8 @@ export async function GET() {
     transactionId: payload.sep24TransactionId ?? null,
     verificationField: payload.sdpVerificationField ?? "DATE_OF_BIRTH",
     isTestnet:
-      process.env.STELLAR_NETWORK !== "public" &&
-      process.env.NEXT_PUBLIC_STELLAR_NETWORK !== "public",
+      normalizeStellarNetwork(
+        process.env.STELLAR_NETWORK || process.env.NEXT_PUBLIC_STELLAR_NETWORK || "testnet",
+      ) !== "mainnet",
   });
 }

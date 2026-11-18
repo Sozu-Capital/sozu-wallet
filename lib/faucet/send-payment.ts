@@ -29,6 +29,8 @@ import {
 import { Api } from "@stellar/stellar-sdk/rpc";
 import { getAssetById, getBlendUsdcAsset } from "@/lib/stellar/asset-registry";
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder";
+import { readFunderSecret } from "@/lib/stellar/funder-secret";
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env";
 import { ensureTestnetAccountFunded } from "@/lib/stellar/soroban-fee-payer";
 import { getStellarConfig } from "@/lib/turnkey/config";
 import {
@@ -52,12 +54,12 @@ export type SendFaucetPaymentResult = {
 };
 
 function getTreasuryKeypair(): Keypair {
+  const network = getStellarConfig().network;
   const secret =
-    process.env.FAUCET_TREASURY_SECRET?.trim() ||
-    process.env.STELLAR_FUNDER_SECRET?.trim();
+    process.env.FAUCET_TREASURY_SECRET?.trim() || readFunderSecret(network);
   if (!secret) {
     throw new Error(
-      "Faucet treasury not configured. Set FAUCET_TREASURY_SECRET (or STELLAR_FUNDER_SECRET) in env.",
+      `Faucet treasury not configured. Set FAUCET_TREASURY_SECRET or STELLAR_FUNDER_SECRET_${network === "mainnet" ? "MAINNET" : "TESTNET"} in env.`,
     );
   }
   try {
@@ -84,13 +86,7 @@ function getFaucetTokenContractId(network: "testnet" | "mainnet"): string {
 }
 
 function getSorobanRpcUrl(network: "testnet" | "mainnet"): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "testnet"
-      ? "https://soroban-testnet.stellar.org"
-      : "https://soroban.stellar.org")
-  );
+  return resolveSorobanRpcUrlForNetwork(network);
 }
 
 function amountToI128ScVal(amount: number, decimals: number): xdr.ScVal {

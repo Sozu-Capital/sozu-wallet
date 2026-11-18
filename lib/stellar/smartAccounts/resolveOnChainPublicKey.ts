@@ -1,8 +1,9 @@
 import "server-only"
 
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
-import { Networks, scValToNative } from "@stellar/stellar-sdk"
+import { scValToNative } from "@stellar/stellar-sdk"
 import { Api } from "@stellar/stellar-sdk/rpc"
+import { resolveSorobanRpcUrlForNetwork, stellarNetworkPassphrase } from "@/lib/stellar/network-env"
 import { buildContextRuleTypesFromAuthEntry } from "@/lib/stellar/smartAccounts/contextRuleTypes"
 import {
   credentialIdToBuffer,
@@ -15,17 +16,11 @@ import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
 import type { xdr } from "@stellar/stellar-sdk"
 
 function getRpcUrl(): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (process.env.STELLAR_NETWORK === "public"
-      ? "https://soroban-mainnet.stellar.org"
-      : "https://soroban-testnet.stellar.org")
-  )
+  return resolveSorobanRpcUrlForNetwork()
 }
 
 function getNetworkPassphrase(): string {
-  return process.env.STELLAR_NETWORK === "public" ? Networks.PUBLIC : Networks.TESTNET
+  return stellarNetworkPassphrase()
 }
 
 function simulationSucceeded(
