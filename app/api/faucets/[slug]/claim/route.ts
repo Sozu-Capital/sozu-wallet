@@ -1,14 +1,25 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { resolveUserId } from "@/lib/auth/resolve-user";
+import { requireSession } from "@/lib/auth/session";
 import {
   computeFaucetAvailability,
   createPendingClaim,
   finalizeClaim,
   getFaucetBySlug,
+  sumReservedFaucetUsdc,
 } from "@/lib/db/faucets";
 import { resolveClaimAmount } from "@/lib/faucet/claim-amount";
+import {
+  FaucetPolicyError,
+  decideFaucetPayout,
+  faucetPolicyMessage,
+  isFaucetContractConfigured,
+  isMainnetPilotArmed,
+  mainnetPilotSlug,
+  readFaucetNetwork,
+} from "@/lib/faucet/network-policy";
 import { sendFaucetPayment } from "@/lib/faucet/send-payment";
+import { tapCookieAllowsSlug } from "@/lib/faucet/tap-gate";
 import {
   getFaucetVaultBalanceMinor,
   minorToUsdc,
@@ -25,6 +36,11 @@ function softHash(value: string | null): string | null {
   return createHash("sha256").update(`${salt}:${value}`).digest("hex");
 }
 
+function policyClaimReason(reason: FaucetPolicyError["reason"]): FaucetClaimResponse["reason"] {
+  if (reason === "treasury_missing" || reason === "mainnet_funder_fallback") return "payment_failed";
+  return reason;
+}
+
 function clientIp(request: Request): string | null {
   const fwd = request.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]!.trim();
@@ -32,8 +48,10 @@ function clientIp(request: Request): string | null {
 }
 
 /**
- * POST /api/faucets/[slug]/claim — claim testnet funds from a faucet.
- * Requires a logged-in wallet (Supabase cookie or x-user-id header).
+ * POST /api/faucets/[slug]/claim — claim faucet USDC.
+ * Testnet: existing cooldown and daily budget.
+ * Mainnet: only the armed 300 USDC pilot slug, paid from the vault contract.
+ * Requires a logged-in wallet (signed session cookie).
  *
  * V1 rules (enforced in computeFaucetAvailability):
  *   - faucet active
@@ -45,11 +63,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const auth = await resolveUserId(request);
+  const auth = requireSession(request);
   if (auth.error) return auth.error;
   const { userId } = auth;
 
   const { slug } = await params;
+  if (!tapCookieAllowsSlug(request.headers.get("cookie"), slug)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   try {
     const faucet = await getFaucetBySlug(slug);
@@ -86,6 +107,27 @@ export async function POST(
     }
 
     const claimAmount = resolveClaimAmount(faucet.claim_amount);
+    const network = readFaucetNetwork();
+    const reservedUsdc = network === "mainnet" ? await sumReservedFaucetUsdc(faucet.id) : 0;
+    const decision = decideFaucetPayout({
+      network,
+      pilotArmed: isMainnetPilotArmed(),
+      slug: faucet.slug,
+      amountUsdc: claimAmount,
+      reservedUsdc,
+      contractConfigured: isFaucetContractConfigured(),
+      pilotSlug: mainnetPilotSlug(),
+    });
+    if (!decision.ok) {
+      const res: FaucetClaimResponse = {
+        success: false,
+        amount: claimAmount,
+        error: faucetPolicyMessage(decision.reason),
+        reason: policyClaimReason(decision.reason),
+      };
+      const status = decision.reason === "pilot_cap" ? 409 : 403;
+      return NextResponse.json(res, { status });
+    }
 
     if (!(await vaultCanCoverClaim(claimAmount))) {
       const minor = await getFaucetVaultBalanceMinor();
@@ -114,6 +156,7 @@ export async function POST(
         toWalletAddress: walletAddress,
         amount: claimAmount,
         faucetSlug: faucet.slug,
+        pendingAlreadyReserved: true,
       });
 
       await finalizeClaim({ claimId: claim.id, status: "success", txHash });
@@ -130,6 +173,16 @@ export async function POST(
       await finalizeClaim({ claimId: claim.id, status: "failed" }).catch((e) =>
         console.error("[POST /api/faucets/[slug]/claim] finalize", e),
       );
+      if (payErr instanceof FaucetPolicyError) {
+        const res: FaucetClaimResponse = {
+          success: false,
+          amount: claimAmount,
+          error: faucetPolicyMessage(payErr.reason),
+          reason: policyClaimReason(payErr.reason),
+        };
+        const status = payErr.reason === "pilot_cap" ? 409 : 403;
+        return NextResponse.json(res, { status });
+      }
       const message =
         payErr instanceof Error ? payErr.message : "Transfer could not be completed.";
       const isUnderfunded = message.includes("underfunded") || message.includes("InsufficientBalance");

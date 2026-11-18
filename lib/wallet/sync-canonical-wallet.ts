@@ -1,7 +1,6 @@
 "use client"
 
 import { persistCanonicalWalletSession } from "@/lib/wallet/persist-wallet-session"
-import { discoverFirstContractIdSafe } from "@/lib/stellar/smartAccounts/discover-contracts"
 
 export type LoadedCanonicalWallet = {
   publicKey: string
@@ -35,9 +34,7 @@ export async function loadCanonicalWallet(
       : null) ||
     undefined
 
-  const addrRes = await fetch("/api/wallet/stellar/address", {
-    headers: { "x-user-id": userId },
-  })
+  const addrRes = await fetch("/api/wallet/stellar/address")
 
   let dbPk: string | null = null
   let dbWalletType: string | null = null
@@ -62,33 +59,6 @@ export async function loadCanonicalWallet(
     const wt = (dbWalletType || sessionStorage.getItem("wallet_type") || "oz") === "factory"
       ? "factory"
       : "oz"
-    const localC = sessionC()
-
-    // Fast path: session matches DB — skip indexer.
-    if (localC === dbPk) {
-      persistCanonicalWalletSession(dbPk, wt, credId)
-      return { publicKey: dbPk, walletType: wt }
-    }
-
-    // Best-effort drift hint only (ADR: Contract Indexer is not source of truth).
-    if (credId && sessionStorage.getItem("wallet_sync_pending") !== "1") {
-      try {
-        const { getSmartAccountKit } = await import("@/lib/stellar/smartAccounts/client")
-        const { kit } = await getSmartAccountKit()
-        const onChain = await discoverFirstContractIdSafe(kit, credId, {
-          logLabel: "loadCanonicalWallet",
-        })
-        if (onChain && onChain !== dbPk) {
-          console.info("[loadCanonicalWallet] Indexer C differs from DB — keeping DB", {
-            db: dbPk.slice(0, 12),
-            onChain: onChain.slice(0, 12),
-          })
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
     persistCanonicalWalletSession(dbPk, wt, credId)
     return { publicKey: dbPk, walletType: wt }
   }

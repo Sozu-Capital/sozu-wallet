@@ -31,8 +31,11 @@ pnpm exec tsx scripts/backfill-ledger-currency-from-email.ts
 
 ## PWA icons
 
-1. Add `public/icons/icon-base.png` (1024×1024).
-2. Run `./scripts/generate-icons.sh` (see also `public/icons/README.md`).
+The November 2026 logo (`public/brand/november-2026/logo.png`) is the source for the favicon, PWA icons, and splash screen. See [brand/november-2026-logo.md](./brand/november-2026-logo.md).
+
+```bash
+python3 scripts/generate-icons.py
+```
 
 ## Testing
 

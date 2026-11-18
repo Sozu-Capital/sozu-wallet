@@ -10,14 +10,16 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Check, Loader2, Fingerprint, Hash } from "lucide-react"
+import { Check, Fingerprint, Hash, Loader2 } from "lucide-react"
 import { useWalletLanguage } from "@/lib/wallet-language"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
+import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
 
 export interface TagInputModalProps {
   isOpen: boolean
   onClose: () => void
-  /** Reserved name → create account (passkey registration). */
-  onRegister: (tag: string) => void
+  /** Reserved name plus the recovery email → create account. */
+  onRegister: (tag: string, recoveryEmail: string) => void
   /** Taken name → passkey authentication. */
   onLoginPasskey: (tag: string) => Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
   /** Taken name + PIN when user has set a backup PIN. */
@@ -30,7 +32,29 @@ export interface TagInputModalProps {
 
 type AvailabilityStatus = "idle" | "checking" | "available" | "taken" | "error"
 
-type Step = "tag" | "signin"
+type Step = "tag" | "email" | "signin"
+
+const EMAIL_COPY = {
+  es: {
+    title: "Tu correo.",
+    subtitle: "Este correo se usa para recuperar tu cuenta si perdés el dispositivo.",
+    placeholder: "Correo",
+    button: "Crear cuenta",
+    invalid: "Escribí un correo válido.",
+    back: "Volver",
+  },
+  en: {
+    title: "Your email.",
+    subtitle: "This email is used to recover your account if you lose this device.",
+    placeholder: "Email",
+    button: "Create account",
+    invalid: "Enter a valid email.",
+    back: "Back",
+  },
+} as const
+
+const fieldClass =
+  "h-11 rounded-none border-0 border-b border-b-white/15 bg-transparent px-0 text-center text-lg font-light tracking-[0.15em] text-white placeholder:text-white/25 focus-visible:border-b-white/40 focus-visible:ring-0"
 
 export function TagInputModal({
   isOpen,
@@ -42,8 +66,11 @@ export function TagInputModal({
   prefillTag,
 }: TagInputModalProps) {
   const { t, language } = useWalletLanguage()
+  const emailCopy = EMAIL_COPY[language] ?? EMAIL_COPY.es
   const [step, setStep] = useState<Step>("tag")
   const [tag, setTag] = useState("")
+  const [email, setEmail] = useState("")
+  const [emailError, setEmailError] = useState("")
   const [pin, setPin] = useState("")
   const [error, setError] = useState("")
   const [learnOpen, setLearnOpen] = useState(false)
@@ -95,7 +122,7 @@ export function TagInputModal({
       } else {
         setAvailabilityStatus("taken")
         setAvailabilityMessage(typeof data.message === "string" ? data.message : "")
-        setPinEnabled(Boolean(data.pinEnabled))
+        setPinEnabled(!isPilotMainnet() && Boolean(data.pinEnabled))
       }
     } catch {
       setAvailabilityStatus("error")
@@ -137,6 +164,8 @@ export function TagInputModal({
   useEffect(() => {
     if (!isOpen) {
       setTag("")
+      setEmail("")
+      setEmailError("")
       setPin("")
       setError("")
       setLearnOpen(false)
@@ -177,7 +206,8 @@ export function TagInputModal({
   const handlePrimaryTagStep = () => {
     if (!validateTag(trimmed)) return
     if (availabilityStatus === "available") {
-      onRegister(trimmed)
+      setEmailError("")
+      setStep("email")
       return
     }
     if (availabilityStatus === "taken") {
@@ -231,21 +261,30 @@ export function TagInputModal({
     }
   }
 
+  const submitEmail = () => {
+    const normalized = normalizeRecoveryEmail(email)
+    if (!normalized) {
+      setEmailError(emailCopy.invalid)
+      return
+    }
+    onRegister(trimmed, normalized)
+  }
+
   const canProceedTag =
     isTagValid && (availabilityStatus === "available" || availabilityStatus === "taken")
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="bg-black/95 border-white/10 text-white max-w-sm shadow-none"
+        className="max-w-sm border-white/10 bg-black/95 text-white shadow-none"
         showCloseButton={false}
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">
-          {step === "tag" ? t.authChooseName : t.authSignIn}
+          {step === "tag" ? t.authChooseName : step === "email" ? emailCopy.title : t.authSignIn}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {step === "tag" ? t.authRegisterOnInternet : trimmed}
+          {step === "email" ? emailCopy.subtitle : step === "tag" ? t.authRegisterOnInternet : trimmed}
         </DialogDescription>
         {step === "tag" ? (
           <div className="space-y-8 pt-1 pb-2">
@@ -259,11 +298,11 @@ export function TagInputModal({
               >
                 {t.authLearnMore}
               </button>
-              {learnOpen && (
-                <p className="text-left text-[11px] leading-relaxed text-white/45 pt-2 px-1 border-t border-white/5 mt-3">
+              {learnOpen ? (
+                <p className="mt-3 border-t border-white/5 px-1 pt-2 text-left text-[11px] leading-relaxed text-white/45">
                   {t.authLearnMoreBody}
                 </p>
-              )}
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -273,7 +312,7 @@ export function TagInputModal({
                 onChange={handleChange}
                 onKeyDown={handleKeyDownTag}
                 placeholder={t.authTagPlaceholder}
-                className={`h-11 bg-transparent border-0 border-b rounded-none text-center text-lg font-light tracking-[0.15em] text-white placeholder:text-white/25 focus-visible:ring-0 focus-visible:border-b-white/40 px-0 ${
+                className={`${fieldClass} ${
                   availabilityStatus === "available"
                     ? "border-b-emerald-500/40"
                     : availabilityStatus === "taken"
@@ -284,14 +323,14 @@ export function TagInputModal({
                 autoCapitalize="none"
                 autoCorrect="off"
               />
-              <div className="min-h-[1.25rem] flex items-center justify-center gap-2">
-                {trimmed.length >= 3 && isTagValid && availabilityStatus === "checking" && (
-                  <Loader2 className="w-3.5 h-3.5 text-white/30 animate-spin" />
-                )}
-                {trimmed.length >= 3 && isTagValid && availabilityStatus === "available" && (
-                  <Check className="w-3.5 h-3.5 text-emerald-600/80" aria-hidden />
-                )}
-                {availabilityMessage && (
+              <div className="flex min-h-[1.25rem] items-center justify-center gap-2">
+                {trimmed.length >= 3 && isTagValid && availabilityStatus === "checking" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />
+                ) : null}
+                {trimmed.length >= 3 && isTagValid && availabilityStatus === "available" ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600/80" aria-hidden />
+                ) : null}
+                {availabilityMessage ? (
                   <p
                     className={`text-[11px] font-light ${
                       availabilityStatus === "available"
@@ -305,49 +344,97 @@ export function TagInputModal({
                   >
                     {availabilityMessage}
                   </p>
-                )}
+                ) : null}
               </div>
-              {error && <p className="text-center text-[11px] text-amber-500/90">{error}</p>}
+              {error ? <p className="text-center text-[11px] text-amber-500/90">{error}</p> : null}
             </div>
 
             <Button
               type="button"
               onClick={handlePrimaryTagStep}
               disabled={!canProceedTag}
-              className="w-full h-11 rounded-full bg-white/95 text-black text-sm font-normal tracking-widest hover:bg-white disabled:opacity-30"
+              className="h-11 w-full rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white disabled:opacity-30"
             >
               {availabilityStatus === "taken" ? t.authSignIn : t.authRegister}
             </Button>
           </div>
-        ) : (
-          <div className="space-y-6 pt-1 pb-2">
-            <div className="text-center space-y-1">
-              <p className="text-[11px] tracking-[0.25em] uppercase text-white/35">{t.authSignIn}</p>
-              <p className="text-base font-light text-white/90 tracking-wide">{trimmed}</p>
+        ) : step === "email" ? (
+          <div className="space-y-8 pt-1 pb-2">
+            <div className="space-y-1 text-center">
+              <p className="text-[15px] font-light tracking-wide text-white/90">{emailCopy.title}</p>
+              <p className="text-[13px] font-extralight tracking-wide text-white/55">{emailCopy.subtitle}</p>
             </div>
 
-            {error && <p className="text-center text-[11px] text-amber-500/90">{error}</p>}
+            <div className="space-y-3">
+              <Input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setEmailError("")
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    submitEmail()
+                  }
+                }}
+                placeholder={emailCopy.placeholder}
+                className={fieldClass}
+                autoFocus
+              />
+              {emailError ? <p className="text-center text-[11px] text-amber-500/90">{emailError}</p> : null}
+            </div>
+
+            <Button
+              type="button"
+              onClick={submitEmail}
+              className="h-11 w-full rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white"
+            >
+              {emailCopy.button}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("tag")
+                setEmailError("")
+              }}
+              className="w-full text-[10px] tracking-[0.2em] uppercase text-white/30 hover:text-white/45"
+            >
+              {emailCopy.back}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6 pt-1 pb-2">
+            <div className="space-y-1 text-center">
+              <p className="text-[11px] tracking-[0.25em] uppercase text-white/35">{t.authSignIn}</p>
+              <p className="text-base font-light tracking-wide text-white/90">{trimmed}</p>
+            </div>
+
+            {error ? <p className="text-center text-[11px] text-amber-500/90">{error}</p> : null}
 
             <Button
               type="button"
               onClick={() => void handlePasskey()}
               disabled={passkeyBusy}
-              className="w-full h-11 rounded-full bg-white/95 text-black text-sm font-normal tracking-widest hover:bg-white disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white/95 text-sm font-normal tracking-widest text-black hover:bg-white disabled:opacity-40"
             >
               {passkeyBusy ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  <Fingerprint className="w-4 h-4 opacity-70" />
+                  <Fingerprint className="h-4 w-4 opacity-70" />
                   {t.authPasskey}
                 </>
               )}
             </Button>
 
             {pinEnabled ? (
-              <div className="space-y-3 pt-2 border-t border-white/10">
-                <Label className="text-[10px] tracking-[0.2em] uppercase text-white/30 flex items-center gap-1.5">
-                  <Hash className="w-3 h-3" />
+              <div className="space-y-3 border-t border-white/10 pt-2">
+                <Label className="flex items-center gap-1.5 text-[10px] tracking-[0.2em] uppercase text-white/30">
+                  <Hash className="h-3 w-3" />
                   {t.authBackupPin}
                 </Label>
                 <Input
@@ -357,22 +444,20 @@ export function TagInputModal({
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 12))}
                   placeholder={t.authPinPlaceholder}
-                  className="h-10 bg-white/5 border-white/10 text-center text-sm tracking-widest"
+                  className="h-10 border-white/10 bg-white/5 text-center text-sm tracking-widest"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => void handlePinSubmit()}
                   disabled={pinBusy || pin.length < 6}
-                  className="w-full text-white/60 hover:text-white hover:bg-white/5 text-xs"
+                  className="w-full text-xs text-white/60 hover:bg-white/5 hover:text-white"
                 >
-                  {pinBusy ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t.authContinueWithPin}
+                  {pinBusy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t.authContinueWithPin}
                 </Button>
               </div>
             ) : (
-              <p className="text-[10px] text-center text-white/30 leading-relaxed">
-                {t.authNoBackupPin}
-              </p>
+              <p className="text-center text-[10px] leading-relaxed text-white/30">{t.authNoBackupPin}</p>
             )}
 
             <button
@@ -382,7 +467,7 @@ export function TagInputModal({
                 setPin("")
                 setError("")
               }}
-              className="w-full text-[10px] tracking-[0.2em] uppercase text-white/30 hover:text-white/45 pt-2"
+              className="w-full pt-2 text-[10px] tracking-[0.2em] uppercase text-white/30 hover:text-white/45"
             >
               {t.authBack}
             </button>

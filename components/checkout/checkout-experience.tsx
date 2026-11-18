@@ -13,6 +13,10 @@ import { warmKitForPay } from "@/lib/stellar/smartAccounts/warm-kit-for-pay";
 import type { CheckoutSession } from "@/lib/checkout/types";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
+import { merchCopy } from "@/lib/merch/copy";
+import { resolveCollectibleSale } from "@/lib/merch/collectible-sale";
+import { buildCollectibleReceipt, collectibleImageUrl } from "@/lib/merch/receipt";
+import { useWalletLanguage } from "@/lib/wallet-language";
 
 type CheckoutPhase =
   | "loading"
@@ -25,6 +29,7 @@ type CheckoutPhase =
 
 export function CheckoutExperience({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const { language } = useWalletLanguage();
   const [phase, setPhase] = useState<CheckoutPhase>("loading");
   const [session, setSession] = useState<CheckoutSession | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,13 +112,24 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       merchantName: session.merchantName,
     });
 
+    const sale = resolveCollectibleSale({
+      collectibleReceipt: session.collectibleReceipt,
+      itemName: session.reference,
+      editionNumber: session.editionNumber,
+      editionSize: session.editionSize,
+    });
     const result = await submitSozuCheckoutPayment({
       sessionId,
       walletAddress,
       destination: session.destinationStellarAddress,
       amountUsd: session.amountUsd,
       merchantName: session.merchantName,
+      itemName: sale.itemName || session.reference,
       organizationId: session.organizationId,
+      collectibleReceipt: sale.collectible,
+      editionNumber: sale.editionNumber,
+      editionSize: sale.editionSize,
+      productImageUrl: session.productImageUrl,
     });
 
     if (result.success) {
@@ -125,6 +141,37 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       setPhase("error");
     }
   }, [isAuthenticated, walletAddress, session, router, sessionId]);
+
+  const sale = session
+    ? resolveCollectibleSale({
+        collectibleReceipt: session.collectibleReceipt,
+        itemName: session.reference,
+        editionNumber: session.editionNumber,
+        editionSize: session.editionSize,
+      })
+    : null;
+  const productPhoto = collectibleImageUrl(session?.productImageUrl);
+  const collectible =
+    phase === "success" && sale?.collectible && session && receipt
+      ? buildCollectibleReceipt({
+          item: {
+            name: sale.itemName || session.merchantName,
+            drop: session.merchantName,
+            network: receipt.network,
+          },
+          edition:
+            sale.editionNumber && sale.editionSize
+              ? { number: sale.editionNumber, size: sale.editionSize }
+              : null,
+          language: language === "en" ? "en" : "es",
+          status: "paid",
+          priceUsdc: session.amountUsd,
+          paymentHash: transactionHash,
+          transferHash: null,
+          createdAt: receipt.completedAt,
+          imageUrl: session.productImageUrl,
+        })
+      : null;
 
   if (phase === "loading") {
     return (
@@ -233,8 +280,11 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
       <CheckoutSuccessScreen
         merchantName={session.merchantName}
         amountUsd={session.amountUsd}
+        itemName={session.reference}
+        showCashback={false}
         transactionHash={transactionHash}
         receipt={receipt}
+        collectible={collectible}
       />
     );
   }
@@ -257,12 +307,31 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
     >
       <div className="flex min-h-screen flex-col items-center justify-center text-white p-4">
         <div className="w-full max-w-md space-y-6">
+          {productPhoto ? (
+            <div className="mx-auto flex h-52 items-center justify-center">
+              {/* Merchant photo, not a Next image: the file is served by the pay host. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={productPhoto}
+                alt=""
+                data-product-photo=""
+                className="max-h-full max-w-[16rem] rounded-2xl object-contain"
+              />
+            </div>
+          ) : null}
+
           <CheckoutAmountHeader
             merchantName={session.merchantName}
             amountUsd={session.amountUsd}
             reference={session.reference}
             destinationAddress={treasuryAddress || session.destinationStellarAddress}
           />
+
+          {sale?.collectible ? (
+            <p className="text-center text-sm text-white/70">
+              {merchCopy(language === "en" ? "en" : "es").receiptLine}
+            </p>
+          ) : null}
 
           {phase === "ready" && (
             <>
@@ -272,11 +341,12 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
                 </div>
               )}
               <CheckoutMethodPicker
-                allowDebit={session.allowDebit}
-                allowCredit={session.allowCredit}
-                allowBankTransfer={session.allowBankTransfer}
+                allowDebit={false}
+                allowCredit={false}
+                allowBankTransfer={false}
                 onPayWithSozu={handlePayWithSozu}
                 disabled={false}
+                sozuSubtitle="Sign with your passkey"
               />
             </>
           )}

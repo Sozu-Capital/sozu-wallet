@@ -2,6 +2,8 @@ import { getUserId } from "@/lib/wallet-utils";
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { getSenderDisplayLabel } from "@/lib/payment/payment-receipt";
 import { getStellarConfig } from "@/lib/turnkey/config";
+import { checkoutBuildSigner } from "@/lib/checkout/checkout-build-signer";
+import { resolveCollectibleSale } from "@/lib/merch/collectible-sale";
 
 const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital";
 
@@ -19,14 +21,24 @@ export async function submitSozuCheckoutPayment({
   destination,
   amountUsd,
   merchantName,
+  itemName,
   organizationId,
+  collectibleReceipt = false,
+  editionNumber,
+  editionSize,
+  productImageUrl,
 }: {
   sessionId: string;
   walletAddress: string;
   destination: string;
   amountUsd: string;
   merchantName: string;
+  itemName?: string | null;
   organizationId?: string | null;
+  collectibleReceipt?: boolean;
+  editionNumber?: number | null;
+  editionSize?: number | null;
+  productImageUrl?: string | null;
 }): Promise<CheckoutPaymentResult> {
   try {
     const userId = getUserId();
@@ -34,7 +46,16 @@ export async function submitSozuCheckoutPayment({
       return { success: false, error: "Not authenticated" };
     }
 
-    const senderC = walletAddress.trim().toUpperCase();
+    let senderC = walletAddress.trim().toUpperCase();
+    let sessionCredentialId: string | undefined;
+    try {
+      const { alignWalletForSendFast } = await import("@/lib/wallet/align-send-wallet");
+      const aligned = await alignWalletForSendFast(userId, senderC);
+      if (aligned.contractId.startsWith("C")) senderC = aligned.contractId;
+      if (aligned.credentialId) sessionCredentialId = aligned.credentialId;
+    } catch (err) {
+      console.warn("[Checkout Payment] Wallet align skipped:", err);
+    }
 
     // Fetch organization's treasury smart account address dynamically
     let actualDestination = destination;
@@ -69,7 +90,6 @@ export async function submitSozuCheckoutPayment({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": userId,
       },
       body: JSON.stringify({
         destination: actualDestination,
@@ -102,18 +122,27 @@ export async function submitSozuCheckoutPayment({
     }
 
     const signMethod = build.signMethod as string | undefined;
-    const signerPublicKey = typeof build.signerPublicKey === "string" ? build.signerPublicKey : null;
-    const walletContractId = typeof build.walletAddress === "string" ? build.walletAddress : senderC;
-
-    if (!signerPublicKey) {
-      return { success: false, error: "Smart wallet signer (G…) missing. Sign out, sign in with passkey again, then retry." };
+    const resolvedSigner = checkoutBuildSigner({
+      signMethod,
+      signerPublicKey: build.signerPublicKey,
+    });
+    if (resolvedSigner.error) {
+      return { success: false, error: resolvedSigner.error };
     }
+    const signerPublicKey = resolvedSigner.signerPublicKey;
+    const walletContractId =
+      typeof build.walletAddress === "string" && build.walletAddress.startsWith("C")
+        ? build.walletAddress
+        : senderC;
 
-    // Step 2: Get credential ID
+    // Passkey accounts sign with the credential. A G key is only required for the factory path.
     const { getCurrentCredentialId, storeCredentialIdInSession } = await import("@/lib/storage/key-utils");
     const credentialId =
-      (typeof build.ozCredentialId === "string" ? build.ozCredentialId : null) ||
-      (await getCurrentCredentialId(signerPublicKey));
+      sessionCredentialId ||
+      (typeof build.ozCredentialId === "string" && build.ozCredentialId.trim()
+        ? build.ozCredentialId.trim()
+        : null) ||
+      (await getCurrentCredentialId(signerPublicKey ?? undefined));
 
     if (!credentialId) {
       return { success: false, error: "Credential ID not found. Please log in again." };
@@ -137,18 +166,22 @@ export async function submitSozuCheckoutPayment({
           ? build.sorobanDataXdr
           : extractSorobanDataXdr(unsignedXdr, config.networkPassphrase);
 
+      const preparedPassphrase =
+        typeof build.networkPassphrase === "string" && build.networkPassphrase.trim()
+          ? build.networkPassphrase.trim()
+          : config.networkPassphrase;
       signedEnvelopeXdr = await signSorobanPreparedTxWithPasskey({
         kit,
         unsignedXdr,
         sorobanDataXdr,
-        networkPassphrase: config.networkPassphrase,
+        networkPassphrase: preparedPassphrase,
         credentialId,
         smartAccountContractId: walletContractId,
         webauthnVerifierAddress: config.webauthnVerifierAddress,
         supportsOzKitApi: build.supportsOzKitApi === true,
         signMethod: signMethod ?? "oz_passkey",
       });
-    } else if (signMethod === "smart_g_signer") {
+    } else if (signMethod === "smart_g_signer" && signerPublicKey) {
       const { signSorobanUsdcWithGSigner } = await import("@/lib/stellar/smartAccounts/signSorobanTransferG");
       signedEnvelopeXdr = await signSorobanUsdcWithGSigner({
         unsignedXdr,
@@ -166,7 +199,6 @@ export async function submitSozuCheckoutPayment({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": userId,
       },
       body: JSON.stringify({
         signedEnvelopeXdr,
@@ -225,6 +257,27 @@ export async function submitSozuCheckoutPayment({
       memo: sessionId,
       completedAt: new Date().toISOString(),
     };
+
+    const { rememberCheckoutPurchase } = await import("@/lib/checkout/saved-purchases");
+    const sale = resolveCollectibleSale({
+      collectibleReceipt,
+      itemName,
+      editionNumber,
+      editionSize,
+    });
+    rememberCheckoutPurchase({
+      hash: result.transactionHash,
+      merchantName,
+      itemName: sale.itemName || merchantName,
+      amount: amountUsd,
+      createdAt: new Date().toISOString(),
+      collectible: sale.collectible,
+      toAddress: actualDestination,
+      ...(sale.editionNumber && sale.editionSize
+        ? { editionNumber: sale.editionNumber, editionSize: sale.editionSize }
+        : {}),
+      ...(productImageUrl ? { imageUrl: productImageUrl } : {}),
+    });
 
     return {
       success: true,

@@ -23,7 +23,6 @@ function DepositReturnContent() {
       const userId = getUserId()
       try {
         const res = await fetch(`/api/deposits/${intentId}`, {
-          headers: userId ? { "x-user-id": userId } : {},
           credentials: "include",
         })
         const data = await res.json().catch(() => ({})) as { deposit?: DepositIntentPublic; error?: string }

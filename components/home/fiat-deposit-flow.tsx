@@ -140,7 +140,6 @@ export function FiatDepositFlow() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         credentials: "include",
         body: JSON.stringify({ method, amountClp: parsedAmount }),
@@ -183,7 +182,6 @@ export function FiatDepositFlow() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         credentials: "include",
         body: JSON.stringify({ proof_reference: proofValue.trim() }),
@@ -391,7 +389,6 @@ function DepositStatusView({ intent: initial }: { intent: DepositIntentPublic })
     try {
       const userId = getUserId()
       const res = await fetch(`/api/deposits/${intent.id}`, {
-        headers: userId ? { "x-user-id": userId } : {},
         credentials: "include",
       })
       if (res.ok) {

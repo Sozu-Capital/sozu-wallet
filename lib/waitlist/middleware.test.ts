@@ -7,6 +7,7 @@ vi.mock("@/lib/supabase/middleware", () => ({
 
 import { middleware } from "@/middleware"
 import { WAITLIST_BYPASS_COOKIE } from "@/lib/waitlist/waitlist-mode"
+import { EVENT_SIGNUP_CLOSES_AT_MS, EVENT_SIGNUP_OPENS_AT_MS } from "@/lib/waitlist/signup-window"
 
 const TOKEN = "team-bypass-token-0123456789"
 
@@ -25,11 +26,13 @@ function isNext(response: Response) {
 }
 
 beforeEach(() => {
-  vi.stubEnv("WAITLIST_MODE", "1")
   vi.stubEnv("WAITLIST_BYPASS_TOKEN", TOKEN)
+  vi.useFakeTimers()
+  vi.setSystemTime(EVENT_SIGNUP_CLOSES_AT_MS)
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
 })
 
@@ -39,8 +42,14 @@ describe("waitlist middleware", () => {
     expect(rewriteTarget(response)).toBe("https://app.sozu.capital/waitlist")
   })
 
+  it("leaves the app open during the signup window", async () => {
+    vi.setSystemTime(EVENT_SIGNUP_OPENS_AT_MS)
+    const response = await middleware(request("/"))
+    expect(rewriteTarget(response)).toBeNull()
+  })
+
   it("redirects app pages and dotted page URLs to the root", async () => {
-    for (const path of ["/auth", "/home?x=1", "/city/spot/1.png", "/waitlist"]) {
+    for (const path of ["/home?x=1", "/city/spot/1.png", "/waitlist"]) {
       const response = await middleware(request(path))
       expect(response.status).toBe(307)
       expect(response.headers.get("location")).toBe("https://app.sozu.capital/")
@@ -48,7 +57,7 @@ describe("waitlist middleware", () => {
   })
 
   it("serves assets and well-known files without the session check", async () => {
-    for (const path of ["/brand/november-2026/mark.png", "/robots.txt", "/.well-known/stellar.toml"]) {
+    for (const path of ["/brand/november-2026/mark.png", "/.well-known/stellar.toml"]) {
       expect(isNext(await middleware(request(path)))).toBe(true)
     }
   })
@@ -78,10 +87,8 @@ describe("waitlist middleware", () => {
     expect(response.headers.get("location")).toBe("https://app.sozu.capital/")
   })
 
-  it("does nothing when WAITLIST_MODE is off", async () => {
-    vi.stubEnv("WAITLIST_MODE", "")
-    const page = await middleware(request("/home"))
-    expect(page.headers.get("location")).toBe("https://app.sozu.capital/auth")
-    expect(isNext(await middleware(request("/icons/sozu_icon_192.png")))).toBe(true)
+  it("keeps sign-in reachable after the window closes", async () => {
+    const response = await middleware(request("/auth"))
+    expect(response.headers.get("location")).toBe("https://app.sozu.capital/auth")
   })
 })

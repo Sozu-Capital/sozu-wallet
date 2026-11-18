@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { resolveUserId } from "@/lib/auth/resolve-user"
+import { requireSession } from "@/lib/auth/session"
 import { mintSozuFaucetToken } from "@/lib/sozu-faucet/mint-token"
 import {
   buildFaucetReturnWithToken,
@@ -24,7 +24,7 @@ function isSmartAccount(addr: string): boolean {
  * Mint a ~5m Mode A JWT and return the allowlisted faucet redirect URL with ?token=.
  */
 export async function POST(request: Request) {
-  const auth = await resolveUserId(request)
+  const auth = requireSession(request)
   if (auth.error) return auth.error
   const { userId } = auth
 

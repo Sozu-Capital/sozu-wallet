@@ -3,6 +3,8 @@ import { challengeStore, cleanupChallenges, getRpID, rpName } from "@/lib/webaut
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
+import { isNewAccountAllowed } from "@/lib/waitlist/signup-window"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -10,6 +12,13 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isNewAccountAllowed(request.headers.get("host"))) {
+      return NextResponse.json(
+        { error: "Account creation is closed.", code: "signup_closed" },
+        { status: 403, headers: corsHeaders(request) },
+      )
+    }
+
     const { username } = await request.json()
 
     if (!username || typeof username !== "string") {
@@ -35,17 +44,7 @@ export async function POST(request: NextRequest) {
     
     const { createClient: createServiceClient } = await import("@supabase/supabase-js")
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
-    
-    const { data: existingProfile, error: checkError } = await serviceClient
-      .from("profiles")
-      .select("id, username")
-      .eq("username", username)
-      .maybeSingle()
-    
-    if (checkError && checkError.code !== "PGRST116") { // PGRST116 = no rows returned
-      console.error("[Register Challenge] Error checking for existing username:", checkError)
-      // Continue anyway - let the registration verify endpoint handle it
-    }
+    const existingProfile = await findCanonicalTagOwner(serviceClient, username)
     
     if (existingProfile) {
       console.log("[Register Challenge] Username already exists:", username)

@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
+import { corsHeaders } from "@/lib/cors"
 import { Horizon, TransactionBuilder, Networks, Transaction, FeeBumpTransaction } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
@@ -13,6 +15,14 @@ import {
 import { contractIsFactoryForSigner } from "@/lib/stellar/factory-smart-account"
 import { normalizeStellarNetwork } from "@/lib/stellar/network-env"
 import { contractSupportsOzKitSigning } from "@/lib/stellar/supports-oz-kit-contract"
+import { getSessionUserId } from "@/lib/auth/session"
+import { supabaseIdempotencyStore } from "@/lib/db/idempotency"
+import {
+  IdempotencyStoreUnavailableError,
+  isValidIdempotencyKey,
+  runIdempotent,
+} from "@/lib/idempotency/idempotency"
+import { parseSacTransferEnvelope, sacTransferIntentKey } from "@/lib/stellar/parse-sac-transfer-envelope"
 
 /**
  * Maps a raw Soroban submit error message to a structured code for client-side handling.
@@ -42,11 +52,6 @@ function getTransactionSource(tx: Transaction | FeeBumpTransaction): string {
   return (tx as any).innerTransaction?.source || ""
 }
 
-const corsHeaders = (request: NextRequest) => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
-})
 
 export async function OPTIONS(request: NextRequest) {
   return NextResponse.json({}, { headers: corsHeaders(request) })
@@ -55,7 +60,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const userId = request.headers.get("x-user-id")
+    const userId = getSessionUserId(request)
     const { destination, amount, sender, signer: signerFromBody, memo, contractId: contractIdFromBody } = body
 
     console.log("[Payment API] Request received:", {
@@ -79,20 +84,46 @@ export async function POST(request: NextRequest) {
     const transactionMemo = memo || null
 
     if (body.signedEnvelopeXdr && typeof body.signedEnvelopeXdr === "string") {
-      try {
-        const hash = await submitSignedSorobanEnvelope(body.signedEnvelopeXdr.trim())
-        return NextResponse.json(
-          { success: true, transactionHash: hash, confirmed: true },
-          { headers: corsHeaders(request) }
-        )
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        const code = classifySorobanSubmitError(msg)
-        return NextResponse.json(
-          { success: false, error: msg, code },
-          { status: 400, headers: corsHeaders(request) },
-        )
+      const signedEnvelopeXdr = body.signedEnvelopeXdr.trim()
+      const submitOnce = async (): Promise<{ status: number; body: unknown }> => {
+        try {
+          const hash = await submitSignedSorobanEnvelope(signedEnvelopeXdr)
+          return { status: 200, body: { success: true, transactionHash: hash, confirmed: true } }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          return { status: 400, body: { success: false, error: msg, code: classifySorobanSubmitError(msg) } }
+        }
       }
+
+      if (body.idempotencyKey !== undefined) {
+        if (!isValidIdempotencyKey(body.idempotencyKey)) {
+          return NextResponse.json(
+            { success: false, error: "Invalid idempotency key", code: "INVALID_IDEMPOTENCY_KEY" },
+            { status: 400, headers: corsHeaders(request) },
+          )
+        }
+        const stellarConfig = getStellarConfig()
+        const passphrase = stellarConfig.network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
+        const parsedTransfer = parseSacTransferEnvelope(signedEnvelopeXdr, passphrase)
+        const fingerprint = parsedTransfer.ok
+          ? sacTransferIntentKey(parsedTransfer.intent)
+          : `envelope:${createHash("sha256").update(signedEnvelopeXdr).digest("hex")}`
+        try {
+          const result = await runIdempotent(
+            supabaseIdempotencyStore,
+            { userId, key: body.idempotencyKey, scope: "payment", fingerprint },
+            submitOnce,
+          )
+          return NextResponse.json(result.body, { status: result.status, headers: corsHeaders(request) })
+        } catch (e) {
+          if (!(e instanceof IdempotencyStoreUnavailableError)) throw e
+          // Regular sends keep working before the idempotency migration is applied.
+          console.error("[Payment API] idempotency store unavailable, submitting without it:", e.message)
+        }
+      }
+
+      const result = await submitOnce()
+      return NextResponse.json(result.body, { status: result.status, headers: corsHeaders(request) })
     }
 
     // If signed transaction is provided, submit it
@@ -682,17 +713,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400, headers: corsHeaders(request) })
     }
 
-    if (!signerPk || !signerPk.startsWith("G")) {
-      return NextResponse.json(
-        {
-          error:
-            "Passkey signer (G…) missing in our records. Sign out, sign in with passkey again. USDC sends from your C smart account; a server funder or your G pays Soroban fees.",
-          code: "SMART_SIGNER_REQUIRED",
-        },
-        { status: 422, headers: corsHeaders(request) }
-      )
-    }
-
     const { contractCanReadOnChainSignerKeyData } = await import(
       "@/lib/stellar/smartAccounts/resolveOnChainPublicKey"
     )
@@ -701,7 +721,9 @@ export async function POST(request: NextRequest) {
     )
     const supportsOzKitApi = await contractSupportsOzKitSigning(senderPk)
     const canReadOnChainKeyData = await contractCanReadOnChainSignerKeyData(senderPk)
-    const isFactoryOnChain = await contractIsFactoryForSigner(senderPk, signerPk)
+    const isFactoryOnChain = signerPk?.startsWith("G")
+      ? await contractIsFactoryForSigner(senderPk, signerPk)
+      : false
     const useFactoryGSigner = !supportsOzKitApi && isFactoryOnChain
 
     const ozCred = wallet.ozCredentialId?.trim() ?? ""
@@ -748,7 +770,7 @@ export async function POST(request: NextRequest) {
     console.log("[Payment API] Soroban fee payer:", {
       feePayer: feePayer.slice(0, 8) + "…",
       usedFunder,
-      signer: signerPk.slice(0, 8) + "…",
+      signer: signerPk ? signerPk.slice(0, 8) + "…" : "passkey",
       from: senderPk.slice(0, 8) + "…",
     })
 
@@ -779,7 +801,8 @@ export async function POST(request: NextRequest) {
         passkeyRegisteredOnContract,
         feePayerPublicKey: feePayer,
         usedFunderRelayer: usedFunder,
-        signerPublicKey: signerPk,
+        networkPassphrase: stellarConfig.network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
+        signerPublicKey: useFactoryGSigner ? signerPk : null,
         walletAddress: senderPk,
         ozCredentialId: wallet.ozCredentialId ?? null,
         contractId: tokenContractId,

@@ -1,8 +1,7 @@
 "use client"
 
-import { WelcomeModal } from "@/components/welcome-modal"
 import { TagInputModal } from "@/components/tag-input-modal"
-import { AuthDeviceChoiceModal } from "@/components/auth-device-choice-modal"
+import { RecoverAccountScreen } from "@/components/auth/recover-account-screen"
 import { QRCodeRegistrationModal } from "@/components/qr-code-registration-modal"
 import { WalletSkeleton } from "@/components/ui/wallet-skeleton"
 import { Button } from "@/components/ui/button"
@@ -29,17 +28,33 @@ import {
   persistAuthIdentitySession,
   persistClientWalletSession,
 } from "@/lib/client-wallet-session"
+import { hasServerWalletSession } from "@/lib/auth/wallet-session-client"
 import { clearClientSession } from "@/lib/storage/clear-session"
 import { signalBootstrapReady } from "@/lib/app-ready"
+import { markWelcomeOnboardingComplete } from "@/lib/wallet/needs-activation-onboarding"
 import { peekFaucetHandoffReturn } from "@/lib/sozu-faucet/handoff-return-storage"
 import {
   parseAllowlistedFaucetReturnUrl,
   parseFaucetHandoffAuthReturn,
 } from "@/lib/sozu-faucet/return-allowlist"
 import { toast } from "sonner"
+import { nfcUsdcDropReturnPath } from "@/lib/faucet/nfc-usdc-drop"
+import { tapAuthReturnPath } from "@/lib/faucet/tap-path"
+import { itemAuthReturnPath } from "@/lib/merch/buy-gate"
+import { panelAuthReturnPath } from "@/lib/shell/panels"
 import { resolvePizzaAuthSearch } from "@/lib/pizza/pay-return"
 import { stashPizzaHopReturn } from "@/lib/pizza/hop-return-storage"
+import { ConnectPayConfirm } from "@/components/connect/connect-pay-confirm"
 import { PizzaAuthContinuation } from "@/components/pizza/PizzaAuthContinuation"
+import { PwaInstallBanner } from "@/components/pwa-install-banner"
+import { circleSacCover } from "@/lib/connect/circle-balance"
+import { readSozuPayRequest, sozuConnectInsufficient, sozuConnectPayment } from "@/lib/connect/pay-request"
+import {
+  deliverSozuConnectResult,
+  isSozuConnectSearch,
+  sozuConnectSignupFailed,
+  sozuConnectSuccess,
+} from "@/lib/connect/popup-result"
 
 function navigatePostAuth(
   path: string,
@@ -64,12 +79,19 @@ function AuthPageContent() {
   const [pwaBannerDismissed, setPwaBannerDismissed] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
   const [qrUsername, setQRUsername] = useState<string | null>(null)
-  const [showDeviceChoice, setShowDeviceChoice] = useState(false)
+  const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(null)
+  const [showRecover, setShowRecover] = useState(false)
+  const [offerCreateAccount, setOfferCreateAccount] = useState(false)
+  const [paySession, setPaySession] = useState<{ username: string; accountId: string } | null>(null)
+  const [payAccount, setPayAccount] = useState<{ username: string; accountId: string } | null>(null)
+  const [payCheck, setPayCheck] = useState<"idle" | "checking" | "unavailable">("idle")
   const router = useRouter()
   const searchParams = useSearchParams()
+  const connectMode = isSozuConnectSearch(searchParams)
+  const payRequest = connectMode ? readSozuPayRequest(searchParams) : null
   const redirectingRef = useRef(false)
   const { canInstall, triggerInstall, isIos, isInstalled } = usePwaInstall()
-  const { t } = useWalletLanguage()
+  const { t, language } = useWalletLanguage()
   // Stores a passkey credential captured during discovery-mode auth that failed
   // (credential not in DB). Passed to proceedWithRegistration so the user isn't
   // prompted for a second biometric after entering their SozuTag.
@@ -95,26 +117,10 @@ function AuthPageContent() {
   })()
 
   /**
-   * In-app NFC faucet return is only valid when this visit came from a faucet URL
-   * (`/auth?faucet=<slug>`). Stale sessionStorage alone must never yank a
-   * normal in-app signup to /faucet/test-orb-001.
-   * `faucet=1` is reserved for the Login-with-Sozu handoff (not a slug).
+   * Login-with-Sozu handoff stays on faucet=1. A slug in ?faucet= is not a return
+   * path — the chip secret is not something auth should put back in the URL.
    */
-  const faucetReturnPath = (() => {
-    if (faucetHandoffReturn) return faucetHandoffReturn
-    const slug = searchParams.get("faucet")?.trim()
-    if (slug && slug !== "1" && /^[a-z0-9-]+$/i.test(slug)) {
-      return `/faucet/${slug}`
-    }
-    if (typeof window !== "undefined") {
-      try {
-        sessionStorage.removeItem("sozu_faucet_return")
-      } catch {
-        /* private browsing */
-      }
-    }
-    return null
-  })()
+  const faucetReturnPath = faucetHandoffReturn
 
   /** SDP onboarding: middleware sends unauthenticated users to /auth?sdpInvite=1 */
   const postAuthPath =
@@ -131,10 +137,63 @@ function AuthPageContent() {
     return null
   })()
 
-  const finalPostAuthPath = checkoutRedirect ?? postAuthPath
+  const nfcUsdcRedirect = nfcUsdcDropReturnPath(searchParams.get("redirect"))
+
+  const offlineReturn = (() => {
+    const redirect = searchParams.get("redirect")?.trim() ?? ""
+    if (redirect === "/offline" || redirect.startsWith("/offline?")) return redirect
+    return null
+  })()
+
+  const itemReturn = itemAuthReturnPath(searchParams.get("redirect"))
+  const panelReturn = panelAuthReturnPath(searchParams.get("redirect"))
+  const tapReturn = tapAuthReturnPath(searchParams.get("redirect"))
+
+  const finalPostAuthPath = checkoutRedirect ?? nfcUsdcRedirect ?? offlineReturn ?? itemReturn ?? panelReturn ?? tapReturn ?? postAuthPath
   const pizzaAuth = resolvePizzaAuthSearch(searchParams)
   const stayOnAuthForPizza = pizzaAuth.kind !== "none"
   const pizzaHopReturnTo = pizzaAuth.kind === "hop" ? pizzaAuth.returnTo : null
+
+  const completeConnect = useCallback(
+    (username: string | null | undefined, accountId: string | null | undefined) => {
+      const success = sozuConnectSuccess(username, accountId)
+      if (payRequest && success) {
+        redirectingRef.current = true
+        setShowTagModal(false)
+        setResumeLoginTag(null)
+        setTagModalPrefill(null)
+        setIsAuthenticated(true)
+        setIsAuthenticating(false)
+        setIsExiting(false)
+        setPayAccount(success)
+        setPayCheck("checking")
+        void circleSacCover(success.accountId, payRequest.amount).then((cover) => {
+          if (cover === "no") {
+            const short = sozuConnectInsufficient(success.username, success.accountId)
+            deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+            return
+          }
+          if (cover !== "yes") {
+            setPayCheck("unavailable")
+            return
+          }
+          setPayCheck("idle")
+          setPaySession({ username: success.username, accountId: success.accountId })
+        })
+        return
+      }
+      const message = success ?? sozuConnectSignupFailed()
+      redirectingRef.current = true
+      setShowTagModal(false)
+      setResumeLoginTag(null)
+      setTagModalPrefill(null)
+      setIsAuthenticated(true)
+      setIsAuthenticating(false)
+      setIsExiting(true)
+      deliverSozuConnectResult(message)
+    },
+    [payRequest],
+  )
 
   useEffect(() => {
     if (pizzaHopReturnTo) stashPizzaHopReturn(pizzaHopReturnTo)
@@ -151,6 +210,8 @@ function AuthPageContent() {
         method: "POST",
         credentials: "include",
       })
+      setTagModalPrefill(null)
+      setResumeLoginTag(null)
       setShowTagModal(true)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => signalBootstrapReady())
@@ -163,6 +224,22 @@ function AuthPageContent() {
       const session = await loadClientWalletSession()
       if (cancelled) return
       if (session.isAuthenticated && session.userId) {
+        const serverSession = await hasServerWalletSession()
+        if (cancelled) return
+        if (serverSession === false) {
+          clearClientSession()
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalBootstrapReady())
+          })
+          return
+        }
+        if (connectMode) {
+          // A cookie is not the passkey check. Stay on this page until they sign.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalBootstrapReady())
+          })
+          return
+        }
         if (stayOnAuthForPizza) {
           setIsAuthenticated(true)
           requestAnimationFrame(() => {
@@ -188,7 +265,7 @@ function AuthPageContent() {
     return () => {
       cancelled = true
     }
-  }, [searchParams, router, finalPostAuthPath, stayOnAuthForPizza, isAuthenticating, isAuthenticated])
+  }, [searchParams, router, finalPostAuthPath, stayOnAuthForPizza, isAuthenticating, isAuthenticated, connectMode, completeConnect])
 
   const finalizePasskeyLoginSuccess = useCallback(
     async (userId: string, username: string | undefined, credential: { id: string }) => {
@@ -202,6 +279,7 @@ function AuthPageContent() {
         username: displayUsername,
       })
 
+      let connectAccountId: string | null = null
       try {
         const { alignWalletMaterialAfterLogin } = await import("@/lib/storage/post-login-wallet")
         const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
@@ -211,6 +289,7 @@ function AuthPageContent() {
         if (needsWalletSync) {
           console.warn("[Auth] Wallet sync may be required for this passkey on this device.")
         } else {
+          connectAccountId = publicKey
           persistClientWalletSession({
             userId,
             publicKey,
@@ -224,6 +303,10 @@ function AuthPageContent() {
           sessionStorage.setItem("wallet_sync_pending", "1")
         }
       }
+      if (connectMode) {
+        completeConnect(displayUsername, connectAccountId)
+        return
+      }
       setShowTagModal(false)
       setResumeLoginTag(null)
       setTagModalPrefill(null)
@@ -236,23 +319,22 @@ function AuthPageContent() {
       }
       redirectingRef.current = true
       setIsExiting(true)
-      setTimeout(
-        () => navigatePostAuth(finalPostAuthPath, (p) => router.push(p)),
-        300,
-      )
+      navigatePostAuth(finalPostAuthPath, (p) => router.push(p))
     },
-    [router, finalPostAuthPath, stayOnAuthForPizza]
+    [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
 
   const finalizePinLoginSuccess = useCallback(
     async (userId: string, username: string) => {
       sessionStorage.removeItem("credential_id")
       persistAuthIdentitySession({ userId, credentialId: "", username })
+      let connectAccountId: string | null = null
       try {
-        const res = await fetch("/api/wallet/stellar/address", { headers: { "x-user-id": userId } })
+        const res = await fetch("/api/wallet/stellar/address")
         const data = (await res.json()) as { publicKey?: string | null }
         const pk = data.publicKey?.trim().toUpperCase()
         if (pk && (pk.startsWith("C") || pk.startsWith("G")) && pk.length === 56) {
+          connectAccountId = pk
           const { getCurrentCredentialId } = await import("@/lib/storage/key-utils")
           const credentialId = (await getCurrentCredentialId(pk)) ?? ""
           persistClientWalletSession({
@@ -271,6 +353,10 @@ function AuthPageContent() {
       } catch (e) {
         console.warn("[Auth] PIN login: could not load wallet address", e)
       }
+      if (connectMode) {
+        completeConnect(username, connectAccountId)
+        return
+      }
       setShowTagModal(false)
       setResumeLoginTag(null)
       setTagModalPrefill(null)
@@ -283,12 +369,9 @@ function AuthPageContent() {
       }
       redirectingRef.current = true
       setIsExiting(true)
-      setTimeout(
-        () => navigatePostAuth(finalPostAuthPath, (p) => router.push(p)),
-        300,
-      )
+      navigatePostAuth(finalPostAuthPath, (p) => router.push(p))
     },
-    [router, finalPostAuthPath, stayOnAuthForPizza]
+    [router, finalPostAuthPath, stayOnAuthForPizza, connectMode, completeConnect]
   )
 
   const attemptLoginWithTag = useCallback(
@@ -348,16 +431,21 @@ function AuthPageContent() {
     }
   }, [searchParams])
 
+  const openAccountWindows = useCallback((prefill?: string | null) => {
+    setOfferCreateAccount(false)
+    setResumeLoginTag(null)
+    setTagModalPrefill(prefill?.replace(/^\$/, "").trim() || null)
+    setShowTagModal(true)
+    setIsAuthenticating(false)
+  }, [])
+
   /**
-   * Explicit discovery login (empty allowCredentials).
-   * Only call when the user chose "scan with another device" — never as the
-   * default Enter path for first-time biometric devices (that surfaces the OS
-   * hybrid QR sheet when no local passkey exists).
+   * OS passkey sheet with no allow-list. Face ID signs an existing account in.
+   * Closing the sheet opens the small account windows.
    */
   const attemptDiscoveryLogin = useCallback(async () => {
     if (typeof window === "undefined" || !window.PublicKeyCredential) {
-      setIsAuthenticating(false)
-      setShowTagModal(true)
+      openAccountWindows()
       return
     }
 
@@ -370,8 +458,8 @@ function AuthPageContent() {
 
       if (!credential) {
         console.log("[Auth] No passkey selected or user cancelled discovery")
-        setIsAuthenticating(false)
-        setShowTagModal(true)
+        pendingCredentialRef.current = null
+        openAccountWindows()
         return
       }
 
@@ -387,8 +475,7 @@ function AuthPageContent() {
           "[Auth] Discovery mode authentication failed — credential captured for registration reuse",
         )
         pendingCredentialRef.current = credential
-        setIsAuthenticating(false)
-        setShowTagModal(true)
+        openAccountWindows()
         return
       }
 
@@ -401,85 +488,92 @@ function AuthPageContent() {
     } catch (discoveryError: unknown) {
       const err = discoveryError as { name?: string; message?: string }
       console.log("[Auth] Passkey discovery failed:", err?.name, err?.message)
+      const dismissed =
+        discoveryError instanceof DOMException &&
+        (discoveryError.name === "NotAllowedError" || discoveryError.name === "AbortError")
+      if (dismissed) {
+        pendingCredentialRef.current = null
+        openAccountWindows()
+        return
+      }
       setIsAuthenticating(false)
-      setShowTagModal(true)
+      toast.error(t.authFailed)
     }
-  }, [finalizePasskeyLoginSuccess])
+  }, [finalizePasskeyLoginSuccess, openAccountWindows, t.authFailed])
+
+  const startSignup = () => {
+    openAccountWindows()
+  }
+
+  const holdForCreateAccount = (
+    credential?: Awaited<ReturnType<typeof getPasskey>> | null,
+  ) => {
+    if (credential) pendingCredentialRef.current = credential
+    setIsAuthenticating(false)
+    setOfferCreateAccount(true)
+  }
 
   const handleAuth = async () => {
-    if (redirectingRef.current) {
-      console.log("[Auth] Already redirecting, ignoring...")
+    if (redirectingRef.current || isAuthenticating) {
       return
     }
 
     setIsAuthenticating(true)
-    setShowDeviceChoice(false)
 
     let storedUsername: string | null = null
     if (typeof window !== "undefined") {
       const value = localStorage.getItem("sozu_username")
       if (value && value !== "user") {
         storedUsername = value
-        console.log("[Auth] Found stored username:", storedUsername)
       }
     }
 
-    // Returning user with a remembered tag → authenticate that passkey directly.
-    if (storedUsername) {
-      console.log("[Auth] ====== Attempting login with stored username:", storedUsername)
-      const result = await attemptLoginWithTag(storedUsername)
-      if (result.ok) {
-        return
-      }
-      console.log("[Auth] Login with stored tag failed:", result.error, result.cancelled)
+    const path = resolveEnterAuthPath({
+      storedUsername,
+      capabilities: {
+        hasWebAuthn: typeof window !== "undefined" && !!window.PublicKeyCredential,
+        canUsePasskeys: true,
+      },
+    })
 
-      if (result.capturedCredential) {
-        pendingCredentialRef.current = result.capturedCredential
-        console.log("[Auth] Captured credential stashed for registration reuse")
+    // Remembered tag: that passkey, one Face ID. Cancelling stays on the
+    // lock screen so Enter can be tapped again.
+    if (path.action === "login-stored") {
+      const result = await attemptLoginWithTag(path.username)
+      if (result.ok) return
+
+      if (result.cancelled || result.capturedCredential) {
+        holdForCreateAccount(result.capturedCredential)
+        return
       }
 
       setIsAuthenticating(false)
-      if (result.cancelled) {
-        setResumeLoginTag(storedUsername)
-      } else if (typeof window !== "undefined") {
+      if (result.error && /not found/i.test(result.error)) {
         localStorage.removeItem("sozu_username")
-        setTagModalPrefill(storedUsername)
+        startSignup()
       }
-      setShowTagModal(true)
       return
     }
 
-    // First visit / no remembered tag: decide from device capability BEFORE any
-    // credentials.get. Auto-discovery here is what triggered "scan with another
-    // device" on biometric phones that simply had no Sozu passkey yet.
-    const capabilities = await detectDeviceCapabilities()
-    const path = resolveEnterAuthPath({ storedUsername: null, capabilities })
-    console.log("[Auth] Enter path:", path.action, {
-      canUsePasskeys: capabilities.canUsePasskeys,
-      deviceType: capabilities.deviceType,
-    })
-
-    setIsAuthenticating(false)
-
-    if (path.action === "create-or-login" || path.action === "unsupported") {
-      setShowTagModal(true)
+    // No remembered tag. The OS passkey sheet is the login. Closing it
+    // opens the small windows for a new account.
+    if (path.action === "passkey-prompt") {
+      await attemptDiscoveryLogin()
       return
     }
 
-    // No platform authenticator → let the user choose scan vs create.
-    setShowDeviceChoice(true)
+    openAccountWindows()
   }
 
-  const handleRegisterFromModal = (tag: string) => {
+  const handleRegisterFromModal = (tag: string, email: string) => {
     setShowTagModal(false)
     setResumeLoginTag(null)
     setTagModalPrefill(null)
+    setPendingRecoveryEmail(email)
     setIsAuthenticating(true)
-    // Consume any credential captured during a failed discovery-mode auth so that
-    // proceedWithRegistration can skip the second biometric prompt.
     const captured = pendingCredentialRef.current
     pendingCredentialRef.current = null
-    void proceedWithRegistration(tag, captured)
+    void proceedWithRegistration(tag, captured, email)
   }
 
   const handleLoginPasskeyFromModal = async (tag: string) => {
@@ -520,6 +614,7 @@ function AuthPageContent() {
     /** Credential already captured from a prior (failed) discovery-mode auth.
      *  When provided the browser biometric prompt is skipped entirely. */
     existingCredential?: Awaited<ReturnType<typeof getPasskey>> | null,
+    recoveryEmail?: string,
   ) => {
     console.log("[Auth] ====== Starting registration with tag:", tag, existingCredential ? "(reusing captured credential)" : "")
 
@@ -553,8 +648,7 @@ function AuthPageContent() {
             `Sozu Wallet requires ${capabilities.os === 'ios' ? 'Face ID or Touch ID' : 'fingerprint or face unlock'} for self-custody security.\n\n` +
             `Please use a device with biometric authentication.`
           )
-          setShowTagModal(true)
-          setTagModalPrefill(usernameToRegister)
+          openAccountWindows(usernameToRegister)
           return
         }
         console.log("[Auth] Device supports passkeys - proceeding with registration")
@@ -614,9 +708,7 @@ function AuthPageContent() {
             passkeyError.name === "AbortError"
           )) {
             console.log("[Auth] User cancelled passkey registration")
-            setIsAuthenticating(false)
-            setTagModalPrefill(usernameToRegister)
-            setShowTagModal(true)
+            openAccountWindows(usernameToRegister)
             return
           }
           throw passkeyError // Re-throw other errors
@@ -632,7 +724,13 @@ function AuthPageContent() {
       console.log("[Auth] Reg Step 4: Verifying registration...")
 
       // Pass the challenge and referral code to verifyRegistration
-      const regResult = await verifyRegistration(usernameToRegister, credential, challenge.challenge, referralCode)
+      const regResult = await verifyRegistration(
+        usernameToRegister,
+        credential,
+        challenge.challenge,
+        referralCode,
+        recoveryEmail,
+      )
       console.log("[Auth] Reg Step 5: Verification result:", regResult)
       console.log("[Auth] Registration success:", regResult.success)
       console.log("[Auth] Registration userId:", regResult.userId)
@@ -668,6 +766,7 @@ function AuthPageContent() {
           console.error("[Auth] ERROR: No userId available from server!")
           throw new Error("No userId available. Cannot continue.")
         }
+        markWelcomeOnboardingComplete(finalUserId)
 
         if (typeof window !== "undefined" && credential?.id) {
           persistAuthIdentitySession({
@@ -697,6 +796,33 @@ function AuthPageContent() {
             console.log("[Auth] Saved passkey public key to smart-account-kit storage for deploy")
           } catch (kitSaveErr) {
             console.warn("[Auth] kit.credentials.save after register:", kitSaveErr)
+          }
+
+          if (connectMode) {
+            let connectAccountId: string | null = null
+            try {
+              const { alignWalletMaterialAfterLogin } = await import(
+                "@/lib/storage/post-login-wallet"
+              )
+              const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
+                finalUserId,
+                credential.id,
+              )
+              if (!needsWalletSync && publicKey) {
+                connectAccountId = publicKey
+                persistClientWalletSession({
+                  userId: finalUserId,
+                  publicKey,
+                  credentialId: credential.id,
+                  username: registeredUsername,
+                })
+              }
+            } catch (walletError) {
+              console.error("[Auth] Smart wallet provisioning failed:", walletError)
+              sessionStorage.setItem("wallet_sync_pending", "1")
+            }
+            completeConnect(registeredUsername, connectAccountId)
+            return
           }
 
           // Kick off Wallet Provisioning without blocking redirect — Home shows
@@ -734,6 +860,9 @@ function AuthPageContent() {
               sessionStorage.setItem("wallet_sync_pending", "1")
             }
           })()
+        } else if (connectMode) {
+          completeConnect(registeredUsername, null)
+          return
         } else {
           console.warn("[Auth] ⚠️ Skipping smart wallet setup — no credential id")
         }
@@ -838,10 +967,8 @@ function AuthPageContent() {
         error.name === "AbortError"
       )) {
         console.log("[Auth] User cancelled passkey authentication/registration")
-        setIsAuthenticating(false)
-        const t = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        if (t) setTagModalPrefill(t)
-        setShowTagModal(true)
+        const stored = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
+        openAccountWindows(stored)
         return
       }
 
@@ -852,8 +979,7 @@ function AuthPageContent() {
         setIsAuthenticating(false)
         toast.message(t.authCancelledHint)
         const storedTag = typeof window !== "undefined" ? localStorage.getItem("sozu_username") : null
-        if (storedTag) setTagModalPrefill(storedTag)
-        setShowTagModal(true)
+        openAccountWindows(storedTag)
         return
       }
 
@@ -872,6 +998,13 @@ function AuthPageContent() {
 
         if (isAuth) {
           console.log("[Auth] Found auth state after error, redirecting anyway...")
+          if (connectMode) {
+            completeConnect(
+              localStorage.getItem("sozu_username"),
+              localStorage.getItem("stellar_public_key"),
+            )
+            return
+          }
           if (stayOnAuthForPizza) {
             setIsAuthenticated(true)
             return
@@ -883,6 +1016,10 @@ function AuthPageContent() {
         }
       }
 
+      if (connectMode) {
+        completeConnect(null, null)
+        return
+      }
       setIsAuthenticating(false)
       toast.error(t.authFailed)
       console.log("[Auth] Authentication failed - setting isAuthenticating to false")
@@ -891,8 +1028,71 @@ function AuthPageContent() {
     }
   }
 
+  if (payRequest && payCheck === "checking") {
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        Checking Circle USDC…
+      </div>
+    )
+  }
+
+  if (payRequest && payCheck === "unavailable" && payAccount) {
+    const account = payAccount
+    const request = payRequest
+    return (
+      <div className="flex h-full min-h-[var(--sozu-app-height,100lvh)] flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-sm text-muted-foreground">Couldn’t check the Circle USDC balance. Try again before sending.</p>
+        <button
+          type="button"
+          className="h-11 rounded-full bg-foreground px-5 text-sm text-background"
+          onClick={() => {
+            setPayCheck("checking")
+            void circleSacCover(account.accountId, request.amount).then((cover) => {
+              if (cover === "no") {
+                const short = sozuConnectInsufficient(account.username, account.accountId)
+                deliverSozuConnectResult(short ?? sozuConnectSignupFailed())
+                return
+              }
+              if (cover !== "yes") {
+                setPayCheck("unavailable")
+                return
+              }
+              setPayCheck("idle")
+              setPaySession(account)
+            })
+          }}
+        >
+          Try again
+        </button>
+        <button type="button" className="text-sm text-muted-foreground" onClick={() => window.close()}>
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  if (paySession && payRequest) {
+    return (
+      <ConnectPayConfirm
+        amount={payRequest.amount}
+        to={payRequest.to}
+        username={paySession.username}
+        accountId={paySession.accountId}
+        onSigned={(txHash) => {
+          const message = sozuConnectPayment(paySession.username, paySession.accountId, txHash)
+          if (!message) {
+            deliverSozuConnectResult(sozuConnectSignupFailed())
+            return
+          }
+          deliverSozuConnectResult(message)
+        }}
+        onCancel={() => window.close()}
+      />
+    )
+  }
+
   return (
-    <div className="relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
+    <div className="sozu-night sozu-night-clear relative h-full min-h-[var(--sozu-app-height,100lvh)] w-full overflow-hidden">
       {isAuthenticated && pizzaAuth.kind !== "none" ? (
         <PizzaAuthContinuation continuation={pizzaAuth} />
       ) : null}
@@ -900,145 +1100,71 @@ function AuthPageContent() {
       {/* ── PWA install banner — fixed top toast, visible on mobile before install ── */}
       <AnimatePresence>
         {!isInstalled && !pwaBannerDismissed && (canInstall || isIos) && (
-          <motion.div
+          <PwaInstallBanner
             key="pwa-banner"
-            initial={{ y: "-110%", opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "-110%", opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 300, delay: 1.2 }}
-            className="fixed left-3 right-3 z-[60] rounded-2xl border border-white/[0.10] px-4 py-3"
-            style={{
-              top: "max(0.75rem, env(safe-area-inset-top))",
-              background: "rgba(18, 18, 20, 0.82)",
-              backdropFilter: "blur(24px)",
-              WebkitBackdropFilter: "blur(24px)",
+            subtitle={isIos ? t.authPwaBannerIos : t.authPwaBannerAndroid}
+            actionLabel={isIos ? t.authPwaInstallIos : t.authPwaInstallAndroid}
+            closeLabel={t.authClose}
+            onAction={() => {
+              if (canInstall) void triggerInstall()
+              else setShowIosInstallModal(true)
             }}
-          >
-            <div className="flex items-center gap-3">
-              {/* App icon */}
-              <img
-                src="/icons/sozu_icon_192.png"
-                alt="Sozu"
-                className="h-11 w-11 shrink-0 rounded-[22%] object-cover"
-              />
-
-              {/* Text */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <p className="text-[13px] font-semibold text-white leading-tight">
-                  Sozu
-                </p>
-                <p className="text-[11px] text-white/45 leading-tight mt-0.5">
-                  {isIos ? t.authPwaBannerIos : t.authPwaBannerAndroid}
-                </p>
-              </div>
-
-              {/* Install / Add CTA */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (canInstall) void triggerInstall()
-                  else setShowIosInstallModal(true)
-                }}
-                className="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-black hover:bg-white/90 active:scale-95 transition-transform"
-              >
-                {isIos ? t.authPwaInstallIos : t.authPwaInstallAndroid}
-              </button>
-
-              {/* Dismiss */}
-              <button
-                type="button"
-                onClick={() => setPwaBannerDismissed(true)}
-                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.08] text-white/35 hover:text-white/60 transition-colors"
-                aria-label={t.authClose}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </motion.div>
+            onDismiss={() => setPwaBannerDismissed(true)}
+          />
         )}
       </AnimatePresence>
-
-      {/* SOZU wordmark — top of screen, matches Passkey caption style */}
-      <p className="pointer-events-none absolute top-[max(1.1rem,env(safe-area-inset-top))] left-0 right-0 z-[3] text-center text-[10px] font-extralight tracking-[0.12em] text-white">
-        SOZU
-      </p>
-
-      {/* Logo and Version — centered on phone; upper area on tablet/desktop so orb stays at bottom */}
-      <div className={`absolute inset-0 z-[2] flex flex-col items-center justify-center pointer-events-none transition-opacity duration-700 md:justify-start md:pt-[clamp(5rem,18vh,10rem)] ${isAuthenticated
-        ? "opacity-0"
-        : "opacity-100"
-        }`}>
-        <div className="flex flex-col items-center gap-4">
-          <img
-            src="/sozucapital_logo_tb.png"
-            alt="Sozu Wallet Logo"
-            className="w-32 h-32 md:w-36 md:h-36 object-contain"
-          />
-          <div className="text-white/60 text-sm font-medium">
-            v0.2
-          </div>
-        </div>
-      </div>
 
       {/* Post-auth skeleton — full viewport */}
       <div className="relative z-[1] h-full overflow-hidden">
         {isAuthenticated ? (
-          <div className="z-10 h-full">
+          <div className="relative z-10 h-full">
             <WalletSkeleton isExiting={isExiting} layout="landing" />
           </div>
         ) : null}
       </div>
 
-      {/* Enter CTA — pinned to viewport bottom with safe-area inset (no scroll needed) */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-[4] flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] transition-all duration-700 ${
-          isAuthenticated
-            ? "pointer-events-none scale-95 opacity-0"
-            : "scale-100 opacity-100"
+        className={`fixed inset-0 z-[4] flex flex-col transition-opacity duration-700 ${
+          isAuthenticated ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
+        <div className="pointer-events-none flex flex-1 items-center justify-center">
+          <img
+            src="/brand/november-2026/mark.png"
+            alt="Sozu Wallet"
+            className="h-36 w-36 object-contain"
+          />
+        </div>
+        <div className="flex w-full flex-col items-center gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        {offerCreateAccount && !isAuthenticated ? (
+          <button
+            type="button"
+            onClick={startSignup}
+            className="text-[13px] font-medium text-white/80 transition-colors hover:text-white"
+          >
+            {t.authCreateAccount}
+          </button>
+        ) : null}
         <Button
-          onClick={handleAuth}
+          type="button"
+          onClick={() => void handleAuth()}
           disabled={isAuthenticating}
-          className="w-full md:w-1/6 h-16 text-lg font-semibold bg-white text-black hover:bg-white/90 active:bg-white/80 transition-all duration-200 rounded-full shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden relative"
+          className="h-14 w-full max-w-[430px] rounded-full bg-white text-base font-semibold text-black hover:bg-white/90"
         >
-          <AnimatePresence mode="popLayout" initial={false}>
-            {isAuthenticating ? (
-              <motion.div
-                key="authenticating"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex items-center justify-center absolute inset-0"
-              >
-                <Fingerprint className="w-8 h-8" />
-              </motion.div>
-            ) : (
-              <motion.span
-                key="idle"
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="flex items-center"
-              >
-                {t.authEnter}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {isAuthenticating ? <Fingerprint className="h-5 w-5" /> : t.authEnter}
         </Button>
-        <p className="max-w-sm px-2 text-center text-[10px] font-extralight tracking-[0.12em] text-white">
-          {t.authPasskeyCaption}
-        </p>
-
-        {/* PWA banner placeholder — actual banner is fixed at top, rendered below */}
+        <button
+          type="button"
+          onClick={() => setShowRecover(true)}
+          className="pointer-events-auto text-[11px] font-normal tracking-wide text-white/60 transition-colors hover:text-white"
+        >
+          {language === "en" ? "Recover my account" : "Recuperar mi cuenta"}
+        </button>
+        </div>
       </div>
 
-      {/* Welcome Modal - Shows on first visit */}
-      <WelcomeModal />
+      {showRecover ? <RecoverAccountScreen onBack={() => setShowRecover(false)} /> : null}
 
-      {/* Tag Input Modal - Shows when user needs to choose a tag */}
       <TagInputModal
         isOpen={showTagModal}
         resumeWithTag={resumeLoginTag}
@@ -1054,26 +1180,11 @@ function AuthPageContent() {
         onLoginPin={handlePinLoginFromModal}
       />
 
-      <AuthDeviceChoiceModal
-        isOpen={showDeviceChoice}
-        onClose={() => {
-          setShowDeviceChoice(false)
-          setIsAuthenticating(false)
-        }}
-        onScanOtherDevice={() => {
-          setShowDeviceChoice(false)
-          void attemptDiscoveryLogin()
-        }}
-        onCreateAccount={() => {
-          setShowDeviceChoice(false)
-          setShowTagModal(true)
-        }}
-      />
-
       {showQRModal && qrUsername && (
         <QRCodeRegistrationModal
           isOpen={showQRModal}
           username={qrUsername}
+          recoveryEmail={pendingRecoveryEmail}
           onComplete={async (userId, username, credentialId) => {
             console.log("[Auth] QR flow completed:", { userId, username, credentialId })
             setShowQRModal(false)
@@ -1088,6 +1199,31 @@ function AuthPageContent() {
             }
             setIsAuthenticated(true)
             setIsAuthenticating(false)
+            if (connectMode) {
+              let connectAccountId: string | null = null
+              try {
+                const { alignWalletMaterialAfterLogin } = await import(
+                  "@/lib/storage/post-login-wallet"
+                )
+                const { publicKey, needsWalletSync } = await alignWalletMaterialAfterLogin(
+                  userId,
+                  credentialId,
+                )
+                if (!needsWalletSync && publicKey) {
+                  connectAccountId = publicKey
+                  persistClientWalletSession({
+                    userId,
+                    publicKey,
+                    credentialId,
+                    username,
+                  })
+                }
+              } catch (walletError) {
+                console.error("[Auth] Connect still waiting on wallet after QR signup:", walletError)
+              }
+              completeConnect(username, connectAccountId)
+              return
+            }
             if (stayOnAuthForPizza) {
               try {
                 const { alignWalletMaterialAfterLogin } = await import(
@@ -1123,8 +1259,7 @@ function AuthPageContent() {
             setShowQRModal(false)
             setQRUsername(null)
             setIsAuthenticating(false)
-            setShowTagModal(true)
-            setTagModalPrefill(qrUsername)
+            openAccountWindows(qrUsername)
           }}
         />
       )}
@@ -1240,7 +1375,7 @@ export default function AuthPage() {
   return (
     <WalletLanguageProvider>
       <Suspense fallback={
-        <div className="flex min-h-[var(--sozu-app-height,100lvh)] items-center justify-center bg-black text-white">
+        <div className="flex min-h-[var(--sozu-app-height,100lvh)] items-center justify-center text-white">
           <div className="text-white">Cargando…</div>
         </div>
       }>

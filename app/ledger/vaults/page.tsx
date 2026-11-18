@@ -39,7 +39,6 @@ import {
 } from "@/lib/ledger/goals-local-storage"
 import { useFxTotalsUsdc } from "@/lib/ledger/use-fx-totals-usdc"
 import { walletBalancesFetchInit, walletBalancesUrl } from "@/lib/ledger/wallet-balances-url"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 
 function TotalsLines({ rows }: { rows: { currency: string; total: number }[] }) {
   if (rows.length === 0) {
@@ -351,7 +350,6 @@ export default function LedgerVaultsPage() {
       try {
         const fxRes = await fetch(`/api/fx?from=CLP&to=USDC`, {
           cache: "no-store",
-          headers: ledgerUserHeaders(),
         })
         if (!fxRes.ok) return
         const fxj = (await fxRes.json().catch(() => ({}))) as { rateToUsd?: number }
@@ -388,7 +386,6 @@ export default function LedgerVaultsPage() {
           }
           const fxRes = await fetch(`/api/fx?from=${encodeURIComponent(cur)}&to=USDC`, {
             cache: "no-store",
-            headers: ledgerUserHeaders(),
           })
           if (!fxRes.ok) {
             missing.push(cur)
@@ -420,9 +417,7 @@ export default function LedgerVaultsPage() {
     setVaultsLoading(true)
     setVaultError(null)
     try {
-      const res = await fetch("/api/ledger/vaults", {
-        headers: ledgerUserHeaders(),
-        cache: "no-store",
+      const res = await fetch("/api/ledger/vaults", { cache: "no-store",
       })
       const j = await res.json()
       if (!res.ok) {
@@ -601,7 +596,7 @@ export default function LedgerVaultsPage() {
     try {
       const res = await fetch("/api/ledger/vaults", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           currency: newCurrency.trim().toUpperCase() || "USDT",
@@ -637,7 +632,7 @@ export default function LedgerVaultsPage() {
     try {
       const res = await fetch(`/api/ledger/vaults/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
       const j = await res.json()
@@ -662,7 +657,6 @@ export default function LedgerVaultsPage() {
     try {
       const res = await fetch(`/api/ledger/vaults/${id}`, {
         method: "DELETE",
-        headers: ledgerUserHeaders(),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) {

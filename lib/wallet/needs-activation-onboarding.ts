@@ -42,9 +42,7 @@ async function fetchDbWalletPublicKey(userId: string): Promise<{
   walletType: string | null
 }> {
   try {
-    const res = await fetch("/api/wallet/stellar/address", {
-      headers: { "x-user-id": userId },
-    })
+    const res = await fetch("/api/wallet/stellar/address")
     if (!res.ok) return { publicKey: null, walletType: null }
     const data = (await res.json()) as {
       publicKey?: string | null

@@ -5,22 +5,18 @@ import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { QRCodeSVG } from "qrcode.react"
 import { Copy, Check, X } from "lucide-react"
+import { toast } from "sonner"
 import { copyToClipboard, formatAddress } from "@/lib/wallet-utils"
-import { cn } from "@/lib/utils"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import { formatWalletText } from "@/lib/wallet-texts"
 import { resolveDepositReceiveAddress } from "@/lib/wallet/deposit-receive-address"
 import { getUserId } from "@/lib/wallet-utils"
-import { depositsEnabled, rampEnabled } from "@/lib/app-config"
 import { fundViaSozuFaucet } from "@/lib/stellar/sozu-faucet-fund"
+import { clientStellarNetwork } from "@/lib/stellar/client-network"
 import {
   markWalletActivationComplete,
   markWelcomeOnboardingComplete,
 } from "@/lib/wallet/needs-activation-onboarding"
-import { FiatDepositFlow } from "@/components/home/fiat-deposit-flow"
-import { BrazilOnrampFlow } from "@/components/home/brazil-onramp-flow"
-
-type RampCountry = "CL" | "BR"
 
 type DepositModalProps = {
   isOpen: boolean
@@ -30,7 +26,34 @@ type DepositModalProps = {
   walletNetwork?: "testnet" | "mainnet"
 }
 
-type CopyMode = "tag" | "address"
+const FAUCET_COOLDOWN_KEY = "sozu_faucet_claim_until_v1"
+const FAUCET_COOLDOWN_MS = 24 * 60 * 60 * 1000
+
+function readFaucetCooldown(wallet: string): boolean {
+  try {
+    const raw = localStorage.getItem(FAUCET_COOLDOWN_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { wallet?: string; until?: number }
+    return (
+      parsed.wallet === wallet.trim().toUpperCase() &&
+      typeof parsed.until === "number" &&
+      parsed.until > Date.now()
+    )
+  } catch {
+    return false
+  }
+}
+
+function writeFaucetCooldown(wallet: string, untilMs: number) {
+  try {
+    localStorage.setItem(
+      FAUCET_COOLDOWN_KEY,
+      JSON.stringify({ wallet: wallet.trim().toUpperCase(), until: untilMs }),
+    )
+  } catch {
+    /* private mode or quota */
+  }
+}
 
 function buildAddressQrPayload(address: string): string {
   return address
@@ -45,7 +68,7 @@ export function DepositModal({
   isOpen,
   onClose,
   walletAddress: walletAddressProp,
-  walletNetwork = "testnet",
+  walletNetwork = clientStellarNetwork(),
 }: DepositModalProps) {
   const { t } = useWalletLanguage()
   const router = useRouter()
@@ -54,7 +77,6 @@ export function DepositModal({
     "prop" | "storage" | "sync" | "legacy"
   >("storage")
   const [sozuTag, setSozuTag] = useState<string>("")
-  const [copyMode, setCopyMode] = useState<CopyMode>("tag")
   const [tagCopied, setTagCopied] = useState(false)
   const [addressCopied, setAddressCopied] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -62,57 +84,13 @@ export function DepositModal({
   const [resolving, setResolving] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
   const [faucetBusy, setFaucetBusy] = useState(false)
+  const [faucetLocked, setFaucetLocked] = useState(false)
   const [faucetStatus, setFaucetStatus] = useState<"idle" | "ok" | "err">("idle")
   const [faucetError, setFaucetError] = useState<string | null>(null)
-  // "crypto" = existing QR flow; "fiat" = CLP bank transfer (closed beta only)
-  const [depositTab, setDepositTab] = useState<"crypto" | "fiat">(() => {
-    if (typeof window === "undefined") return depositsEnabled ? "fiat" : "crypto"
-    try {
-      const stored = localStorage.getItem("sozu_deposit_tab_v1")
-      if (stored === "crypto" || stored === "fiat") {
-        if (stored === "fiat" && !depositsEnabled) return "crypto"
-        return stored
-      }
-    } catch {
-      /* ignore */
-    }
-    return depositsEnabled ? "fiat" : "crypto"
-  })
-
-  // Fiat-tab country selector — CL keeps the existing bank-transfer/SumUp flow,
-  // BR routes to the Etherfuse PIX on-ramp. Only rendered when rampEnabled.
-  const [rampCountry, setRampCountry] = useState<RampCountry>(() => {
-    if (typeof window === "undefined") return "CL"
-    try {
-      const stored = localStorage.getItem("sozu_ramp_country_v1")
-      if (stored === "CL" || stored === "BR") return stored
-    } catch {
-      /* ignore */
-    }
-    return "CL"
-  })
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      localStorage.setItem("sozu_deposit_tab_v1", depositTab)
-    } catch {
-      /* ignore */
-    }
-  }, [depositTab])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      localStorage.setItem("sozu_ramp_country_v1", rampCountry)
-    } catch {
-      /* ignore */
-    }
-  }, [rampCountry])
 
   useEffect(() => {
     if (!isOpen) {
@@ -131,8 +109,6 @@ export function DepositModal({
         ""
       setSozuTag(tag)
     }
-
-    setCopyMode(tag ? "tag" : "address")
 
     setSetupError(
       typeof window !== "undefined"
@@ -171,10 +147,6 @@ export function DepositModal({
   const propIsC = walletAddressProp?.trim().toUpperCase().startsWith("C")
   const effectiveAddress =
     address.startsWith("C") ? address : propIsC ? walletAddressProp!.trim().toUpperCase() : address
-  const hasTag = Boolean(sozuTag)
-  const canShowTagQr = hasTag
-  const activeCopyMode: CopyMode = canShowTagQr ? copyMode : "address"
-
   const qrPayload = useMemo(() => {
     if (effectiveAddress) return buildAddressQrPayload(effectiveAddress)
     return ""
@@ -184,6 +156,13 @@ export function DepositModal({
     () => (effectiveAddress ? formatAddress(effectiveAddress, 6, 6) : ""),
     [effectiveAddress],
   )
+
+  useEffect(() => {
+    if (!isOpen) return
+    const wallet = effectiveAddress || address
+    if (!wallet) return
+    setFaucetLocked(readFaucetCooldown(wallet))
+  }, [isOpen, effectiveAddress, address])
 
   const qrCaption = effectiveAddress
     ? effectiveAddress.startsWith("C")
@@ -208,18 +187,29 @@ export function DepositModal({
   }
 
   const handleSozuFaucetFund = async () => {
-    if (faucetBusy || walletNetwork !== "testnet") return
+    if (faucetBusy || faucetLocked || walletNetwork !== "testnet") return
     setFaucetBusy(true)
     setFaucetStatus("idle")
     setFaucetError(null)
     try {
       const result = await fundViaSozuFaucet(effectiveAddress || address)
+      const fundedWallet = ("to" in result && result.to) || effectiveAddress || address
       if (result.ok) {
+        writeFaucetCooldown(fundedWallet, Date.now() + FAUCET_COOLDOWN_MS)
+        setFaucetLocked(true)
         setFaucetStatus("ok")
         markWelcomeOnboardingComplete()
         markWalletActivationComplete()
         onClose()
         router.replace("/home")
+        return
+      }
+      if (result.reason === "wallet_daily_limit") {
+        const until = result.nextAvailableAt ? Date.parse(result.nextAvailableAt) : Number.NaN
+        writeFaucetCooldown(fundedWallet, Number.isFinite(until) ? until : Date.now() + FAUCET_COOLDOWN_MS)
+        setFaucetLocked(true)
+        setFaucetStatus("err")
+        setFaucetError(t.depositFaucetDailyLimit)
         return
       }
       setFaucetStatus("err")
@@ -260,187 +250,30 @@ export function DepositModal({
         <X className="h-4 w-4" />
       </button>
 
-      {/* Testnet Sozu Faucet — one-click Circle USDC, then home */}
-      {walletNetwork === "testnet" ? (
-        <div
-          className="relative z-20 flex w-full max-w-sm flex-col gap-1.5"
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            transform: visible ? "translateY(0)" : "translateY(8px)",
-            transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-          }}
-        >
-          <button
-            type="button"
-            disabled={faucetBusy || resolving || !effectiveAddress}
-            onClick={() => void handleSozuFaucetFund()}
-            className="flex w-full items-center justify-center rounded-2xl border border-white/20 bg-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/90 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] backdrop-blur-sm transition hover:bg-white/[0.14] hover:text-white active:scale-[0.99] disabled:opacity-50"
-          >
-            {faucetBusy ? t.depositFaucetBusy : t.depositFaucetCta}
-          </button>
-          {faucetStatus === "ok" ? (
-            <p className="text-center text-[10px] text-white/70">{t.depositFaucetSuccess}</p>
-          ) : faucetStatus === "err" ? (
-            <p className="text-center text-[10px] text-red-300/90">
-              {faucetError || t.depositFaucetError}
-            </p>
-          ) : (
-            <p className="text-center text-[10px] text-white/40">{t.depositFaucetHint}</p>
-          )}
-        </div>
-      ) : null}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          toast(t.comingSoon, { description: t.depositPesosTag })
+        }}
+        className="rounded-full border border-white/15 bg-white/[0.08] px-4 py-2 text-[11px] font-medium text-white/80 transition hover:bg-white/[0.14] hover:text-white"
+      >
+        {t.depositPesosTag}
+      </button>
 
       <div className="text-[9px] font-light uppercase tracking-[0.3em] text-white/35">{t.depositTitle}</div>
 
-      {/* Rail selector — only shown when fiat deposits are enabled on this deployment */}
-      {depositsEnabled ? (
-        <div
-          className="relative grid w-full max-w-[15.5rem] grid-cols-2 rounded-full border border-white/10 bg-white/[0.04] p-1"
-          onClick={(e) => e.stopPropagation()}
-          role="tablist"
-          aria-label="Deposit method"
-          style={{
-            transform: visible ? "translateY(0)" : "translateY(8px)",
-            transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-            touchAction: "manipulation",
+      {sozuTag ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            void handleCopyTag()
           }}
+          className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-[12px] text-white/70"
         >
-          <span
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-full bg-white/12 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition-[left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-              depositTab === "crypto" ? "left-1" : "left-[calc(50%+0.125rem)]",
-            )}
-          />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={depositTab === "crypto"}
-            onClick={() => setDepositTab("crypto")}
-            className={cn(
-              "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-              depositTab === "crypto" ? "text-white" : "text-white/45 hover:text-white/70",
-            )}
-          >
-            {t.depositCryptoTabLabel}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={depositTab === "fiat"}
-            onClick={() => setDepositTab("fiat")}
-            className={cn(
-              "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-              depositTab === "fiat" ? "text-white" : "text-white/45 hover:text-white/70",
-            )}
-          >
-            {t.depositFiatTabLabel}
-          </button>
-        </div>
-      ) : null}
-
-      {/* Fiat tab content */}
-      {depositsEnabled && depositTab === "fiat" ? (
-        <div
-          className="flex w-full max-w-sm flex-col gap-2"
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            transform: visible ? "translateY(0)" : "translateY(12px)",
-            transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1)",
-            touchAction: "manipulation",
-          }}
-        >
-          {rampEnabled ? (
-            <div
-              className="relative mx-auto grid w-full max-w-[15.5rem] grid-cols-2 rounded-full border border-white/10 bg-white/[0.04] p-1"
-              role="tablist"
-              aria-label={t.rampCountryLabel}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "pointer-events-none absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-full bg-white/12 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition-[left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-                  rampCountry === "CL" ? "left-1" : "left-[calc(50%+0.125rem)]",
-                )}
-              />
-              <button
-                type="button"
-                role="tab"
-                aria-selected={rampCountry === "CL"}
-                onClick={() => setRampCountry("CL")}
-                className={cn(
-                  "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-                  rampCountry === "CL" ? "text-white" : "text-white/45 hover:text-white/70",
-                )}
-              >
-                {t.rampCountryChile}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={rampCountry === "BR"}
-                onClick={() => setRampCountry("BR")}
-                className={cn(
-                  "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-                  rampCountry === "BR" ? "text-white" : "text-white/45 hover:text-white/70",
-                )}
-              >
-                {t.rampCountryBrazil}
-              </button>
-            </div>
-          ) : null}
-
-          {!rampEnabled || rampCountry === "CL" ? <FiatDepositFlow /> : <BrazilOnrampFlow />}
-        </div>
-      ) : null}
-
-      {/* Crypto tab content (existing QR flow) — hidden when fiat tab is active */}
-      {(!depositsEnabled || depositTab === "crypto") ? (
-      <>
-      {canShowTagQr ? (
-        <div
-          className="relative grid w-full max-w-[15.5rem] grid-cols-2 rounded-full border border-white/10 bg-white/[0.04] p-1"
-          onClick={(e) => e.stopPropagation()}
-          role="tablist"
-          aria-label={t.depositQrTypeLabel}
-          style={{
-            transform: visible ? "translateY(0)" : "translateY(8px)",
-            transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-            touchAction: "manipulation",
-          }}
-        >
-          <span
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-full bg-white/12 shadow-[0_0_0_1px_rgba(255,255,255,0.06)] transition-[left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-              activeCopyMode === "tag" ? "left-1" : "left-[calc(50%+0.125rem)]",
-            )}
-          />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeCopyMode === "tag"}
-            onClick={() => setCopyMode("tag")}
-            className={cn(
-              "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-              activeCopyMode === "tag" ? "text-white" : "text-white/45 hover:text-white/70",
-            )}
-          >
-            {t.depositQrTag}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeCopyMode === "address"}
-            onClick={() => setCopyMode("address")}
-            className={cn(
-              "relative z-10 rounded-full px-3 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors",
-              activeCopyMode === "address" ? "text-white" : "text-white/45 hover:text-white/70",
-            )}
-          >
-            {t.depositQrStellar}
-          </button>
-        </div>
+          {tagCopied ? t.depositCopied : `$${sozuTag}`}
+        </button>
       ) : null}
 
       <div
@@ -477,29 +310,7 @@ export function DepositModal({
           touchAction: "manipulation",
         }}
       >
-        {activeCopyMode === "tag" && sozuTag ? (
-          <button
-            type="button"
-            onClick={handleCopyTag}
-            className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-2.5 transition hover:bg-emerald-500/[0.12]"
-          >
-            <div className="min-w-0 text-left">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">{t.depositSozuTag}</p>
-              <p className="truncate font-mono text-[11px] text-white/70">${sozuTag}</p>
-            </div>
-            {tagCopied ? (
-              <span className="flex shrink-0 items-center gap-1 text-[10px] text-green-400">
-                <Check className="h-4 w-4" />
-                {t.depositCopied}
-              </span>
-            ) : (
-              <Copy className="h-4 w-4 shrink-0 text-white/25 group-hover:text-white/60" />
-            )}
-          </button>
-        ) : null}
-
-        {activeCopyMode === "address" ? (
-          <button
+        <button
             type="button"
             onClick={handleCopyAddress}
             disabled={!effectiveAddress}
@@ -520,7 +331,6 @@ export function DepositModal({
               <Copy className="h-4 w-4 shrink-0 text-white/25 group-hover:text-white/60" />
             )}
           </button>
-        ) : null}
 
         {!effectiveAddress && (setupError || resolving) ? (
           <div className="rounded-2xl border border-rose-500/35 bg-rose-950/40 px-4 py-3 text-left">
@@ -544,9 +354,30 @@ export function DepositModal({
 
       </div>
 
-      <div className="shrink-0 text-[9px] text-white/25">{t.depositUsdcOnly}</div>
-      </>
+      {walletNetwork === "testnet" ? (
+        <div
+          className="relative z-20 flex w-full max-w-sm flex-col gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            disabled={faucetBusy || faucetLocked || resolving || !effectiveAddress}
+            onClick={() => void handleSozuFaucetFund()}
+            className="flex w-full items-center justify-center rounded-2xl border border-white/20 bg-white/[0.08] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/90 transition hover:bg-white/[0.14] hover:text-white active:scale-[0.99] disabled:opacity-50"
+          >
+            {faucetBusy ? t.depositFaucetBusy : t.depositFaucetCta}
+          </button>
+          {faucetStatus === "err" ? (
+            <p className="text-center text-[10px] text-red-300/90">{faucetError || t.depositFaucetError}</p>
+          ) : faucetLocked ? (
+            <p className="text-center text-[10px] text-white/55">{t.depositFaucetDailyLimit}</p>
+          ) : (
+            <p className="text-center text-[10px] text-white/40">{t.depositFaucetHint}</p>
+          )}
+        </div>
       ) : null}
+
+      <div className="shrink-0 text-[9px] text-white/25">{t.depositUsdcOnly}</div>
     </div>
   )
 

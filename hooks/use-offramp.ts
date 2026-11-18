@@ -57,10 +57,6 @@ export type OfframpSettlement = {
   settlementTxHash: string
 }
 
-function authHeaders(userId: string): HeadersInit {
-  return { "Content-Type": "application/json", "x-user-id": userId }
-}
-
 /**
  * Signs the off-ramp order's unsigned C→treasury transfer with the user's
  * passkey. This is a faithful lift of the `oz_passkey` / `oz_passkey_local`
@@ -154,7 +150,7 @@ export function useOfframp() {
     try {
       const res = await fetch("/api/ramp/quote", {
         method: "POST",
-        headers: authHeaders(userId),
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ direction: "off", amountMinor: amountUsdcMinor }),
       })
@@ -195,7 +191,7 @@ export function useOfframp() {
     try {
       const orderRes = await fetch("/api/ramp/orders", {
         method: "POST",
-        headers: authHeaders(userId),
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           direction: "off",
@@ -233,7 +229,7 @@ export function useOfframp() {
       setPhase("submitting")
       const submitRes = await fetch(`/api/ramp/orders/${orderData.orderId}/submit`, {
         method: "POST",
-        headers: authHeaders(userId),
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ signedEnvelopeXdr }),
       })

@@ -1,12 +1,13 @@
+import { hasValidWalletSessionCookie, WALLET_SESSION_COOKIE } from "@/lib/auth/wallet-session-edge"
+import { isPilotBlockedPath, isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { updateSession } from "@/lib/supabase/middleware"
 import {
   WAITLIST_BYPASS_COOKIE,
   WAITLIST_BYPASS_QUERY,
   WAITLIST_PATH,
   isValidBypass,
-  isWaitlistMode,
-  waitlistGate,
 } from "@/lib/waitlist/waitlist-mode"
+import { betaAccessDecision } from "@/lib/waitlist/signup-window"
 import { NextResponse, type NextRequest } from "next/server"
 
 const IMAGE_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp)$/i
@@ -14,18 +15,28 @@ const IMAGE_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp)$/i
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  if (isWaitlistMode()) {
-    const gated = waitlistResponse(request)
-    if (gated) return gated
+  if (isPilotMainnet() && isPilotBlockedPath(pathname)) {
+    return new NextResponse(null, { status: 404 })
   }
 
-  // Image files skip the session check. They are matched only so the waitlist gate above sees them.
+  const gated = await waitlistResponse(request)
+  if (gated) return gated
+
+  // API routes enforce their own auth; the matcher includes them only for the pilot gate above.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next()
+  }
+
+  // Image files skip the session check. They are matched only so the pilot gate above sees them.
   if (IMAGE_FILE.test(pathname)) {
     return NextResponse.next()
   }
 
   // Browsing via http://0.0.0.0:PORT breaks WebAuthn (rpId invalid). Dev may bind 0.0.0.0 for Docker.
-  if (request.nextUrl.hostname === "0.0.0.0") {
+  // Use the Host header. nextUrl.hostname stays 0.0.0.0 for every request when the
+  // server is bound there, which would redirect localhost and LAN phones forever.
+  const requestedHost = request.headers.get("host")?.split(":")[0]
+  if (requestedHost === "0.0.0.0") {
     const url = request.nextUrl.clone()
     url.hostname = "localhost"
     return NextResponse.redirect(url, 307)
@@ -44,7 +55,7 @@ export async function middleware(request: NextRequest) {
   return await updateSession(request)
 }
 
-function waitlistResponse(request: NextRequest): NextResponse | null {
+async function waitlistResponse(request: NextRequest): Promise<NextResponse | null> {
   const accessParam = request.nextUrl.searchParams.get(WAITLIST_BYPASS_QUERY)
   if (accessParam !== null && isValidBypass(accessParam)) {
     const url = request.nextUrl.clone()
@@ -61,9 +72,15 @@ function waitlistResponse(request: NextRequest): NextResponse | null {
   }
 
   const hasBypass = isValidBypass(request.cookies.get(WAITLIST_BYPASS_COOKIE)?.value)
-  const decision = waitlistGate(request.nextUrl.pathname, hasBypass)
-  if (decision === "asset") return NextResponse.next()
-  if (decision === "pass") return null
+  const hasSession = await hasValidWalletSessionCookie(request.cookies.get(WALLET_SESSION_COOKIE)?.value)
+  const decision = betaAccessDecision({
+    pathname: request.nextUrl.pathname,
+    hasBypass,
+    hasSession,
+    host: request.headers.get("host"),
+    nowMs: Date.now(),
+  })
+  if (decision === "open" || decision === "pass") return null
 
   const url = request.nextUrl.clone()
   url.search = ""
@@ -79,14 +96,13 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - sw.js (service worker)
      * - manifest.json (PWA manifest)
-     * Image extensions stay matched so a page URL ending in .png still meets the waitlist gate.
+     * Image extensions stay matched so a disabled module can't be reached as /api/pizza/x.png.
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|\\.well-known).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|\\.well-known).*)",
   ],
 }

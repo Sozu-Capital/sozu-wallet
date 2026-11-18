@@ -4,6 +4,7 @@ import {
   listActiveFaucets,
   toPublicFaucet,
 } from "@/lib/db/faucets";
+import { tapSlug } from "@/lib/faucet/tap-gate";
 import type { FaucetMapEntry } from "@/lib/faucet/types";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,8 @@ function depositAddressFor(vaultAddress: string | null): string | null {
 /** GET /api/faucets — all active faucets with availability (map view). Public. */
 export async function GET() {
   try {
-    const faucets = await listActiveFaucets();
+    const hidden = tapSlug();
+    const faucets = (await listActiveFaucets()).filter((faucet) => faucet.slug !== hidden);
     const entries: FaucetMapEntry[] = await Promise.all(
       faucets.map(async (faucet) => ({
         ...toPublicFaucet(faucet),

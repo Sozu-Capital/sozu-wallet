@@ -10,30 +10,9 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-
-function corsHeaders(request: NextRequest): Record<string, string> {
-  const origin = request.headers.get("origin")
-  const allowedOrigins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    process.env.NEXT_PUBLIC_APP_URL,
-  ].filter(Boolean) as string[]
-
-  if (origin && allowedOrigins.includes(origin)) {
-    return {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, x-user-id",
-      "Access-Control-Allow-Credentials": "true",
-    }
-  }
-
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-user-id",
-  }
-}
+import { requireSession } from "@/lib/auth/session"
+import { corsHeaders } from "@/lib/cors"
+import { CANONICAL_SMART_ACCOUNT_IMMUTABLE, canonicalWriteDecision } from "@/lib/wallet/canonical-smart-account"
 
 export async function OPTIONS(request: NextRequest) {
   return NextResponse.json({}, { headers: corsHeaders(request) })
@@ -41,8 +20,10 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = requireSession(request, corsHeaders(request))
+    if (session.error) return session.error
+
     const { username, newPublicKey, network } = await request.json()
-    // x-user-id is optional - we look up by username anyway
 
     if (!username || !newPublicKey) {
       return NextResponse.json(
@@ -94,6 +75,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (profile.id !== session.userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders(request) })
+    }
+
     console.log("[Update Address] Updating wallet for user:", {
       username: profile.username,
       userId: profile.id,
@@ -114,6 +99,18 @@ export async function POST(request: NextRequest) {
         network: existingWallet.network,
         updatedAt: existingWallet.updated_at
       })
+    }
+
+    const decision = canonicalWriteDecision(existingWallet?.public_key, newPublicKey)
+    if (decision.action === "reject") {
+      return NextResponse.json(
+        {
+          error: "This Sozu account already has a smart account. That address cannot be changed.",
+          code: CANONICAL_SMART_ACCOUNT_IMMUTABLE,
+          contractId: decision.contractId,
+        },
+        { status: 409, headers: corsHeaders(request) },
+      )
     }
 
     // Update or insert wallet

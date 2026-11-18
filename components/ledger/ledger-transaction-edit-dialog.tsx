@@ -26,7 +26,6 @@ import { Separator } from "@/components/ui/separator"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { parseHeuristicReceipt } from "@/lib/gmail/parse-heuristic"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { resolveMerchantLegalFromTx } from "@/lib/ledger/merchant-alias"
 import { parseLedgerAmountInput } from "@/lib/ledger/currency"
 import { formatLedgerTxDetailMoment } from "@/lib/ledger/transaction-date"
@@ -140,7 +139,6 @@ export function LedgerTransactionEditDialog({
     ;(async () => {
       try {
         const res = await fetch("/api/ledger/vaults", {
-          headers: { ...ledgerUserHeaders() },
           cache: "no-store",
         })
         const j = (await res.json().catch(() => ({}))) as { vaults?: { id: string; name: string }[] }
@@ -281,7 +279,7 @@ export function LedgerTransactionEditDialog({
 
       const res = await fetch(`/api/ledger/transactions/${row.id}/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           merchant: nextMerchant,
           amount: parsedAmt,
@@ -320,7 +318,7 @@ export function LedgerTransactionEditDialog({
       if (rememberManualRule) {
         void fetch("/api/ledger/category-rules", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             from_transaction_id: row.id,
             category: nextCategory,
@@ -351,7 +349,7 @@ export function LedgerTransactionEditDialog({
     try {
       const res = await fetch("/api/ledger/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, kind }),
       })
       const json = (await res.json().catch(() => ({}))) as {
@@ -383,7 +381,7 @@ export function LedgerTransactionEditDialog({
     try {
       const res = await fetch(`/api/ledger/transactions/${row.id}/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dismissed: true }),
       })
       const json = await res.json().catch(() => ({}))
@@ -395,7 +393,7 @@ export function LedgerTransactionEditDialog({
       if (rememberDismissRule) {
         const rr = await fetch("/api/ledger/category-rules", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             from_transaction_id: row.id,
             category: "junk_mail",

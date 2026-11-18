@@ -64,9 +64,7 @@ export async function ensureKitConnectedForSend(
   if (!publicKey) {
     const userId = getUserId()
     if (userId) {
-      const res = await fetch("/api/auth/passkeys/primary", {
-        headers: { "x-user-id": userId },
-      })
+      const res = await fetch("/api/auth/passkeys/primary")
       const data = (await res.json().catch(() => ({}))) as { publicKey65b?: string }
       if (data.publicKey65b) {
         publicKey = parsePasskeyPublicKey65(data.publicKey65b)

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
 import type { MonthlyObligationLine } from "@/lib/ledger/monthly-obligations-plan"
 
@@ -14,7 +13,7 @@ type Props = {
   onSaved: () => void
 }
 
-const fetchInit = { headers: ledgerUserHeaders(), cache: "no-store" as RequestCache }
+const fetchInit = { cache: "no-store" as RequestCache }
 
 export function MonthlyObligationsPlanEditor({ currency, lines, onSaved }: Props) {
   const [draft, setDraft] = useState<MonthlyObligationLine[]>(lines)
@@ -51,7 +50,7 @@ export function MonthlyObligationsPlanEditor({ currency, lines, onSaved }: Props
       const res = await fetch("/api/ledger/monthly-obligations", {
         ...fetchInit,
         method: "PUT",
-        headers: { ...fetchInit.headers, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lines: cleaned }),
       })
       const json = await res.json().catch(() => ({}))

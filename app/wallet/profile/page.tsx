@@ -114,11 +114,7 @@ export default function ProfilePage() {
           }
 
           // Fetch profile data
-          const profileResponse = await fetch("/api/wallet/profile", {
-            headers: {
-              "x-user-id": userId,
-            },
-          })
+          const profileResponse = await fetch("/api/wallet/profile")
           const profileData = await profileResponse.json()
           
           if (profileData.profile) {
@@ -132,11 +128,7 @@ export default function ProfilePage() {
           setWalletAddress(mockWalletAddress)
 
           // Fetch EVM address
-          const evmResponse = await fetch("/api/wallet/evm-address", {
-            headers: {
-              "x-user-id": userId,
-            },
-          })
+          const evmResponse = await fetch("/api/wallet/evm-address")
           const evmData = await evmResponse.json()
           
           if (evmData.evmAddress) {
@@ -172,11 +164,7 @@ export default function ProfilePage() {
       if (!userId) return
 
       // Fetch ego score
-      const egoResponse = await fetch(`/api/maxflow/ego/${address}/score`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const egoResponse = await fetch(`/api/maxflow/ego/${address}/score`)
       
       if (egoResponse.ok) {
         const egoData = await egoResponse.json()
@@ -184,11 +172,7 @@ export default function ProfilePage() {
       }
 
       // Fetch trust score
-      const trustResponse = await fetch(`/api/maxflow/ego/${address}/trust-score`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const trustResponse = await fetch(`/api/maxflow/ego/${address}/trust-score`)
       
       if (trustResponse.ok) {
         const trustData = await trustResponse.json()
@@ -219,7 +203,6 @@ export default function ProfilePage() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify({
           username: tag,
@@ -281,7 +264,6 @@ export default function ProfilePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
         },
         body: JSON.stringify({ evmAddress: evmAddressInput }),
       })
@@ -313,9 +295,6 @@ export default function ProfilePage() {
 
       const response = await fetch("/api/wallet/evm-address", {
         method: "DELETE",
-        headers: {
-          "x-user-id": userId,
-        },
       })
 
       if (response.ok) {

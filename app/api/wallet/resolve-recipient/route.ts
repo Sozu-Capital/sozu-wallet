@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { corsHeaders } from "@/lib/cors"
 import { createClient } from "@supabase/supabase-js"
 import {
   isValidSozuTag,
@@ -12,12 +13,9 @@ import {
   isValidStellarReceiveAddress,
   normalizeStellarAddressInput,
 } from "@/lib/payment/stellar-address"
+import { selectCanonicalSmartAccount } from "@/lib/wallet/canonical-smart-account"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
-const corsHeaders = (request: NextRequest) => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
-})
 
 type ResolveCacheEntry = {
   expiresAt: number
@@ -108,27 +106,10 @@ export async function POST(request: NextRequest) {
 
     console.log("[Resolve Recipient] Looking up profile for Sozu tag:", sozuTagLookup)
 
-    // Case-insensitive match — tags may be stored with different casing than typed.
-    const { data: profiles, error: profileError } = await serviceClient
-      .from("profiles")
-      .select("id, username")
-      .ilike("username", sozuTagLookup)
-      .not("username", "is", null)
-      .limit(10)
-
-    if (profileError) {
-      console.error("[Resolve Recipient] Error finding profile:", profileError)
-      return NextResponse.json(
-        { error: "Recipient not found. Please check the Sozu tag or wallet address." },
-        { status: 404, headers: corsHeaders(request) }
-      )
-    }
-
-    const profile =
-      profiles?.find((p) => p.username === sozuTagLookup) ??
-      profiles?.find((p) => p.username?.toLowerCase() === sozuTagLookup.toLowerCase()) ??
-      profiles?.[0] ??
-      null
+    const owner = await findCanonicalTagOwner(serviceClient, sozuTagLookup)
+    const profile = owner
+      ? { id: owner.id, username: owner.username }
+      : null
 
     if (!profile) {
       console.log("[Resolve Recipient] Profile not found for username:", sozuTagLookup)
@@ -152,9 +133,8 @@ export async function POST(request: NextRequest) {
         .limit(1),
       serviceClient
         .from("organizations")
-        .select("soroban_contract_id")
+        .select("treasury_smart_account_address, treasury_contract_id, soroban_contract_id")
         .eq("sozu_tag_auth_user_id", profile.id)
-        .not("soroban_contract_id", "is", null)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -170,13 +150,22 @@ export async function POST(request: NextRequest) {
 
     let wallet = wallets?.[0] ?? null
 
-    /** SozuPay org $tag → org disbursement C (SAC treasury), not only the admin's personal C. */
-    const orgTreasuryC = orgRow?.soroban_contract_id?.trim().toUpperCase()
-    const resolvedFromOrgTreasury =
-      !!orgTreasuryC && isValidStellarReceiveAddress(orgTreasuryC)
-    if (resolvedFromOrgTreasury) {
+    /** One receive address. A stored smart account wins. Org treasury is used only before that exists. */
+    const orgTreasuryC = [
+      orgRow?.treasury_smart_account_address,
+      orgRow?.treasury_contract_id,
+      orgRow?.soroban_contract_id,
+    ]
+      .map((value) => (typeof value === "string" ? value.trim().toUpperCase() : ""))
+      .find((value) => value.startsWith("C") && value.length === 56)
+    const canonical = selectCanonicalSmartAccount({
+      walletPublicKey: wallet?.public_key,
+      orgTreasuryContractId: orgTreasuryC,
+    })
+    const resolvedFromOrgTreasury = canonical?.source === "org_treasury"
+    if (canonical) {
       wallet = {
-        public_key: orgTreasuryC,
+        public_key: canonical.contractId,
         user_id: profile.id,
         network: wallet?.network ?? "testnet",
         updated_at: wallet?.updated_at ?? new Date().toISOString(),

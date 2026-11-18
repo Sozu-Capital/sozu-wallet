@@ -2,7 +2,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
-import { resolveUserId } from "@/lib/auth/resolve-user"
+import { requireSession } from "@/lib/auth/session"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
 import { ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
 import { parsePasskeyPublicKey65 } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
@@ -18,7 +18,7 @@ export async function OPTIONS(request: NextRequest) {
 /** The fee payer sponsors the OpenZeppelin deployer create. The user account holds no XLM. */
 export async function POST(request: NextRequest) {
   const headers = corsHeaders(request)
-  const session = await resolveUserId(request)
+  const session = requireSession(request, headers)
   if (session.error) return session.error
 
   const body = await request.json().catch(() => ({}))

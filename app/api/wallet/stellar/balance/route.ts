@@ -12,6 +12,7 @@ import { normalizeStellarNetwork } from "@/lib/stellar/network-env"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { Horizon } from "@stellar/stellar-sdk"
 import { isUsdcSpendableCategory } from "@/lib/stellar/asset-types"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
         console.log("[Stellar Balance API] Using Supabase auth, userId:", userId)
       } else {
         // In dev mode, check for userId in headers
-        userId = request.headers.get("x-user-id")
+        userId = getSessionUserId(request)
         console.log("[Stellar Balance API] Dev mode, userId from header:", userId)
 
         if (!userId) {
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
     if (!balanceUserId) {
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      balanceUserId = user?.id ?? request.headers.get("x-user-id")
+      balanceUserId = user?.id ?? getSessionUserId(request)
     }
 
     let signerForBreakdown = wallet?.signerPublicKey?.trim() ?? null
@@ -207,7 +208,7 @@ export async function GET(request: NextRequest) {
         userId = user?.id || null
       } else {
         // Try from headers
-        userId = request.headers.get("x-user-id")
+        userId = getSessionUserId(request)
       }
       
       if (userId) {

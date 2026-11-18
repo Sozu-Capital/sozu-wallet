@@ -1,12 +1,14 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { NFC_USDC_DROP_PATH } from "@/lib/faucet/nfc-usdc-drop"
+import { isSozuConnectSearch } from "@/lib/connect/popup-result"
 import { hasSupabaseAuthCookies } from "@/lib/supabase/authCookies"
 
 export async function updateSession(request: NextRequest) {
   // CRITICAL: Check for allowed routes at the VERY START - before creating NextResponse
   // This ensures these routes are allowed before any other processing
   const pathname = request.nextUrl.pathname
-  /** Ledger (cashflow) uses sessionStorage + x-user-id like /wallet; never require Supabase cookie. */
+  /** Ledger (cashflow) uses the wallet session cookie like /wallet; never require Supabase cookie. */
   const isLedgerRoute = pathname === "/ledger" || pathname.startsWith("/ledger/")
   const isCreditRoute = pathname === "/credit" || pathname.startsWith("/credit/")
 
@@ -43,9 +45,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Faucet claim page + map are public NFC entry points (covers /faucet/* and /faucets/*).
-  // Unauthenticated users see the "create wallet" state and bounce through /auth?faucet=<slug>.
+  // Sozu Pay store map and directory. The wallet session lives in sessionStorage, not a Supabase cookie.
+  if (pathname === "/stores" || pathname.startsWith("/stores/")) {
+    return NextResponse.next()
+  }
+
+  // Public Hack Meridian watch page: live testnet ledger of offline vault txs.
+  if (pathname === "/offline" || pathname.startsWith("/offline/")) {
+    return NextResponse.next()
+  }
+
+  // Faucet map stays reachable. The claim itself is /tap, opened from the chip.
   if (pathname.startsWith("/faucet")) {
+    return NextResponse.next()
+  }
+
+  if (pathname === "/tap") {
+    return NextResponse.next()
+  }
+
+  // Standing Sozu Faucet NFC drop. The page sends new phones to /auth?redirect=/get/usdc.
+  if (pathname === NFC_USDC_DROP_PATH) {
     return NextResponse.next()
   }
 
@@ -56,8 +76,23 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Help pages (withdraw runbook) are static copy and must work when sign-in is the problem.
+  if (pathname.startsWith("/ayuda")) {
+    return NextResponse.next()
+  }
+
   // Checkout pages are public (payer links from merchants)
   if (pathname.startsWith("/checkout")) {
+    return NextResponse.next()
+  }
+
+  // Sozu Connect demo calls login() and pay() from a merchant page, not a wallet session.
+  if (pathname === "/connect-demo" || pathname.startsWith("/connect-demo/")) {
+    return NextResponse.next()
+  }
+
+  // Hang-tag item pages. NFC and QR open the same URL with no session.
+  if (pathname === "/item" || pathname.startsWith("/item/")) {
     return NextResponse.next()
   }
 
@@ -83,8 +118,10 @@ export async function updateSession(request: NextRequest) {
   const isSettingsRoute = pathname === "/settings"
   const isTestKeysRoute = pathname === "/test-keys"
   const isCityRoute = pathname.startsWith("/city")
+  const isStoresRoute = pathname === "/stores" || pathname.startsWith("/stores/")
   const isTrackerRoute = pathname.startsWith("/tracker")
   const isOnboardingRoute = pathname.startsWith("/onboarding")
+  const isOfflineLedgerRoute = pathname === "/offline" || pathname.startsWith("/offline/")
   const isAuthRoute = pathname.startsWith("/auth")
   const isApiRoute = pathname.startsWith("/api")
   const isDevMode = process.env.NODE_ENV === "development"
@@ -186,8 +223,10 @@ export async function updateSession(request: NextRequest) {
     !isCreditRoute &&
     !isTestKeysRoute &&
     !isCityRoute &&
+    !isStoresRoute &&
     !isTrackerRoute &&
-    !isOnboardingRoute
+    !isOnboardingRoute &&
+    !isOfflineLedgerRoute
   ) {
     const url = request.nextUrl.clone()
     url.pathname = "/auth"
@@ -212,6 +251,13 @@ export async function updateSession(request: NextRequest) {
         return supabaseResponse
       }
       if (request.nextUrl.searchParams.get("faucet") === "1") {
+        return supabaseResponse
+      }
+      // Sozu Connect: the popup must stay on /auth until the passkey posts the account.
+      if (isSozuConnectSearch(request.nextUrl.searchParams)) {
+        return supabaseResponse
+      }
+      if (request.nextUrl.searchParams.get("redirect") === NFC_USDC_DROP_PATH) {
         return supabaseResponse
       }
       const url = request.nextUrl.clone()

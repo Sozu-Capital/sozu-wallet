@@ -82,7 +82,8 @@ function CrossDeviceContent() {
           usernameParam,
           credential,
           challenge.challenge,
-          null
+          null,
+          searchParams.get("e"),
         )
 
         if (!regResult?.success || !regResult.userId) {

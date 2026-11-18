@@ -10,6 +10,7 @@ import { motion } from "framer-motion"
 import { ArrowUp, ExternalLink, ChevronDown, ChevronUp, Activity } from "lucide-react"
 import { TransactionHistorySkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { getStellarExpertTxUrl, formatAddress } from "@/lib/wallet-utils"
+import { historyCounterpartyLabel, isOnChainTxHash } from "@/lib/wallet/account-tx-history"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import type { Transaction } from "@/hooks/use-wallet-data"
 import { cn } from "@/lib/utils"
@@ -45,7 +46,7 @@ export const TransactionHistory = memo(function TransactionHistory({
     return null
   }
 
-  if (isLoading) {
+  if (isLoading && transactions.length === 0) {
     return (
       <div
         className={cn(isHistory ? "pb-4" : "mb-8 lg:mb-0")}
@@ -122,13 +123,22 @@ export const TransactionHistory = memo(function TransactionHistory({
               const paymentOp = tx.operations.find((op: { type: string }) => op.type === "payment")
               if (!paymentOp) return null
 
-              const isSent = paymentOp.from === walletAddress
-              const isReceived = paymentOp.to === walletAddress
+              const wallet = walletAddress.trim().toUpperCase()
+              const from = paymentOp.from.trim().toUpperCase()
+              const to = paymentOp.to.trim().toUpperCase()
+              const isSent = from === wallet
+              const isReceived = to === wallet
               const amount = paymentOp.amount
               const otherAddress = isSent ? paymentOp.to : paymentOp.from
-              const otherTag = addressToTagMap[otherAddress] || null
+              const otherTag =
+                addressToTagMap[otherAddress] ||
+                addressToTagMap[otherAddress.trim().toUpperCase()] ||
+                null
+              const counterparty = historyCounterpartyLabel(otherAddress, otherTag)
 
-              const stellarExpertUrl = getStellarExpertTxUrl(tx.hash, walletNetwork)
+              const stellarExpertUrl = isOnChainTxHash(tx.hash)
+                ? getStellarExpertTxUrl(tx.hash, walletNetwork)
+                : null
               const isFading =
                 !isHistory && !isExpanded && index >= previewCount - 1 && hasMore
               const opacity = isFading ? 0.3 : 1
@@ -176,24 +186,26 @@ export const TransactionHistory = memo(function TransactionHistory({
                       <div className="flex min-w-0 flex-1 items-center justify-between gap-3 md:justify-end">
                         <span className="min-w-0 truncate text-left text-sm text-white/60 md:text-right">
                           <span className="text-white/45">{isSent ? "To" : "From"}:</span>{" "}
-                          {otherTag ? (
-                            <span className="font-medium text-white">${otherTag}</span>
+                          {counterparty ? (
+                            <span className="font-medium text-white">{counterparty}</span>
                           ) : (
                             <span className="font-mono text-xs text-white/50">
                               {formatAddress(otherAddress, 8, 8)}
                             </span>
                           )}
                         </span>
-                        <a
-                          href={stellarExpertUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/10 hover:text-white/75"
-                          aria-label="View on Stellar Expert"
-                        >
-                          <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </a>
+                        {stellarExpertUrl ? (
+                          <a
+                            href={stellarExpertUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/10 hover:text-white/75"
+                            aria-label="View on Stellar Expert"
+                          >
+                            <ExternalLink className="h-4 w-4 sm:h-5 sm:w-5" />
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   </motion.div>

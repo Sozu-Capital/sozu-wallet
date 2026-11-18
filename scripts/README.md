@@ -5,7 +5,7 @@ Maintenance utilities referenced from **`package.json`** or operational docs.
 ## Shell
 
 - **`dev-clean.sh`** — frees ports / stale Next artifacts; used by `pnpm run dev:clean`.
-- **`generate-icons.sh`** — generates PWA icons from `public/icons/icon-base.png`.
+- **`generate-icons.py`** / **`generate-icons.sh`** — rebuild favicon, PWA icons, and splash from `public/brand/november-2026/logo.png`.
 
 ## TypeScript
 

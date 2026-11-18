@@ -31,9 +31,7 @@ export async function collectCredentialIdCandidates(
 
   if (userId) {
     try {
-      const res = await fetch("/api/auth/passkeys/list", {
-        headers: { "x-user-id": userId },
-      })
+      const res = await fetch("/api/auth/passkeys/list")
       if (res.ok) {
         const data = (await res.json()) as { passkeys?: Array<{ credential_id?: string }> }
         for (const row of data.passkeys ?? []) {
@@ -46,9 +44,7 @@ export async function collectCredentialIdCandidates(
 
     if (ids.size === 0) {
       try {
-        const res = await fetch("/api/auth/passkeys/primary", {
-          headers: { "x-user-id": userId },
-        })
+        const res = await fetch("/api/auth/passkeys/primary")
         if (res.ok) {
           const data = (await res.json()) as { credentialId?: string }
           addCredentialCandidate(ids, data.credentialId)
@@ -150,7 +146,6 @@ export async function derivePrimaryPasskeySignerG(
 async function fetchRegisteredSignerG(userId: string): Promise<string | null> {
   try {
     const res = await fetch("/api/wallet/stellar/address", {
-      headers: { "x-user-id": userId },
       cache: "no-store",
     })
     if (!res.ok) return null
@@ -184,7 +179,6 @@ export async function syncPasskeySignerToServer(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-user-id": userId,
     },
     body: JSON.stringify({
       signerPublicKey: derived.publicKey,

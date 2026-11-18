@@ -1,11 +1,21 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Check, Copy, LogOut, Plus, X } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Copy, LogOut, Plus, X } from "lucide-react"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
+import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
+import { BadgePopup, SouvenirPopup } from "@/components/merch/souvenir-popup"
+import { SouvenirList, type SouvenirListItem } from "@/components/merch/souvenir-list"
 import { SozuShaderAvatar } from "@/components/ui/sozu-shader-avatar"
+import { souvenirDismissesToHome } from "@/lib/checkout/collectible-return"
+import { readSavedPurchases, type SavedPurchase } from "@/lib/checkout/saved-purchases"
+import { listCollectibleSouvenirs, type CollectibleSouvenir } from "@/lib/merch/catalog"
+import { claimEventSouvenir, fetchAccountSouvenirs } from "@/lib/merch/claim-souvenir"
+import { merchCopy } from "@/lib/merch/copy"
+import { profileSouvenirs, readClaimedSouvenirs, type ClaimedSouvenir, type HeldSouvenir } from "@/lib/merch/souvenirs"
+import { useWalletLanguage } from "@/lib/wallet-language"
 
 interface WalletSwitcherModalProps {
   isOpen: boolean
@@ -13,6 +23,8 @@ interface WalletSwitcherModalProps {
   walletAddress: string | null
   walletNetwork: "testnet" | "mainnet"
   sozuTag?: string | null
+  /** Checkout return: open this paid collectible on top of the profile souvenirs. */
+  openCollectibleHash?: string | null
 }
 
 function abbrev(address: string | null): string {
@@ -39,10 +51,45 @@ export function WalletSwitcherModal({
   walletAddress,
   walletNetwork,
   sozuTag,
+  openCollectibleHash = null,
 }: WalletSwitcherModalProps) {
   const [copied, setCopied] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [showProHint, setShowProHint] = useState(false)
+  const [view, setView] = useState<"wallets" | "souvenirs">("wallets")
+  const [purchases, setPurchases] = useState<SavedPurchase[]>([])
+  const [claims, setClaims] = useState<ClaimedSouvenir[]>([])
+  const [catalog, setCatalog] = useState<readonly CollectibleSouvenir[]>(() => listCollectibleSouvenirs())
+  const [openSouvenir, setOpenSouvenir] = useState<HeldSouvenir | null>(null)
+  const openedReturnRef = useRef<string | null>(null)
+  const [claimingId, setClaimingId] = useState<string | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
+  const { language } = useWalletLanguage()
+  const copy = merchCopy(language === "en" ? "en" : "es")
+  const lang = language === "en" ? "en" : "es"
+  const { held, claimable } = profileSouvenirs({
+    purchases,
+    claims,
+    catalog,
+    language: lang,
+    network: walletNetwork,
+  })
+  const souvenirItems: SouvenirListItem[] = [
+    ...held.map((item) =>
+      item.kind === "receipt"
+        ? { id: item.id, kind: "receipt" as const, name: item.name, drop: item.drop }
+        : { id: item.id, kind: "badge" as const, name: item.name, drop: item.drop, imagePath: item.imagePath },
+    ),
+    ...claimable.map((item) => ({
+      id: `claim:${item.slug}`,
+      kind: "claim" as const,
+      name: item.name,
+      drop: item.drop,
+      imagePath: item.imagePath,
+      claimLabel: copy.claimSouvenir,
+      signingLabel: copy.claimWithWallet,
+    })),
+  ]
 
   const handleAddWallet = useCallback(() => {
     setShowProHint(true)
@@ -87,6 +134,80 @@ export function WalletSwitcherModal({
     setPortalEl(document.body)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) {
+      setView("wallets")
+      setOpenSouvenir(null)
+      setClaimError(null)
+      return
+    }
+    if (openCollectibleHash) setView("souvenirs")
+    setPurchases(readSavedPurchases())
+    setClaims(readClaimedSouvenirs(walletAddress))
+    setCatalog(listCollectibleSouvenirs())
+    void fetchAccountSouvenirs().then((remote) => {
+      if (!remote) return
+      setCatalog(remote.catalog.length > 0 ? remote.catalog : listCollectibleSouvenirs())
+      setClaims(remote.claims)
+    })
+  }, [isOpen, openCollectibleHash, walletAddress])
+
+  const heldRef = useRef(held)
+  heldRef.current = held
+  const heldReceiptKey = held
+    .map((item) => (item.kind === "receipt" ? item.id : ""))
+    .filter(Boolean)
+    .join("|")
+
+  useEffect(() => {
+    if (!isOpen) {
+      openedReturnRef.current = null
+      return
+    }
+    if (!openCollectibleHash || openedReturnRef.current === openCollectibleHash) return
+    const match = heldRef.current.find(
+      (item) => item.kind === "receipt" && item.id === `receipt:${openCollectibleHash}`,
+    )
+    if (!match) return
+    openedReturnRef.current = openCollectibleHash
+    setView("souvenirs")
+    setOpenSouvenir(match)
+  }, [heldReceiptKey, isOpen, openCollectibleHash])
+
+  const closeOpenSouvenir = useCallback(() => {
+    const backToHome = souvenirDismissesToHome(openSouvenir?.id, openCollectibleHash)
+    setOpenSouvenir(null)
+    if (backToHome) onClose()
+  }, [onClose, openCollectibleHash, openSouvenir?.id])
+
+  const handleSouvenirSelect = useCallback(
+    async (id: string) => {
+      const heldItem = held.find((item) => item.id === id)
+      if (heldItem) {
+        setOpenSouvenir(heldItem)
+        return
+      }
+      const claim = claimable.find((item) => `claim:${item.slug}` === id)
+      if (!claim || !walletAddress || claimingId) return
+      setClaimingId(id)
+      setClaimError(null)
+      try {
+        const saved = await claimEventSouvenir({ souvenir: claim, walletAddress })
+        if (saved) {
+          setClaims((current) => {
+            const slug = saved.slug.trim().toLowerCase()
+            return [saved, ...current.filter((row) => row.slug.trim().toLowerCase() !== slug)]
+          })
+        }
+      } catch (error) {
+        setClaimError(error instanceof Error && error.message === "claim_closed" ? copy.claimClosed : copy.claimFailed)
+      } finally {
+        setClaimingId(null)
+      }
+    },
+    [claimable, claimingId, copy.claimClosed, copy.claimFailed, held, walletAddress],
+  )
+
   if (!portalEl) return null
 
   return createPortal(
@@ -130,9 +251,21 @@ export function WalletSwitcherModal({
 
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between px-5 py-4">
-              <p className="text-[13px] font-medium tracking-wider text-white/40 uppercase">
-                Mis billeteras
-              </p>
+              <div className="flex min-w-0 items-center gap-2">
+                {view === "souvenirs" ? (
+                  <button
+                    type="button"
+                    onClick={() => setView("wallets")}
+                    aria-label={copy.back}
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.07] text-white/55 hover:text-white/80 transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <p className="truncate text-[13px] font-medium tracking-wider text-white/40 uppercase">
+                  {view === "souvenirs" ? copy.souvenirs : "Mis billeteras"}
+                </p>
+              </div>
               <button
                 onClick={onClose}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.07] text-white/35 hover:text-white/70 transition-colors"
@@ -144,13 +277,30 @@ export function WalletSwitcherModal({
 
             {/* Cards */}
             <div className="flex flex-1 flex-col gap-3 px-4 overflow-hidden">
-
+              {view === "souvenirs" ? (
+                <>
+                  {claimError ? <p className="px-1 text-sm text-red-300">{claimError}</p> : null}
+                  <SouvenirList
+                    label={copy.souvenirs}
+                    items={souvenirItems}
+                    emptyLabel={copy.emptySouvenirs}
+                    onSelect={(id) => void handleSouvenirSelect(id)}
+                    claimingId={claimingId}
+                  />
+                </>
+              ) : (
+              <>
               {/* Active wallet card */}
               <div
                 className="rounded-2xl p-5"
                 style={{ background: "rgba(255,255,255,0.06)" }}
               >
-                <div className="flex items-start gap-4">
+                <button
+                  type="button"
+                  onClick={() => setView("souvenirs")}
+                  aria-label={copy.openSouvenirs}
+                  className="flex w-full items-start gap-4 text-left"
+                >
                   <WalletAvatar address={walletAddress} tag={sozuTag} />
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
@@ -176,7 +326,8 @@ export function WalletSwitcherModal({
                       )}
                     </div>
                   </div>
-                </div>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-white/30" aria-hidden />
+                </button>
 
                 <div className="my-4 h-px bg-white/[0.06]" />
 
@@ -253,6 +404,8 @@ export function WalletSwitcherModal({
               </motion.button>
 
               <div className="flex-1" />
+              </>
+              )}
             </div>
 
             {/* Sign out — white text, clearly visible */}
@@ -271,6 +424,21 @@ export function WalletSwitcherModal({
             </div>
           </motion.div>
         </>
+      ) : null}
+      {openSouvenir?.kind === "badge" ? (
+        <BadgePopup
+          name={openSouvenir.name}
+          drop={openSouvenir.drop}
+          imagePath={openSouvenir.imagePath}
+          onClose={closeOpenSouvenir}
+        />
+      ) : null}
+      {openSouvenir?.kind === "receipt" ? (
+        <SouvenirPopup label={openSouvenir.name} onClose={closeOpenSouvenir}>
+          <div data-souvenir-popup="receipt">
+            <CollectibleReceipt model={openSouvenir.receipt} />
+          </div>
+        </SouvenirPopup>
       ) : null}
     </AnimatePresence>,
     portalEl,

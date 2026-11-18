@@ -11,31 +11,31 @@ describe("resolveEnterAuthPath", () => {
     ).toEqual({ action: "login-stored", username: "alice" })
   })
 
-  it("ignores placeholder stored username", () => {
+  it("ignores placeholder stored username and opens the passkey sheet", () => {
     expect(
       resolveEnterAuthPath({
         storedUsername: "user",
         capabilities: { hasWebAuthn: true, canUsePasskeys: true },
       }),
-    ).toEqual({ action: "create-or-login" })
+    ).toEqual({ action: "passkey-prompt" })
   })
 
-  it("routes first-time biometric devices to create/login — not discovery", () => {
+  it("opens the passkey sheet before any new-account form", () => {
     expect(
       resolveEnterAuthPath({
         storedUsername: null,
         capabilities: { hasWebAuthn: true, canUsePasskeys: true },
       }),
-    ).toEqual({ action: "create-or-login" })
+    ).toEqual({ action: "passkey-prompt" })
   })
 
-  it("routes no-biometrics devices to an explicit chooser", () => {
+  it("still opens the passkey sheet when this device has no platform authenticator", () => {
     expect(
       resolveEnterAuthPath({
         storedUsername: null,
         capabilities: { hasWebAuthn: true, canUsePasskeys: false },
       }),
-    ).toEqual({ action: "choose-path" })
+    ).toEqual({ action: "passkey-prompt" })
   })
 
   it("marks missing WebAuthn as unsupported", () => {

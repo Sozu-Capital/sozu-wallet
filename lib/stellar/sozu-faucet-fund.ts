@@ -38,7 +38,6 @@ export async function fundViaSozuFaucet(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": userId,
       },
       body: JSON.stringify(to ? { to } : {}),
       cache: "no-store",

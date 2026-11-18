@@ -136,7 +136,8 @@ export async function verifyRegistration(
   username: string,
   credential: PasskeyCredential,
   challenge?: string,
-  referralCode?: string | null
+  referralCode?: string | null,
+  recoveryEmail?: string | null,
 ): Promise<{ success: boolean; userId?: string; username?: string }> {
   try {
     let clientPublicKey65b: string | undefined
@@ -158,6 +159,7 @@ export async function verifyRegistration(
         username,
         challenge, // Pass challenge in case store doesn't have it
         referralCode: referralCode || null, // Pass referral code if provided
+        recoveryEmail: recoveryEmail || null,
         clientPublicKey65b,
         credential,
       }),
@@ -394,10 +396,21 @@ export async function getPasskeyForTransaction(challenge: PasskeyChallenge): Pro
   }
 }
 
+export type GetPasskeyOptions = {
+  /**
+   * Immediate UI only shows passkeys already on this device.
+   * allowCredentials must stay empty or the browser rejects the request.
+   */
+  uiMode?: "immediate"
+}
+
 /**
  * Get WebAuthn credential (browser API wrapper)
  */
-export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCredential | null> {
+export async function getPasskey(
+  challenge: PasskeyChallenge,
+  options?: GetPasskeyOptions,
+): Promise<PasskeyCredential | null> {
   try {
     if (!window.PublicKeyCredential) {
       throw new Error("WebAuthn is not supported in this browser")
@@ -408,10 +421,11 @@ export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCr
       (typeof process !== "undefined" && process.env.NEXT_PUBLIC_RP_ID?.trim()) ||
       window.location.hostname
 
+    const listed = options?.uiMode === "immediate" ? [] : challenge.allowCredentials
     const publicKeyOptions: PublicKeyCredentialRequestOptions = {
       challenge: base64URLToArrayBuffer(challenge.challenge),
       rpId,
-      allowCredentials: challenge.allowCredentials?.map((cred) => ({
+      allowCredentials: listed?.map((cred) => ({
         id: base64URLToArrayBuffer(cred.id),
         type: cred.type as PublicKeyCredentialType,
         // Only include transports if explicitly provided
@@ -422,9 +436,12 @@ export async function getPasskey(challenge: PasskeyChallenge): Promise<PasskeyCr
       userVerification: challenge.userVerification || "required",
     }
 
-    const credential = (await navigator.credentials.get({
+    const request = {
       publicKey: publicKeyOptions,
-    })) as PublicKeyCredential
+      ...(options?.uiMode ? { uiMode: options.uiMode } : {}),
+    } as CredentialRequestOptions
+
+    const credential = (await navigator.credentials.get(request)) as PublicKeyCredential
 
     if (!credential) {
       throw new Error("Failed to get passkey")
@@ -510,12 +527,6 @@ function base64URLToArrayBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer
 }
 
-const addPasskeyHeaders = (): Record<string, string> => {
-  if (typeof window === "undefined") return {}
-  const uid = sessionStorage.getItem("dev_username")
-  return uid ? { "x-user-id": uid } : {}
-}
-
 export async function fetchPasskeyStatus(): Promise<{
   count: number
   max: number
@@ -523,7 +534,7 @@ export async function fetchPasskeyStatus(): Promise<{
   username?: string
   pinSet?: boolean
 }> {
-  const res = await fetch("/api/auth/passkeys/status", { headers: addPasskeyHeaders() })
+  const res = await fetch("/api/auth/passkeys/status")
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     throw new Error(typeof data.error === "string" ? data.error : "Failed to load passkey status")
@@ -538,7 +549,6 @@ export async function initPasskeyPairing(): Promise<{
 }> {
   const res = await fetch("/api/auth/passkeys/pairing/init", {
     method: "POST",
-    headers: { ...addPasskeyHeaders() },
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -555,9 +565,6 @@ export async function generateAddPasskeyChallenge(options: {
   username?: string
 }): Promise<PasskeyChallenge> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (!options.pairingCode) {
-    Object.assign(headers, addPasskeyHeaders())
-  }
   const res = await fetch("/api/auth/passkeys/add/challenge", {
     method: "POST",
     headers,
@@ -587,9 +594,6 @@ export async function verifyAddPasskey(
   options: { pairingCode?: string; username?: string }
 ): Promise<{ success: boolean; credentialId?: string; walletSyncHint?: string }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" }
-  if (!options.pairingCode) {
-    Object.assign(headers, addPasskeyHeaders())
-  }
   let clientPublicKey65b: string | undefined
   try {
     const { extractPasskeyPublicKey65ForStorage } = await import(

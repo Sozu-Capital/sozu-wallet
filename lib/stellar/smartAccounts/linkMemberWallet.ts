@@ -30,9 +30,7 @@ function isNotDeployedError(message: string): boolean {
 async function resolveLoginPasskeyPublicKey(credentialId: string): Promise<Uint8Array | null> {
   const userId = getUserId()
   if (!userId) return null
-  const res = await fetch("/api/auth/passkeys/primary", {
-    headers: { "x-user-id": userId },
-  })
+  const res = await fetch("/api/auth/passkeys/primary")
   const data = (await res.json().catch(() => ({}))) as {
     credentialId?: string
     publicKey65b?: string
@@ -98,9 +96,7 @@ async function resolveDeployPublicKey(
 
   const userId = getUserId()
   if (!userId) throw new Error("PASSKEY_PUBLIC_KEY_MISSING")
-  const res = await fetch("/api/auth/passkeys/primary", {
-    headers: { "x-user-id": userId },
-  })
+  const res = await fetch("/api/auth/passkeys/primary")
   const primary = (await res.json().catch(() => ({}))) as { publicKey65b?: string }
   if (!res.ok || !primary.publicKey65b) {
     throw new Error("PASSKEY_PUBLIC_KEY_MISSING")
@@ -226,6 +222,22 @@ export async function linkMemberWalletWithLoginPasskey(params: {
 
   if (!credentialId) throw new Error("PASSKEY_WALLET_NOT_LINKED")
 
+  const canonicalRes = await fetch("/api/wallet/stellar/address", { cache: "no-store" })
+  if (canonicalRes.ok) {
+    const canonicalBody = (await canonicalRes.json().catch(() => ({}))) as { publicKey?: string | null }
+    const canonical = canonicalBody.publicKey?.trim().toUpperCase() ?? ""
+    if (canonical.startsWith("C") && canonical.length === 56) {
+      try {
+        return await finishLink(await connect({ credentialId, contractId: canonical }))
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        throw new Error(
+          `This Sozu account already has smart account ${canonical}. Sign in with the passkey that created it. A second smart account was not created. ${msg}`,
+        )
+      }
+    }
+  }
+
   const { contractId: deployedContractId, publicKey } = await deployMemberContract(
     kit,
     credentialId,
@@ -247,14 +259,17 @@ async function verifyDeployedPubkey(
   credentialId: string,
   expectedPublicKey: Uint8Array,
 ): Promise<void> {
-  const userId = getUserId()
   const q = new URLSearchParams({ contractId, credentialId })
-  const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`, {
-    headers: userId ? { "x-user-id": userId } : {},
-  })
-  if (!res.ok) return
-  const data = (await res.json().catch(() => ({}))) as { keyDataBase64?: string }
-  if (!data.keyDataBase64) return
+  const res = await fetch(`/api/smart-accounts/resolve-key-data?${q}`)
+  const data = (await res.json().catch(() => ({}))) as {
+    keyDataBase64?: string
+    defaultSigner?: { signerCount?: number; onlyPasskeyExternal?: boolean }
+  }
+  if (!res.ok || !data.keyDataBase64 || data.defaultSigner?.onlyPasskeyExternal !== true) {
+    throw new Error(
+      "Could not verify that this smart account's only default signer is the passkey. Retry wallet setup.",
+    )
+  }
 
   const onChainBytes = Uint8Array.from(
     atob(data.keyDataBase64.replace(/-/g, "+").replace(/_/g, "/")),

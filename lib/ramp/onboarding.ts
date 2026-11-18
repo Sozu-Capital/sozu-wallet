@@ -3,7 +3,7 @@ import "server-only"
 import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 import { rampEnabled } from "@/lib/app-config"
-import { resolveUserId } from "@/lib/auth/resolve-user"
+import { requireSession } from "@/lib/auth/session"
 import { rampServerConfigured } from "@/lib/ramp/config"
 import { getRampProvider } from "@/lib/ramp/registry"
 import { getRampTreasuryKeypair } from "@/lib/ramp/settlement"
@@ -151,11 +151,13 @@ export async function completeSetup(params: {
 /** Shared guard for every /api/ramp/* route. */
 export async function rampRouteGuard(request: Request):
   Promise<{ userId: string; error?: never } | { userId?: never; error: NextResponse }> {
+  const session = requireSession(request)
+  if (session.error) return session
   if (!rampEnabled) {
     return { error: NextResponse.json({ error: "ramp_disabled" }, { status: 503 }) }
   }
   if (!rampServerConfigured()) {
     return { error: NextResponse.json({ error: "ramp_not_configured" }, { status: 503 }) }
   }
-  return resolveUserId(request)
+  return session
 }

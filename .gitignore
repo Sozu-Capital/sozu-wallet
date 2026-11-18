@@ -28,6 +28,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+packages/connect/dist
 
 # soroban contracts (Rust build artifacts)
 contracts/**/target/

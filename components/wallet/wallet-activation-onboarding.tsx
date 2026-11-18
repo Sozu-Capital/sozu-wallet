@@ -1,310 +1,339 @@
 "use client"
 
-import Image from "next/image"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { cn } from "@/lib/utils"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { SozuTagScreen } from "@/components/onboarding/sozu-tag-screen"
+import { ProgressPills } from "@/components/onboarding/progress-pills"
+import { DeviceKeyIcon, SlideIcons, sentenceLines } from "@/components/onboarding/slide-art"
+import { SozuButton } from "@/components/ui/sozu-button"
 import {
   WALLET_ACTIVATION_SLIDE_COUNT,
-  WALLET_ACTIVATION_SLIDES_ES,
-  WALLET_ACTIVATION_SLIDES_FALLBACK,
+  activationCta,
+  activationDialogLabel,
+  activationSlides,
+  type ActivationSlide,
 } from "@/lib/onboarding/slides"
+import { normalizeRecoveryEmail } from "@/lib/auth/recovery-email"
+import { useWalletLanguage } from "@/lib/wallet-language"
 
-const CROSSFADE_MS = 520
 const BLACK_FADE_MS = 650
 const WALLET_REVEAL_MS = 750
 
-type Phase = "slides" | "black" | "done"
+type Phase = "tag" | "slides" | "black" | "done"
 
 type WalletActivationOnboardingProps = {
   open: boolean
   activationSettled: boolean
   onExitComplete: () => void
+  /** Welcome is the home recap. Signup starts with the tag and ends with the recovery email. */
+  intent?: "welcome" | "signup"
+  initialTag?: string
+  onCreateAccount?: (tag: string, email: string) => void
+  onSignIn?: (tag: string) => void
 }
 
-function ActivationSlide({
-  esSrc,
-  fallbackSrc,
-  opacity,
-  priority,
-}: {
-  esSrc: string
-  fallbackSrc: string
-  opacity: number
-  priority?: boolean
-}) {
-  const [src, setSrc] = useState(esSrc)
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+}
 
-  useEffect(() => {
-    setSrc(esSrc)
-  }, [esSrc])
+function SlideCopy({
+  slide,
+  index,
+  recovery,
+}: {
+  slide: ActivationSlide
+  index: number
+  recovery?: {
+    hint: string
+    placeholder: string
+    value: string
+    error?: string
+    onChange: (value: string) => void
+  }
+}) {
+  const lines = sentenceLines(slide.body)
 
   return (
-    <Image
-      src={src}
-      alt=""
-      fill
-      priority={priority}
-      sizes="430px"
-      className="object-cover object-top"
-      style={{
-        opacity,
-        transition: `opacity ${CROSSFADE_MS}ms ease-in-out`,
-      }}
-      onError={() => {
-        if (src !== fallbackSrc) setSrc(fallbackSrc)
-      }}
-    />
+    <div className="relative flex min-h-full w-full shrink-0 flex-col items-center justify-center overflow-hidden px-3 py-8 text-center">
+      <div className="relative z-10 flex w-full flex-col items-center">
+        <SlideIcons index={index} />
+        <h1
+          className="sozu-serif w-full max-w-[366px] space-y-1 text-[18px] font-normal leading-6 tracking-[-0.02em] text-[var(--sozu-text-primary)]"
+          style={{ textShadow: "0 1px 16px rgba(19, 18, 16, 0.92)" }}
+        >
+          <span className="sr-only">{slide.title}. </span>
+          {lines.map((line) => (
+            <span key={line} className="block">
+              {line}
+            </span>
+          ))}
+        </h1>
+        {slide.note ? (
+          <p className="mt-14 flex max-w-[300px] items-center justify-center gap-2.5 text-[15px] leading-5 text-[var(--sozu-text-secondary)]">
+            {index === 0 ? <DeviceKeyIcon /> : null}
+            <span>{slide.note}</span>
+          </p>
+        ) : null}
+        {recovery ? (
+          <div className="mt-8 w-full max-w-[342px]">
+            <p className="text-pretty text-[14px] leading-5 text-[var(--sozu-text-secondary)]">{recovery.hint}</p>
+            <label className="sr-only" htmlFor="sozu-recovery-email">
+              {recovery.placeholder}
+            </label>
+            <input
+              id="sozu-recovery-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={recovery.value}
+              placeholder={recovery.placeholder}
+              onChange={(event) => recovery.onChange(event.target.value)}
+              className="sozu-field mt-3 h-[54px] w-full rounded-2xl px-4 text-[16px] text-[var(--sozu-text-primary)] outline-none placeholder:text-[var(--sozu-text-subtle)]"
+            />
+            {recovery.error ? (
+              <p className="mt-2 text-[13px] leading-[18px] text-[var(--sozu-text-danger)]">{recovery.error}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
 /**
- * Full-screen onboarding overlay while the wallet activates.
+ * Full-screen onboarding while the wallet activates.
  *
- * Layout:
- *   - Outer wrapper is transparent so the /home shader shows through on desktop
- *     (only the black-fade exit overlay covers the whole viewport)
- *   - Portrait container (max 430 × 932 px) is centred on desktop
- *
- * Navigation (manual only — no auto-advance):
- *   - Tap left  half → previous slide
- *   - Tap right half → next slide
- *   - On the last slide, tapping right queues the exit. The wallet opens as
- *     soon as activation has settled. Dots pulse while waiting.
+ * Each step is a card. Changing step fades the current card out and the next
+ * one in. The last step opens the wallet from its button, after activation
+ * has settled.
  */
 export function WalletActivationOnboarding({
   open,
   activationSettled,
   onExitComplete,
+  intent = "welcome",
+  initialTag = "",
+  onCreateAccount,
+  onSignIn,
 }: WalletActivationOnboardingProps) {
-  const [phase, setPhase] = useState<Phase>("slides")
+  const { language, t } = useWalletLanguage()
+  const slides = activationSlides(language)
+  const [phase, setPhase] = useState<Phase>(intent === "signup" ? "tag" : "slides")
+  const [chosenTag, setChosenTag] = useState(initialTag)
+  const [recoveryEmail, setRecoveryEmail] = useState("")
+  const [recoveryError, setRecoveryError] = useState("")
   const [slideIndex, setSlideIndex] = useState(0)
-  const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null)
-  const [incomingOpacity, setIncomingOpacity] = useState(1)
-  const [outgoingOpacity, setOutgoingOpacity] = useState(1)
-  // true once the user taps "next" on the last slide
+  const [cardOn, setCardOn] = useState(true)
   const [exitPending, setExitPending] = useState(false)
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null)
 
   const exitStartedRef = useRef(false)
+  const indexRef = useRef(0)
+  const cardTimerRef = useRef(0)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
-  // Pointer tracking (tap only — no swipe needed)
-  const pointerRef = useRef({ startX: 0, startY: 0, active: false })
-
-  // ─── Preload ────────────────────────────────────────────────────────────────
-  const preloadSlides = useCallback(() => {
-    for (let i = 0; i < WALLET_ACTIVATION_SLIDE_COUNT; i++) {
-      for (const src of [WALLET_ACTIVATION_SLIDES_ES[i], WALLET_ACTIVATION_SLIDES_FALLBACK[i]]) {
-        const img = new window.Image()
-        img.src = src
-      }
+  const goToSlide = useCallback((next: number) => {
+    if (exitStartedRef.current) return
+    if (next >= WALLET_ACTIVATION_SLIDE_COUNT) {
+      if (intent === "signup") return
+      setExitPending(true)
+      return
     }
-  }, [])
+    if (next < 0 || next === indexRef.current) return
 
-  // ─── Exit ────────────────────────────────────────────────────────────────────
+    const show = (index: number) => {
+      indexRef.current = index
+      setSlideIndex(index)
+      setCardOn(true)
+    }
+
+    if (prefersReducedMotion()) {
+      show(next)
+      return
+    }
+
+    setCardOn(false)
+    window.clearTimeout(cardTimerRef.current)
+    cardTimerRef.current = window.setTimeout(() => show(next), 220)
+  }, [intent])
+
   const startExit = useCallback(() => {
     if (exitStartedRef.current) return
     exitStartedRef.current = true
     setPhase("black")
+    const reduced = prefersReducedMotion()
+    const wait = reduced ? 0 : BLACK_FADE_MS + WALLET_REVEAL_MS
     window.setTimeout(() => {
       setPhase("done")
       onExitComplete()
-    }, BLACK_FADE_MS + WALLET_REVEAL_MS)
+    }, wait)
   }, [onExitComplete])
 
-  // ─── Slide transition ────────────────────────────────────────────────────────
-  const goToSlide = useCallback(
-    (next: number) => {
-      if (exitStartedRef.current) return
-      if (next >= WALLET_ACTIVATION_SLIDE_COUNT) {
-        // User tapped "next" on the last slide — queue the exit.
-        // The wallet opens as soon as activationSettled becomes true.
-        setExitPending(true)
-        return
-      }
-      if (next < 0 || next === slideIndex) return
-
-      setOutgoingIndex(slideIndex)
-      setOutgoingOpacity(1)
-      setIncomingOpacity(0)
-      setSlideIndex(next)
-
-      // Double-rAF: ensures initial opacity=0 is painted before the transition starts
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setOutgoingOpacity(0)
-          setIncomingOpacity(1)
-        })
-      })
-
-      window.setTimeout(() => {
-        setOutgoingIndex(null)
-        setOutgoingOpacity(1)
-      }, CROSSFADE_MS + 50)
-    },
-    [slideIndex],
-  )
-
-  // ─── Tap handlers ────────────────────────────────────────────────────────────
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    pointerRef.current = { startX: e.clientX, startY: e.clientY, active: true }
-  }, [])
-
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!pointerRef.current.active || phase !== "slides") return
-      pointerRef.current.active = false
-
-      const dx = e.clientX - pointerRef.current.startX
-      const dy = e.clientY - pointerRef.current.startY
-
-      // Ignore drags/swipes — only respond to taps
-      if (Math.abs(dx) > 12 || Math.abs(dy) > 12) return
-
-      if (e.clientX < window.innerWidth * 0.35) {
-        goToSlide(slideIndex - 1) // left 35 % → back
-      } else if (slideIndex < WALLET_ACTIVATION_SLIDE_COUNT - 1) {
-        goToSlide(slideIndex + 1) // right 65 % → next (disabled on last slide — use CTA button)
-      }
-    },
-    [phase, slideIndex, goToSlide],
-  )
-
-  const onPointerCancel = useCallback(() => {
-    pointerRef.current.active = false
-  }, [])
-
-  // ─── Keyboard ────────────────────────────────────────────────────────────────
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") {
-        e.preventDefault()
-        goToSlide(slideIndex + 1)
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault()
-        goToSlide(slideIndex - 1)
-      }
-    },
-    [slideIndex, goToSlide],
-  )
-
-  // ─── Effects ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return
-    preloadSlides()
-    setPhase("slides")
+    setPhase(intent === "signup" ? "tag" : "slides")
+    setChosenTag(initialTag)
+    setRecoveryEmail("")
+    setRecoveryError("")
+    indexRef.current = 0
     setSlideIndex(0)
-    setOutgoingIndex(null)
-    setIncomingOpacity(1)
-    setOutgoingOpacity(1)
+    setCardOn(true)
     setExitPending(false)
     exitStartedRef.current = false
-  }, [open, preloadSlides])
+    dialogRef.current?.focus()
+  }, [open, intent, initialTag])
 
-  // Open the wallet as soon as activation settles — but ONLY if the user has
-  // already tapped past the last slide (exitPending).
   useEffect(() => {
     if (exitPending && activationSettled) startExit()
   }, [exitPending, activationSettled, startExit])
 
-  if (!open || phase === "done") return null
+  useLayoutEffect(() => {
+    if (phase !== "slides") return
+    dialogRef.current?.focus()
+  }, [phase])
 
-  // Pulse dots while waiting for activation after user tapped past the last slide
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.target instanceof HTMLElement && event.target.closest("button")) {
+        if (event.key === "Enter" || event.key === " ") return
+      }
+      if (event.key === "ArrowRight" || event.key === " " || event.key === "Enter") {
+        event.preventDefault()
+        goToSlide(indexRef.current + 1)
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault()
+        goToSlide(indexRef.current - 1)
+      }
+    },
+    [goToSlide],
+  )
+
+  useLayoutEffect(() => {
+    setPortalNode(document.body)
+  }, [])
+
+  if (!open || phase === "done" || !portalNode) return null
+
+  if (phase === "tag") {
+    return createPortal(
+      <div className="sozu-night sozu-night-clear fixed inset-0 z-[200] flex justify-center overflow-x-hidden">
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[#061018]/45" />
+        <SozuTagScreen
+          initialTag={chosenTag}
+          onContinue={(tag) => {
+            setChosenTag(tag)
+            setPhase("slides")
+          }}
+          onHaveTag={(tag) => {
+            if (tag) onSignIn?.(tag)
+          }}
+          onSignIn={(tag) => {
+            if (tag) onSignIn?.(tag)
+          }}
+        />
+      </div>,
+      portalNode,
+    )
+  }
+
   const waitingForActivation = exitPending && !activationSettled
+  const safeIndex = Math.min(slideIndex, slides.length - 1)
+  const finishingSignup = intent === "signup" && safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1
+  const cta = finishingSignup
+    ? t.onbRecoveryCta
+    : activationCta(language, safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1)
+  const recoveryReady = normalizeRecoveryEmail(recoveryEmail) !== null
+  const fadeMs = BLACK_FADE_MS
+  const current = slides[safeIndex]
 
-  return (
+  return createPortal(
     <>
-      {/*
-       * Fixed black overlay for the exit fade.
-       * Sits above the scroll layer (z-[210]) so it covers the viewport
-       * regardless of scroll position.
-       */}
       <div
-        className="fixed inset-0 bg-black pointer-events-none transition-opacity ease-in-out"
+        className="pointer-events-none fixed inset-0 bg-[#131210] ease-in-out motion-reduce:transition-none"
         style={{
           opacity: phase === "black" ? 1 : 0,
-          transitionDuration: `${BLACK_FADE_MS}ms`,
+          transitionProperty: "opacity",
+          transitionDuration: `${fadeMs}ms`,
           zIndex: 210,
         }}
       />
 
-      {/*
-       * Scroll container — fixed to the viewport, scrollable on the Y axis.
-       * On tall devices the portrait card fits without scrolling.
-       * On short devices the card overflows below the fold: the user can
-       * scroll down to see the rest, then tap to advance.
-       *
-       * Tap zones (viewport-relative clientX):
-       *   left 35 %  → previous slide
-       *   right 65 % → next slide / open wallet
-       */}
       <div
-        className="fixed inset-0 z-[200] overflow-y-auto flex justify-center touch-manipulation select-none"
+        ref={dialogRef}
+        className="sozu-night sozu-night-clear fixed inset-0 z-[200] flex w-full touch-manipulation justify-center overflow-x-hidden select-none outline-none"
         role="dialog"
         aria-modal
-        aria-label="Activando billetera"
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-        onKeyDown={onKeyDown}
+        aria-label={activationDialogLabel(language)}
         tabIndex={0}
-        /* Stop touch events from bubbling to the shell's swipe-panel handlers */
-        onTouchStart={e => e.stopPropagation()}
-        onTouchMove={e => e.stopPropagation()}
-        onTouchEnd={e => e.stopPropagation()}
+        onKeyDown={onKeyDown}
+        onTouchStart={(event) => event.stopPropagation()}
+        onTouchMove={(event) => event.stopPropagation()}
+        onTouchEnd={(event) => event.stopPropagation()}
       >
-        {/*
-          Portrait container — natural 430 × 932 aspect ratio.
-          Uses `max()` so it is at least 100dvh tall on large screens
-          (shader visible on the sides on desktop) while remaining fully
-          scrollable on compact phones where the aspect-ratio height
-          exceeds the viewport height.
-        */}
-        <div
-          className="relative w-full max-w-[430px] bg-black overflow-hidden"
-          style={{
-            height: "max(100dvh, calc(min(100vw, 430px) * 932 / 430))",
-          }}
-        >
-          {/* Outgoing slide (fades out) */}
-          {outgoingIndex !== null ? (
-            <div className="absolute inset-0" style={{ zIndex: 0 }}>
-              <ActivationSlide
-                esSrc={WALLET_ACTIVATION_SLIDES_ES[outgoingIndex]}
-                fallbackSrc={WALLET_ACTIVATION_SLIDES_FALLBACK[outgoingIndex]}
-                opacity={outgoingOpacity}
-              />
-            </div>
-          ) : null}
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[#061018]/45" />
+        <p className="sr-only" aria-live="polite">
+          {current?.step}. {current?.title}
+        </p>
+        <div className="relative z-10 flex h-dvh w-full min-w-0 max-w-[430px] flex-col overflow-x-hidden">
+          <header className="px-6" style={{ paddingTop: "calc(env(safe-area-inset-top) + 18px)" }}>
+            <ProgressPills count={WALLET_ACTIVATION_SLIDE_COUNT} current={safeIndex} label={current?.step} />
+          </header>
 
-          {/* Incoming slide (fades in) */}
-          <div className="absolute inset-0" style={{ zIndex: 1 }}>
-            <ActivationSlide
-              esSrc={WALLET_ACTIVATION_SLIDES_ES[slideIndex]}
-              fallbackSrc={WALLET_ACTIVATION_SLIDES_FALLBACK[slideIndex]}
-              opacity={incomingOpacity}
-              priority={slideIndex === 0}
-            />
+          <div className="relative min-h-0 w-full min-w-0 flex-1 overflow-hidden">
+            <section
+              className={`absolute inset-0 overflow-y-auto transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+                cardOn ? "opacity-100" : "pointer-events-none opacity-0"
+              }`}
+            >
+              <SlideCopy
+                slide={current ?? slides[0]}
+                index={safeIndex}
+                recovery={
+                  intent === "signup" && safeIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1
+                    ? {
+                        hint: t.onbRecoveryHint,
+                        placeholder: t.onbRecoveryPlaceholder,
+                        value: recoveryEmail,
+                        error:
+                          recoveryError ||
+                          (recoveryEmail.includes("@") && !recoveryReady ? t.onbRecoveryInvalid : ""),
+                        onChange: (value) => {
+                          setRecoveryEmail(value)
+                          setRecoveryError("")
+                        },
+                      }
+                    : undefined
+                }
+              />
+            </section>
           </div>
 
-          {/* Last-slide CTA — fully transparent tap target overlaying the button in the slide image */}
-          {slideIndex === WALLET_ACTIVATION_SLIDE_COUNT - 1 && (
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                goToSlide(WALLET_ACTIVATION_SLIDE_COUNT)
-              }}
-              aria-label="Abrir mi billetera"
-              className={cn(
-                "absolute left-0 right-0 z-10 bg-transparent border-0 outline-none cursor-pointer",
-                waitingForActivation && "animate-pulse",
-              )}
-              style={{
-                bottom: "max(1.5rem, env(safe-area-inset-bottom))",
-                height: "15%",
-              }}
-            />
-          )}
+          <footer className="px-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 18px)" }}>
+            <div className="mx-auto w-full max-w-[342px]">
+              <SozuButton
+                aria-label={cta}
+                aria-busy={waitingForActivation}
+                disabled={waitingForActivation || (finishingSignup && !recoveryReady)}
+                onClick={() => {
+                  if (!finishingSignup) {
+                    goToSlide(safeIndex + 1)
+                    return
+                  }
+                  const email = normalizeRecoveryEmail(recoveryEmail)
+                  if (!email || !chosenTag) {
+                    setRecoveryError(t.onbRecoveryInvalid)
+                    return
+                  }
+                  onCreateAccount?.(chosenTag, email)
+                }}
+              >
+                {cta}
+              </SozuButton>
+            </div>
+          </footer>
         </div>
       </div>
-    </>
+    </>,
+    portalNode,
   )
 }

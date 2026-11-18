@@ -14,6 +14,13 @@ export type CheckoutSession = {
   stellarTxHash?: string | null;
   completedPaymentMethod?: string | null;
   organizationId?: string | null;
+  /** Product link with the merchant's collectible receipt toggle on. Drinks are never set. */
+  collectibleReceipt?: boolean;
+  /** Shirt number claimed for this sale. Set together with editionSize. */
+  editionNumber?: number | null;
+  editionSize?: number | null;
+  /** Photo the merchant attached to this payment link. */
+  productImageUrl?: string | null;
 };
 
 export type CheckoutPublicResponse = CheckoutSession;

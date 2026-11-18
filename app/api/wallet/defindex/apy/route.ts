@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getRealTimeAPY, formatAPY, getAPYWithPrecision } from "@/lib/defindex/apy-calculator"
-import { resolveWalletUserId } from "@/lib/wallet/resolve-wallet-user-id"
+import { getSessionUserId } from "@/lib/auth/session"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 
 export async function OPTIONS(request: NextRequest) {
@@ -14,7 +14,8 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await resolveWalletUserId(request)
+    const sessionUserId = getSessionUserId(request)
+    const auth = sessionUserId ? { userId: sessionUserId, via: "session" as const } : null
     if (!auth) {
       return NextResponse.json(
         { error: "Unauthorized" },

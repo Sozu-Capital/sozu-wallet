@@ -90,8 +90,8 @@ export async function signSorobanTransaction(
   // - We sign the 32-byte transaction hash, not the XDR directly
   const transactionHash = transaction.hash()
   console.log("[Turnkey Soroban Signing] Transaction hash length:", transactionHash.length, "bytes")
-  console.log("[Turnkey Soroban Signing] Transaction hash (hex):", transactionHash.toString("hex"))
-  console.log("[Turnkey Soroban Signing] Transaction hash (base64):", transactionHash.toString("base64"))
+  console.log("[Turnkey Soroban Signing] Transaction hash (hex):", Buffer.from(transactionHash).toString("hex"))
+  console.log("[Turnkey Soroban Signing] Transaction hash (base64):", Buffer.from(transactionHash).toString("base64"))
   
   // Also get the transaction XDR for comparison/testing
   const transactionXdr = transaction.toXDR()
@@ -129,7 +129,7 @@ export async function signSorobanTransaction(
   }
   const signParamsHash = {
     signWith: signWith,
-    payload: transactionHash.toString("hex"), // Sign the transaction hash (32 bytes = 64 hex chars)
+    payload: Buffer.from(transactionHash).toString("hex"), // Sign the transaction hash (32 bytes = 64 hex chars)
     encoding: "PAYLOAD_ENCODING_HEXADECIMAL",
     hashFunction: "HASH_FUNCTION_NOT_APPLICABLE", // Required for ED25519 (Stellar) - we're providing the hash directly
   }
@@ -342,7 +342,7 @@ export async function signSorobanTransaction(
     console.log("[Turnkey Soroban Signing] Verifying signature with public key:", wallet.publicKey)
     console.log("[Turnkey Soroban Signing] Payload that was signed:", signParams === signParamsHash ? "Transaction Hash" : "Transaction XDR")
     console.log("[Turnkey Soroban Signing] Payload to verify against:", "Transaction Hash (always)")
-    console.log("[Turnkey Soroban Signing] Transaction hash to verify:", transactionHash.toString("hex"))
+    console.log("[Turnkey Soroban Signing] Transaction hash to verify:", Buffer.from(transactionHash).toString("hex"))
     console.log("[Turnkey Soroban Signing] Transaction hash length:", transactionHash.length, "bytes")
     console.log("[Turnkey Soroban Signing] Signature to verify (R || S):", signatureBytes.toString("hex"))
     console.log("[Turnkey Soroban Signing] Signature length:", signatureBytes.length, "bytes")
@@ -455,7 +455,7 @@ export async function signSorobanTransaction(
     } else {
       console.error("[Turnkey Soroban Signing] ❌ Signature verification FAILED with both R||S and S||R orders!")
       console.error("[Turnkey Soroban Signing] This indicates the signature format from Turnkey is incorrect")
-      console.error("[Turnkey Soroban Signing] Transaction hash being signed:", transactionHash.toString("hex"))
+      console.error("[Turnkey Soroban Signing] Transaction hash being signed:", Buffer.from(transactionHash).toString("hex"))
       console.error("[Turnkey Soroban Signing] Public key:", wallet.publicKey)
       console.error("[Turnkey Soroban Signing] Signature (R || S):", signatureBytes.toString("hex"))
       console.error("[Turnkey Soroban Signing] Continuing anyway - Stellar will reject with tx_bad_auth")
@@ -467,7 +467,7 @@ export async function signSorobanTransaction(
     
     console.log("[Turnkey Soroban Signing] Public key bytes length:", publicKeyBytes.length)
     console.log("[Turnkey Soroban Signing] Hint length:", hint.length)
-    console.log("[Turnkey Soroban Signing] Hint (hex):", hint.toString("hex"))
+    console.log("[Turnkey Soroban Signing] Hint (hex):", Buffer.from(hint).toString("hex"))
     
     // Verify the signature format is correct for Stellar
     // For ED25519, the signature should be exactly 64 bytes
@@ -493,11 +493,11 @@ export async function signSorobanTransaction(
     
     // Verify the transaction hash matches what we signed
     const newHash = transaction.hash()
-    console.log("[Turnkey Soroban Signing] New transaction hash (after adding signature):", newHash.toString("hex"))
-    console.log("[Turnkey Soroban Signing] Original hash (what we signed):", transactionHash.toString("hex"))
+    console.log("[Turnkey Soroban Signing] New transaction hash (after adding signature):", Buffer.from(newHash).toString("hex"))
+    console.log("[Turnkey Soroban Signing] Original hash (what we signed):", Buffer.from(transactionHash).toString("hex"))
     
     // The hash should be the same because signatures are not included in the hash calculation
-    if (!newHash.equals(transactionHash)) {
+    if (!Buffer.from(newHash).equals(Buffer.from(transactionHash))) {
       console.warn("[Turnkey Soroban Signing] ⚠️ Transaction hash changed after adding signature - this might be expected")
     }
     

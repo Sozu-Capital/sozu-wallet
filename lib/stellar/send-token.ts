@@ -15,12 +15,20 @@ import { getAssetByContractId } from "@/lib/stellar/asset-registry"
 import type { SozuAsset, StellarNetwork } from "@/lib/stellar/asset-types"
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder"
 import { getStellarConfig } from "@/lib/turnkey/config"
-import {
-  funderKeypairFromResolution,
-  resolveFunderSecret,
-} from "@/lib/stellar/funder-secret"
 import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
+import {
+  getConfiguredFunderPublicKey,
+  getFunderKeypair,
+  FEE_PAYER_SEQUENCE_ATTEMPTS,
+  isBadSequenceResult,
+  resequenceOnFeePayer,
+  waitForSourceSequence,
+  withFeePayerLock,
+} from "@/lib/stellar/soroban-fee-payer"
+import { scheduleFeePayerBalanceCheck } from "@/lib/stellar/fee-payer-alert"
 import { extractSorobanDataXdr } from "@/lib/stellar/soroban-prepared-envelope"
+import { SorobanTransactionPendingError } from "@/lib/stellar/soroban-pending"
 
 function getNetworkPassphrase(network: StellarNetwork): string {
   return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
@@ -125,23 +133,23 @@ function formatSorobanSubmitError(result: {
 }): string {
   if (result.errorResult) {
     try {
-      const txResult = result.errorResult.result()?.switch?.().name
-      if (txResult === "txMalformed") {
+      const txResult = xdrField<object>(result.errorResult, "result")
+      const txResultName = xdrType(txResult)
+      if (txResultName === "txMalformed") {
         return "transaction envelope is invalid (missing Soroban data). Refresh and try send again."
       }
-      if (txResult === "txBadAuth") {
+      if (txResultName === "txBadAuth") {
         return "passkey signature was rejected. Sign out, sign in on the same URL, then retry."
       }
-      if (txResult === "txInsufficientFee") {
-        const { expectedEnvName, network } = resolveFunderSecret()
-        return `insufficient fee on the fee-payer account. Fund ${expectedEnvName} with XLM on ${network}.`
+      if (txResultName === "txInsufficientFee") {
+        return "insufficient fee on the fee-payer account. Fund STELLAR_FUNDER_SECRET with XLM."
       }
-      const opResults = result.errorResult.result()?.results()
-      const first = opResults?.[0]
-      const tr = first?.tr?.()
-      const opName = tr?.switch?.().name
+      const failedOps = txResultName === "txFailed" ? xdrField<object[]>(txResult, "results") : []
+      const firstOp = failedOps[0]
+      const opName =
+        firstOp && xdrType(firstOp) === "opInner" ? xdrType(xdrField(firstOp, "tr")) : undefined
       if (opName) return `transaction failed (${opName})`
-      if (txResult) return `transaction failed (${txResult})`
+      if (txResultName) return `transaction failed (${txResultName})`
     } catch {
       /* fall through */
     }
@@ -156,7 +164,7 @@ async function simulateBeforeSubmit(
   server: rpc.Server,
   tx: Transaction | FeeBumpTransaction,
 ): Promise<void> {
-  const sim = await server.simulateTransaction(tx)
+  const sim = await server.simulateTransaction(tx, undefined, "enforce")
   if (Api.isSimulationError(sim)) {
     const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
     console.error("[simulateBeforeSubmit] Simulation error:", detail.slice(0, 1000))
@@ -190,58 +198,90 @@ export async function submitSignedSorobanEnvelope(
 
   // Re-prepare Soroban resources server-side (avoids client-side assembleTransaction()).
   // This also handles the case where the client built with stale sorobanData.
-  let preparedTx: Transaction | FeeBumpTransaction = tx
-  try {
-    if (tx instanceof Transaction) {
-      preparedTx = await server.prepareTransaction(tx)
-    }
-  } catch (e) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[submitSignedSorobanEnvelope] prepareTransaction skipped:", e)
+  async function prepare(t: Transaction | FeeBumpTransaction): Promise<Transaction | FeeBumpTransaction> {
+    if (!(t instanceof Transaction)) return t
+    try {
+      const sim = await server.simulateTransaction(t, undefined, "enforce")
+      if (Api.isSimulationError(sim)) {
+        throw new Error(typeof sim.error === "string" ? sim.error : "simulation failed")
+      }
+      return rpc.assembleTransaction(t, sim).build()
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[submitSignedSorobanEnvelope] prepareTransaction skipped:", e)
+      }
+      return t
     }
   }
 
-  const funder = resolveFunderSecret(network)
-  const funderKp = funderKeypairFromResolution(funder)
-  if (funder.secret && !funderKp) {
-    throw new Error(`${funder.envName} is not a valid Stellar secret key.`)
-  }
-  const funderPk = funderKp?.publicKey() ?? null
-  const txSource =
-    preparedTx instanceof FeeBumpTransaction
-      ? (preparedTx as any).innerTransaction?.source ?? ""
-      : preparedTx.source
-  if (funderKp && funderPk && txSource === funderPk && preparedTx instanceof Transaction) {
-    preparedTx.sign(funderKp)
-  } else if (funderPk && txSource === funderPk && !funderKp) {
+  const funderPk = getConfiguredFunderPublicKey()
+  const funderKp = getFunderKeypair()
+  const txSource = tx instanceof FeeBumpTransaction ? tx.innerTransaction.source : tx.source
+  const paidByFunder = Boolean(funderPk) && txSource === funderPk
+  if (paidByFunder && !funderKp) {
     throw new Error(
-      `Fee payer signature missing and ${funder.expectedEnvName} is not configured on the server.`,
+      "Fee payer signature missing and STELLAR_FUNDER_SECRET is not configured on the server.",
     )
   }
 
-  await simulateBeforeSubmit(server, preparedTx)
+  let result: rpc.Api.SendTransactionResponse
+  if (paidByFunder && funderKp && tx instanceof Transaction) {
+    result = await withFeePayerLock(async () => {
+      let sent: rpc.Api.SendTransactionResponse | null = null
+      for (let attempt = 0; attempt < FEE_PAYER_SEQUENCE_ATTEMPTS; attempt++) {
+        const fresh = await resequenceOnFeePayer(server, tx, networkPassphrase)
+        const preparedTx = await prepare(fresh)
+        if (preparedTx instanceof Transaction) preparedTx.sign(funderKp)
+        await simulateBeforeSubmit(server, preparedTx)
+        sent = await server.sendTransaction(preparedTx)
+        if (!isBadSequenceResult(sent)) {
+          if (sent.status !== "ERROR" && preparedTx instanceof Transaction) {
+            await waitForSourceSequence(server, preparedTx.source, preparedTx.sequence)
+          }
+          break
+        }
+      }
+      return sent!
+    })
+  } else {
+    const preparedTx = await prepare(tx)
+    await simulateBeforeSubmit(server, preparedTx)
+    result = await server.sendTransaction(preparedTx)
+  }
 
-  const result = await server.sendTransaction(preparedTx)
   if (result.status === "ERROR") {
     throw new Error(`Soroban submit failed: ${formatSorobanSubmitError(result)}`)
   }
   if (!result.hash) throw new Error("No transaction hash from Soroban RPC")
+  if (paidByFunder) scheduleFeePayerBalanceCheck()
 
   const ledger = await waitForSorobanTransactionResult(server, result.hash)
   if (ledger.status === "FAILED") {
     const detail = ledger.detail
+    const explorer = network === "mainnet" ? "public" : "testnet"
     throw new Error(
       `Transaction was included on-chain but failed (${detail}). ` +
-        `Your USDC balance was not reduced. View: https://stellar.expert/explorer/testnet/tx/${result.hash}`,
+        `Your USDC balance was not reduced. View: https://stellar.expert/explorer/${explorer}/tx/${result.hash}`,
     )
   }
   if (ledger.status !== "SUCCESS") {
-    throw new Error(
-      `Transaction ${result.hash.slice(0, 8)}… is still pending on Soroban RPC. ` +
-        "Check Stellar Expert in a minute before sending again.",
-    )
+    throw new SorobanTransactionPendingError(result.hash)
   }
   return result.hash
+}
+
+/** One RPC read. Used to turn a timed-out withdraw into a receipt once the ledger catches up. */
+export async function lookupSorobanLedger(hash: string): Promise<"SUCCESS" | "FAILED" | "PENDING"> {
+  const cfg = getStellarConfig()
+  const server = new rpc.Server(getSorobanRpcUrl(cfg.network), { allowHttp: cfg.network === "testnet" })
+  try {
+    const tx = await server.getTransaction(hash)
+    if (tx.status === Api.GetTransactionStatus.SUCCESS) return "SUCCESS"
+    if (tx.status === Api.GetTransactionStatus.FAILED) return "FAILED"
+    return "PENDING"
+  } catch {
+    return "PENDING"
+  }
 }
 
 type SorobanLedgerOutcome =
@@ -288,9 +328,11 @@ function formatSorobanLedgerFailure(tx: Api.GetFailedTransactionResponse): strin
     }
   }
   try {
-    const tr = failed.resultXdr?.result?.()?.results?.()?.[0]?.tr?.()
-    const name = tr?.switch?.()?.name
-    if (name) return name
+    const result = failed.resultXdr ? xdrField<object | undefined>(failed.resultXdr, "result") : undefined
+    if (result && xdrType(result) === "txFailed") {
+      const first = xdrField<object[]>(result, "results")[0]
+      if (first && xdrType(first) === "opInner") return xdrType(xdrField(first, "tr")) ?? "on-chain execution failed"
+    }
   } catch {
     /* ignore */
   }

@@ -19,11 +19,8 @@ import {
 import * as rpc from "@stellar/stellar-sdk/rpc"
 import { Api } from "@stellar/stellar-sdk/rpc"
 import { getBlendUsdcAsset } from "@/lib/stellar/asset-registry"
-import { readFunderSecret, resolveFunderSecret } from "@/lib/stellar/funder-secret"
-import {
-  resolveSorobanRpcUrlForNetwork,
-  stellarNetworkPassphrase,
-} from "@/lib/stellar/network-env"
+import { xdrBigInt, xdrField, xdrType } from "@/lib/stellar/xdr-access"
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
 
 const DUMMY_ACCOUNT = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"
 const DEFAULT_TOKEN_DECIMALS = 7
@@ -38,27 +35,28 @@ function resolveSorobanRpcUrl(network: "testnet" | "mainnet"): string {
 }
 
 function getNetworkPassphrase(network: "testnet" | "mainnet"): string {
-  return stellarNetworkPassphrase(network)
+  return network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET
+}
+
+function scValWide(val: xdr.ScVal, arm: "i128" | "u128", signedHi: boolean): bigint {
+  const parts = xdrField<{ hi: unknown; lo: unknown }>(val, arm)
+  const hi = signedHi
+    ? BigInt.asIntN(64, xdrBigInt(xdrField(parts, "hi")))
+    : BigInt.asUintN(64, xdrBigInt(xdrField(parts, "hi")))
+  const lo = BigInt.asUintN(64, xdrBigInt(xdrField(parts, "lo")))
+  return (hi << BigInt(64)) + lo
 }
 
 function scValToBalanceStroops(val: xdr.ScVal): bigint {
-  switch (val.switch().name) {
-    case "scvI128": {
-      const p = val.i128()
-      const hi = BigInt(p.hi().toString())
-      const lo = BigInt(p.lo().toString())
-      return (hi << BigInt(64)) + lo
-    }
-    case "scvU128": {
-      const p = val.u128()
-      const hi = BigInt(p.hi().toString())
-      const lo = BigInt(p.lo().toString())
-      return (hi << BigInt(64)) + lo
-    }
+  switch (xdrType(val)) {
+    case "scvI128":
+      return scValWide(val, "i128", true)
+    case "scvU128":
+      return scValWide(val, "u128", false)
     case "scvI64":
-      return BigInt(val.i64().toString())
+      return xdrBigInt(xdrField(val, "i64"))
     case "scvU64":
-      return BigInt(val.u64().toString())
+      return xdrBigInt(xdrField(val, "u64"))
     default:
       return BigInt(0)
   }
@@ -74,16 +72,10 @@ function normalizeHolderAddress(holderAddress: string): string {
 
 async function getSimulationSourceAccount(
   server: rpc.Server,
-  network: "testnet" | "mainnet",
 ): Promise<{ account: Account; publicKey: string }> {
-  const resolved = resolveFunderSecret(network)
-  if (resolved.secret) {
-    let kp: Keypair
-    try {
-      kp = Keypair.fromSecret(resolved.secret)
-    } catch {
-      throw new Error(`${resolved.envName} is not a valid Stellar secret key.`)
-    }
+  const secret = process.env.STELLAR_FUNDER_SECRET?.trim()
+  if (secret) {
+    const kp = Keypair.fromSecret(secret)
     const loaded = await server.getAccount(kp.publicKey())
     return { account: loaded, publicKey: kp.publicKey() }
   }
@@ -118,7 +110,7 @@ async function readBalanceViaSimulate(
   const rpcUrl = resolveSorobanRpcUrl(network)
   const server = new rpc.Server(rpcUrl, { allowHttp: network === "testnet" })
   const networkPassphrase = getNetworkPassphrase(network)
-  const { account } = await getSimulationSourceAccount(server, network)
+  const { account } = await getSimulationSourceAccount(server)
   const contract = new Contract(tokenAddress)
   const holder = normalizeHolderAddress(holderAddress)
 
@@ -179,18 +171,19 @@ async function readBalanceViaLedger(
 
 /**
  * Read the Soroban token balance for `userAddress` from contract `tokenAddress`.
- * Returns a decimal value (divided by 10^decimals; PizzaToken uses 0).
+ * Returns a decimal value (divided by 10^decimals; PizzaToken uses 0), or null
+ * when the ledger read fails. A zero balance is a real zero, not a failure.
  */
-export async function getSorobanTokenBalance(
+export async function tryGetSorobanTokenBalance(
   tokenAddress: string,
   userAddress: string,
   network: "testnet" | "mainnet" = "testnet",
   decimals = DEFAULT_TOKEN_DECIMALS,
-): Promise<number> {
+): Promise<number | null> {
   const holder = normalizeHolderAddress(userAddress)
   const token = tokenAddress.trim().toUpperCase()
 
-  const hasFunder = Boolean(readFunderSecret(network))
+  const hasFunder = Boolean(process.env.STELLAR_FUNDER_SECRET?.trim())
   const attempts = hasFunder
     ? [
         () => readBalanceViaSimulate(token, holder, network, decimals),
@@ -215,7 +208,21 @@ export async function getSorobanTokenBalance(
     }
   }
 
-  return 0
+  return null
+}
+
+/**
+ * Same read as `tryGetSorobanTokenBalance`, with a failed read reported as 0
+ * so existing USDC callers keep their previous fallback.
+ */
+export async function getSorobanTokenBalance(
+  tokenAddress: string,
+  userAddress: string,
+  network: "testnet" | "mainnet" = "testnet",
+  decimals = DEFAULT_TOKEN_DECIMALS,
+): Promise<number> {
+  const value = await tryGetSorobanTokenBalance(tokenAddress, userAddress, network, decimals)
+  return value ?? 0
 }
 
 export function getBlendUsdcContractId(network: "testnet" | "mainnet"): string {
