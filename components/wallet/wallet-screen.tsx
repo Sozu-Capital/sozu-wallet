@@ -52,6 +52,7 @@ import {
   historyReceiptForTransaction,
   type HistoryReceiptView,
 } from "@/lib/payment/history-receipt"
+import { readCollectibleReturn } from "@/lib/checkout/collectible-return"
 import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
 import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
 import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
@@ -128,6 +129,8 @@ export function WalletScreen({
 
   // UI State
   const [isWalletSwitcherOpen, setIsWalletSwitcherOpen] = useState(false)
+  const [returnCollectibleHash, setReturnCollectibleHash] = useState<string | null>(null)
+  const consumedCollectibleReturnRef = useRef(false)
   const swipeUpStartY = useRef<number | null>(null)
   const swipeUpStartX = useRef<number | null>(null)
   const [sendAssetContractId, setSendAssetContractId] = useState<string | null>(null)
@@ -145,6 +148,21 @@ export function WalletScreen({
     if (onSendModalOpenChange) onSendModalOpenChange(open)
     else setIsSendModalOpenInternal(open)
   }, [onSendModalOpenChange])
+
+  // Checkout return: /home?profile=souvenirs&collectible=<hash> opens that collectible on the profile.
+  useEffect(() => {
+    if (shellLayout !== "landing" || !searchParams || consumedCollectibleReturnRef.current) return
+    const hash = readCollectibleReturn(searchParams)
+    if (!hash) return
+    consumedCollectibleReturnRef.current = true
+    setReturnCollectibleHash(hash)
+    setIsWalletSwitcherOpen(true)
+    const url = new URL(window.location.href)
+    url.searchParams.delete("profile")
+    url.searchParams.delete("collectible")
+    const next = `${url.pathname}${url.search}${url.hash}`
+    window.history.replaceState(window.history.state, "", next)
+  }, [searchParams, shellLayout])
 
   // Desktop deep-link: /wallet?send=1 opens send modal on mount
   useEffect(() => {
@@ -834,10 +852,14 @@ export function WalletScreen({
 
       <WalletSwitcherModal
         isOpen={isWalletSwitcherOpen}
-        onClose={() => setIsWalletSwitcherOpen(false)}
+        onClose={() => {
+          setIsWalletSwitcherOpen(false)
+          setReturnCollectibleHash(null)
+        }}
         walletAddress={walletAddress}
         walletNetwork={walletNetwork}
         sozuTag={username}
+        openCollectibleHash={returnCollectibleHash}
       />
     </>
   )

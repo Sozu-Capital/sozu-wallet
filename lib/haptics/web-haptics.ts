@@ -55,6 +55,21 @@ export function hapticAirdropContact(): boolean {
   return vibrate(AIRDROP_CONTACT_PATTERN);
 }
 
+/**
+ * Confirmed collectible payment — brrrr.
+ * Pulses stay at or above 40ms so the motor actually spins up.
+ */
+export const PAYMENT_CONFIRMED_PATTERN: number[] = [80, 40, 140, 35, 260, 40, 520]
+
+export function hapticPaymentConfirmed(): boolean {
+  if (vibrate(PAYMENT_CONFIRMED_PATTERN)) return true
+  iosHapticSingle()
+  setTimeout(() => iosHapticSingle(), 120)
+  setTimeout(() => iosHapticSingle(), 300)
+  setTimeout(() => iosHapticSingle(), 560)
+  return false
+}
+
 /** Success: dum … dum dum */
 export function hapticClaimSuccess(): boolean {
   if (vibrate([60, 220, 30, 90, 30])) return true;
