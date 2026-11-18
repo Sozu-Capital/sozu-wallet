@@ -19,7 +19,7 @@ import { getOzSmartAccountConfig } from "@/lib/stellar/smartAccounts/ozConfig"
 import { contractIdForDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
 
 /** Above this, the fee payer refuses to sponsor one account create. 5 XLM. */
-const MAX_SPONSORED_FEE_STROOPS = 50_000_000n
+const MAX_SPONSORED_FEE_STROOPS = BigInt(50_000_000)
 
 /**
  * The kit deployer is a public, deterministic key. It holds no spendable XLM on
@@ -42,12 +42,6 @@ function saltMatches(salt: Uint8Array, allowedSalts: Uint8Array[]): boolean {
   )
 }
 
-function uint256(field: { value?: Uint8Array } | Uint8Array | Buffer | undefined): Buffer {
-  if (field instanceof Uint8Array || Buffer.isBuffer(field)) return Buffer.from(field)
-  if (field?.value instanceof Uint8Array || Buffer.isBuffer(field?.value)) return Buffer.from(field.value)
-  throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
-}
-
 function readCreateContract(tx: Transaction): { salt: Buffer; wasmHashHex: string } {
   if (tx.operations.length !== 1) {
     throw new SponsoredDeployRejected("Deploy envelope must contain one operation.")
@@ -56,44 +50,45 @@ function readCreateContract(tx: Transaction): { salt: Buffer; wasmHashHex: strin
   if (op.type !== "invokeHostFunction") {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  const func = op.func as {
-    type?: string
-    createContractV2?: {
-      contractIdPreimage?: {
-        type?: string
-        fromAddress?: { address?: { accountId?: { ed25519?: { value?: Uint8Array } } }; salt?: { value?: Uint8Array } }
-      }
-      executable?: { type?: string; wasmHash?: { value?: Uint8Array } }
-    }
-    createContract?: {
-      contractIdPreimage?: {
-        type?: string
-        fromAddress?: { address?: { accountId?: { ed25519?: { value?: Uint8Array } } }; salt?: { value?: Uint8Array } }
-      }
-      executable?: { type?: string; wasmHash?: { value?: Uint8Array } }
-    }
+  const func = (op as { func?: xdr.HostFunction }).func
+  if (!func) {
+    throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
+  const kind = func.switch().name
   const args =
-    func.type === "hostFunctionTypeCreateContractV2"
-      ? func.createContractV2
-      : func.type === "hostFunctionTypeCreateContract"
-        ? func.createContract
+    kind === "hostFunctionTypeCreateContractV2"
+      ? func.createContractV2()
+      : kind === "hostFunctionTypeCreateContract"
+        ? func.createContract()
         : null
-  const preimage = args?.contractIdPreimage
-  if (!args || preimage?.type !== "contractIdPreimageFromAddress" || !preimage.fromAddress) {
+  if (!args) {
+    throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
+  }
+  const preimage = args.contractIdPreimage()
+  if (preimage.switch().name !== "contractIdPreimageFromAddress") {
     throw new SponsoredDeployRejected("Deploy envelope must create an address-salted contract.")
   }
-  const deployerBytes = uint256(preimage.fromAddress.address?.accountId?.ed25519)
+  const fromAddress = preimage.fromAddress()
+  const address = fromAddress.address()
+  if (address.switch().name !== "scAddressTypeAccount") {
+    throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
+  }
+  const accountId = address.accountId()
+  if (accountId.switch().name !== "publicKeyTypeEd25519") {
+    throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
+  }
+  const deployerBytes = Buffer.from(accountId.ed25519())
   const expected = Buffer.from(StrKey.decodeEd25519PublicKey(ozKitDeployerPublicKey()))
   if (!deployerBytes.equals(expected)) {
     throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
   }
-  if (args.executable?.type !== "contractExecutableWasm") {
+  const executable = args.executable()
+  if (executable.switch().name !== "contractExecutableWasm") {
     throw new SponsoredDeployRejected("Deploy envelope must use the smart-account WASM.")
   }
   return {
-    salt: uint256(preimage.fromAddress.salt),
-    wasmHashHex: uint256(args.executable.wasmHash).toString("hex"),
+    salt: Buffer.from(fromAddress.salt()),
+    wasmHashHex: Buffer.from(executable.wasmHash()).toString("hex"),
   }
 }
 
