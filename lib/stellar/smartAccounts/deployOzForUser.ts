@@ -1,12 +1,12 @@
 "use client"
 
 import type { SmartAccountKit } from "smart-account-kit"
-import { Address, hash, rpc, StrKey, xdr } from "@stellar/stellar-sdk"
-import base64url from "base64url"
+import { rpc, xdr } from "@stellar/stellar-sdk"
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
+import { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
+import { getUserId } from "@/lib/wallet-utils"
 import {
   buildExternalSignerKeyData,
-  credentialIdToBuffer,
   resolveCredentialIdBytes,
 } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
 
@@ -31,32 +31,7 @@ function sorobanServer(rpcUrl: string): rpc.Server {
   return new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
 }
 
-/** Per-user deploy salt so a new account does not reuse another user's C for the same passkey. */
-export function ozDeploySalt(credentialId: string, userId: string): Buffer {
-  const credBuf = base64url.toBuffer(credentialId)
-  return hash(Buffer.concat([credBuf, Buffer.from(userId.trim(), "utf8")]))
-}
-
-export function deriveOzContractIdForUser(params: {
-  credentialId: string
-  userId: string
-  networkPassphrase: string
-  deployerPublicKey: string
-}): string {
-  const salt = ozDeploySalt(params.credentialId, params.userId)
-  const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
-    new xdr.HashIdPreimageContractId({
-      networkId: hash(Buffer.from(params.networkPassphrase)),
-      contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-        new xdr.ContractIdPreimageFromAddress({
-          address: Address.fromString(params.deployerPublicKey).toScAddress(),
-          salt,
-        }),
-      ),
-    }),
-  )
-  return StrKey.encodeContract(hash(preimage.toXDR()))
-}
+export { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
 
 export async function isOzContractDeployedOnChain(
   rpcUrl: string,
@@ -82,28 +57,6 @@ async function waitForContractOnChain(rpcUrl: string, contractId: string, maxMs 
   throw new Error(
     `Deployed smart account ${contractId.slice(0, 8)}… is not visible on Soroban RPC yet. Retry wallet setup in a moment.`,
   )
-}
-
-function contractIdFromDeploySend(sent: {
-  result?: { options?: { contractId?: string } }
-  getTransactionResponse?: { status?: string; returnValue?: unknown }
-}): string | null {
-  try {
-    const fromClient = sent.result?.options?.contractId?.trim().toUpperCase()
-    if (fromClient?.startsWith("C") && fromClient.length === 56) return fromClient
-  } catch {
-    /* fall through */
-  }
-  const rv = sent.getTransactionResponse?.returnValue
-  if (rv) {
-    try {
-      const addr = Address.fromScVal(rv as xdr.ScVal).toString().trim().toUpperCase()
-      if (addr.startsWith("C") && addr.length === 56) return addr
-    } catch {
-      /* ignore */
-    }
-  }
-  return null
 }
 
 function isContractAlreadyExistsError(err: unknown): boolean {
@@ -165,41 +118,30 @@ export async function deployOzSmartAccountForUser(params: {
     )
 
     await kit.signWithDeployer(deployTx as Parameters<KitDeployInternals["signWithDeployer"]>[0])
-    const sent = (await (deployTx as { send: () => Promise<unknown> }).send()) as {
-      result?: { options?: { contractId?: string } }
-      getTransactionResponse?: { status?: string; returnValue?: unknown }
-      sendTransactionResponse?: { hash?: string }
+    const signedXdr = (deployTx as { signed?: { toXDR?: () => string } }).signed?.toXDR?.()
+    if (!signedXdr) {
+      throw new Error("Deploy transaction was not signed.")
     }
-
-    const status = sent.getTransactionResponse?.status
-    const txHash = sent.sendTransactionResponse?.hash
-    if (status === "FAILED") {
+    const userId = getUserId()
+    const sponsored = await fetch("/api/smart-accounts/submit-deploy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(userId ? { "x-user-id": userId } : {}),
+      },
+      body: JSON.stringify({ signedXdr }),
+    })
+    const sponsoredBody = (await sponsored.json().catch(() => ({}))) as { error?: string }
+    if (!sponsored.ok) {
       throw new Error(
-        `Smart account deploy failed on-chain.${txHash ? ` Tx: ${txHash}.` : ""} Check Soroban explorer.`,
-      )
-    }
-    if (status !== "SUCCESS") {
-      if (await isOzContractDeployedOnChain(kit.rpcUrl, derivedId)) {
-        activateKitWallet(kit, derivedId, params.credentialId)
-        return { contractId: derivedId }
-      }
-      throw new Error(
-        `Smart account deploy did not succeed (status=${status ?? "unknown"}).${txHash ? ` Tx: ${txHash}.` : ""} ` +
-          "The OpenZeppelin kit deployer may need testnet XLM — fund the deployer G address from smart-account-kit docs.",
+        sponsoredBody.error ||
+          "Could not sponsor the smart account. The fee payer pays this create, and the deployer account has no XLM.",
       )
     }
 
-    const contractId = contractIdFromDeploySend(sent) ?? derivedId
-    if (contractId !== derivedId) {
-      console.warn("[deployOzSmartAccountForUser] on-chain C differs from local derivation", {
-        deployed: contractId.slice(0, 12),
-        derived: derivedId.slice(0, 12),
-      })
-    }
-
-    await waitForContractOnChain(kit.rpcUrl, contractId)
-    activateKitWallet(kit, contractId, params.credentialId)
-    return { contractId }
+    await waitForContractOnChain(kit.rpcUrl, derivedId)
+    activateKitWallet(kit, derivedId, params.credentialId)
+    return { contractId: derivedId }
   } catch (err) {
     if (isContractAlreadyExistsError(err) || (await isOzContractDeployedOnChain(kit.rpcUrl, derivedId))) {
       activateKitWallet(kit, derivedId, params.credentialId)
