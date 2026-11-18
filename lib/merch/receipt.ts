@@ -25,10 +25,13 @@ export type CollectibleReceiptModel = {
 }
 
 const HASH = /^[a-fA-F0-9]{64}$/
+const PRODUCT_IMAGE_DATA_URL =
+  /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/
 
 export function collectibleImageUrl(raw: string | null | undefined): string | null {
   const value = raw?.trim() ?? ""
   if (!value) return null
+  if (PRODUCT_IMAGE_DATA_URL.test(value)) return value
   try {
     const url = new URL(value)
     if (url.protocol === "https:" || url.protocol === "http:") return url.toString()

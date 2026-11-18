@@ -15,7 +15,7 @@ import type { PaymentReceipt } from "@/lib/payment/payment-receipt";
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
 import { merchCopy } from "@/lib/merch/copy";
 import { resolveCollectibleSale } from "@/lib/merch/collectible-sale";
-import { buildCollectibleReceipt } from "@/lib/merch/receipt";
+import { buildCollectibleReceipt, collectibleImageUrl } from "@/lib/merch/receipt";
 import { useWalletLanguage } from "@/lib/wallet-language";
 
 type CheckoutPhase =
@@ -150,6 +150,7 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
         editionSize: session.editionSize,
       })
     : null;
+  const productPhoto = collectibleImageUrl(session?.productImageUrl);
   const collectible =
     phase === "success" && sale?.collectible && session && receipt
       ? buildCollectibleReceipt({
@@ -306,6 +307,19 @@ export function CheckoutExperience({ sessionId }: { sessionId: string }) {
     >
       <div className="flex min-h-screen flex-col items-center justify-center text-white p-4">
         <div className="w-full max-w-md space-y-6">
+          {productPhoto ? (
+            <div className="mx-auto flex h-52 items-center justify-center">
+              {/* Merchant photo, not a Next image: the file is served by the pay host. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={productPhoto}
+                alt=""
+                data-product-photo=""
+                className="max-h-full max-w-[16rem] rounded-2xl object-contain"
+              />
+            </div>
+          ) : null}
+
           <CheckoutAmountHeader
             merchantName={session.merchantName}
             amountUsd={session.amountUsd}
