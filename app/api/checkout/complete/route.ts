@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital";
+import { sozuPayOriginFromRequest } from "@/lib/sozupay-origin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,12 +26,13 @@ export async function POST(request: NextRequest) {
       paymentMethod: paymentMethod || "sozu",
     };
 
+    const sozuPayUrl = `${sozuPayOriginFromRequest(request)}/api/checkout/complete`;
     console.log("[checkout/complete] Calling sozupay API:", {
-      url: `${SOZUPAY_URL}/api/checkout/complete`,
+      url: sozuPayUrl,
       body: requestBody,
     });
 
-    const res = await fetch(`${SOZUPAY_URL}/api/checkout/complete`, {
+    const res = await fetch(sozuPayUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),

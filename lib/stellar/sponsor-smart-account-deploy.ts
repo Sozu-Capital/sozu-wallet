@@ -18,6 +18,7 @@ import {
 } from "@/lib/stellar/network-env"
 import { getOzSmartAccountConfig } from "@/lib/stellar/smartAccounts/ozConfig"
 import { contractIdForDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
+import { xdrBytes, xdrField, xdrType } from "@/lib/stellar/xdr-access"
 
 /** Above this, the fee payer refuses to sponsor one account create. 5 XLM. */
 const MAX_SPONSORED_FEE_STROOPS = BigInt(50_000_000)
@@ -48,6 +49,12 @@ function saltMatches(salt: Uint8Array, allowedSalts: Uint8Array[]): boolean {
   )
 }
 
+function scVec(value: xdr.ScVal | undefined): xdr.ScVal[] | null {
+  if (!value || xdrType(value) !== "scvVec") return null
+  const items = xdrField<xdr.ScVal[] | null>(value, "vec")
+  return items ? [...items] : null
+}
+
 function assertUserConstructor(
   constructorArgs: xdr.ScVal[],
   publicKey: Buffer,
@@ -56,30 +63,30 @@ function assertUserConstructor(
   if (constructorArgs.length !== 2) {
     throw new SponsoredDeployRejected("Deploy constructor must install this account's passkey.")
   }
-  const signerList = constructorArgs[0]?.switch().name === "scvVec" ? constructorArgs[0].vec() : null
-  const signer = signerList?.length === 1 ? signerList[0] : null
-  const signerParts = signer?.switch().name === "scvVec" ? signer.vec() : null
+  const signerList = scVec(constructorArgs[0])
+  const signerParts = signerList?.length === 1 ? scVec(signerList[0]) : null
   if (!signerParts || signerParts.length !== 3) {
     throw new SponsoredDeployRejected("Deploy constructor must install exactly one signer.")
   }
   const [tag, verifier, keyData] = signerParts
-  const tagName = tag?.switch().name === "scvSymbol" ? tag.sym()?.toString() : null
+  const tagName = tag && xdrType(tag) === "scvSymbol" ? xdrField<{ toString(): string }>(tag, "sym").toString() : null
   if (tagName !== "External") {
     throw new SponsoredDeployRejected("Deploy constructor must install an External passkey signer.")
   }
-  if (verifier?.switch().name !== "scvAddress") {
+  if (!verifier || xdrType(verifier) !== "scvAddress") {
     throw new SponsoredDeployRejected("Deploy constructor must use the WebAuthn verifier.")
   }
   const verifierAddress = Address.fromScVal(verifier).toString().trim().toUpperCase()
   if (verifierAddress !== verifierContractId.trim().toUpperCase()) {
     throw new SponsoredDeployRejected("Deploy constructor must use the WebAuthn verifier.")
   }
-  const rawKey = keyData?.switch().name === "scvBytes" ? keyData.bytes() : null
-  const keyBytes = rawKey ? Buffer.from(rawKey) : Buffer.alloc(0)
-  if (keyBytes.length < 66 || !keyBytes.subarray(0, 65).equals(publicKey)) {
+  const rawKey = keyData && xdrType(keyData) === "scvBytes" ? xdrBytes(xdrField(keyData, "bytes")) : null
+  if (!rawKey || rawKey.length < 66 || !rawKey.subarray(0, 65).equals(publicKey)) {
     throw new SponsoredDeployRejected("Deploy constructor signer is not this account's passkey.")
   }
-  const policies = constructorArgs[1]?.switch().name === "scvMap" ? constructorArgs[1].map() : null
+  const policies = constructorArgs[1] && xdrType(constructorArgs[1]) === "scvMap"
+    ? xdrField<unknown[] | null>(constructorArgs[1], "map")
+    : null
   if (!policies || policies.length !== 0) {
     throw new SponsoredDeployRejected("Deploy constructor must not install extra policies.")
   }
@@ -97,40 +104,37 @@ function readCreateContract(tx: Transaction): {
   if (op.type !== "invokeHostFunction") {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  const func = (op as { func?: xdr.HostFunction }).func
-  if (!func) {
+  const func = xdrField<object | undefined>(op, "func")
+  if (!func || xdrType(func) !== "hostFunctionTypeCreateContractV2") {
     throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
   }
-  if (func.switch().name !== "hostFunctionTypeCreateContractV2") {
-    throw new SponsoredDeployRejected("Deploy envelope must create a smart account.")
-  }
-  const args = func.createContractV2()
-  const preimage = args.contractIdPreimage()
-  if (preimage.switch().name !== "contractIdPreimageFromAddress") {
+  const args = xdrField<object>(func, "createContractV2")
+  const preimage = xdrField<object>(args, "contractIdPreimage")
+  if (xdrType(preimage) !== "contractIdPreimageFromAddress") {
     throw new SponsoredDeployRejected("Deploy envelope must create an address-salted contract.")
   }
-  const fromAddress = preimage.fromAddress()
-  const address = fromAddress.address()
-  if (address.switch().name !== "scAddressTypeAccount") {
+  const fromAddress = xdrField<object>(preimage, "fromAddress")
+  const address = xdrField<object>(fromAddress, "address")
+  if (xdrType(address) !== "scAddressTypeAccount") {
     throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
   }
-  const accountId = address.accountId()
-  if (accountId.switch().name !== "publicKeyTypeEd25519") {
+  const accountId = xdrField<object>(address, "accountId")
+  if (xdrType(accountId) !== "publicKeyTypeEd25519") {
     throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
   }
-  const deployerBytes = Buffer.from(accountId.ed25519())
+  const deployerBytes = xdrBytes(xdrField(accountId, "ed25519"))
   const expected = Buffer.from(StrKey.decodeEd25519PublicKey(ozKitDeployerPublicKey()))
   if (!deployerBytes.equals(expected)) {
     throw new SponsoredDeployRejected("Deploy transaction must be sourced by the OpenZeppelin deployer.")
   }
-  const executable = args.executable()
-  if (executable.switch().name !== "contractExecutableWasm") {
+  const executable = xdrField<object>(args, "executable")
+  if (xdrType(executable) !== "contractExecutableWasm") {
     throw new SponsoredDeployRejected("Deploy envelope must use the smart-account WASM.")
   }
   return {
-    salt: Buffer.from(fromAddress.salt()),
-    wasmHashHex: Buffer.from(executable.wasmHash()).toString("hex"),
-    constructorArgs: args.constructorArgs(),
+    salt: xdrBytes(xdrField(fromAddress, "salt")),
+    wasmHashHex: xdrBytes(xdrField(executable, "wasmHash")).toString("hex"),
+    constructorArgs: xdrField<xdr.ScVal[]>(args, "constructorArgs"),
   }
 }
 

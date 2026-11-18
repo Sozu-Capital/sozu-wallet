@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
+import { getSessionUserId } from "@/lib/auth/session"
+import { adoptCanonicalSmartAccountIfUnassigned } from "@/lib/wallet/persist-canonical-smart-account"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
@@ -9,34 +11,45 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
+    const cookieUserId = getSessionUserId(request)
+    let userId: string | null = cookieUserId
+    const fromWalletCookie = Boolean(cookieUserId)
 
-    // Get the authenticated user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    let userId: string | null = null
-
-    if (user) {
-      userId = user.id
-      console.log("[Stellar Address API] Using Supabase auth, userId:", userId)
-    } else {
-      // In dev mode, check for userId in headers
-      userId = request.headers.get("x-user-id")
-      console.log("[Stellar Address API] Dev mode, userId from header:", userId)
-
-      if (!userId) {
-        console.error("[Stellar Address API] No userId provided")
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401, headers: corsHeaders(request as any) }
-        )
+    if (!userId) {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        userId = user.id
+        console.log("[Stellar Address API] Using Supabase auth, userId:", userId)
       }
+    } else {
+      console.log("[Stellar Address API] Using wallet session cookie, userId:", userId)
+    }
+
+    if (!userId) {
+      console.error("[Stellar Address API] No userId provided")
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: corsHeaders(request as any) }
+      )
     }
 
     console.log("[Stellar Address API] Getting wallet for userId:", userId)
-    let wallet = await getStellarWallet(userId, !user)
+    try {
+      await adoptCanonicalSmartAccountIfUnassigned(userId)
+    } catch (adoptErr) {
+      console.warn(
+        "[Stellar Address API] canonical adopt skipped:",
+        adoptErr instanceof Error ? adoptErr.message : adoptErr,
+      )
+    }
+    let wallet = await getStellarWallet(userId, fromWalletCookie)
 
-    if (wallet?.publicKey?.startsWith("G")) {
+    if (
+      wallet?.publicKey?.startsWith("G") &&
+      process.env.PILOT_MAINNET !== "1" &&
+      process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1"
+    ) {
       const { ensureFactorySmartWalletForUser } = await import(
         "@/lib/stellar/migrate-legacy-wallet"
       )
@@ -61,20 +74,7 @@ export async function GET(request: Request) {
           console.warn("[Stellar Address API] G→C migration failed:", migrated.error)
         }
       } else {
-        console.warn(
-          "[Stellar Address API] Legacy G in DB; factory not configured — client should provision OZ C",
-        )
-        return NextResponse.json(
-          {
-            publicKey: null,
-            network: wallet.network,
-            walletType: "legacy",
-            signerPublicKey: wallet.signerPublicKey ?? wallet.publicKey,
-            walletMustMigrate: true,
-            provisionVia: "oz_passkey",
-          },
-          { headers: corsHeaders(request as any) },
-        )
+        console.warn("[Stellar Address API] Legacy G left in place; factory is not configured")
       }
     }
 
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
         network: wallet.network,
         walletType: wallet.walletType ?? (pk.startsWith("C") ? "factory" : null),
         signerPublicKey: wallet.signerPublicKey ?? null,
-        walletMustMigrate: pk.startsWith("G"),
+        walletMustMigrate: false,
       },
       { headers: corsHeaders(request as any) }
     )

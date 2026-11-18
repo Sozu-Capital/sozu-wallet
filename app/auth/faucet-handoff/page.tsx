@@ -122,7 +122,6 @@ function FaucetHandoffContent() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-user-id": session.userId,
           },
           credentials: "same-origin",
           body: JSON.stringify({

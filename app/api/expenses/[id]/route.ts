@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import { getSessionUserId } from "@/lib/auth/session"
 
 const updateExpenseSchema = z.object({
   amount: z.number().positive().optional(),
@@ -15,7 +16,7 @@ async function getUserId(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) return user.id
-  return request.headers.get("x-user-id")
+  return getSessionUserId(request)
 }
 
 export async function GET(

@@ -1,17 +1,6 @@
-import type { Metadata } from "next";
-import { FaucetClaimExperience } from "@/components/faucet/faucet-claim-experience";
+import { notFound } from "next/navigation"
 
-export const metadata: Metadata = {
-  title: "Sozu Faucet",
-  description: "Toca la esfera. Recibe valor.",
-};
-
-/** NFC entry point: the NTAG215 tag stores https://app.sozu.capital/faucet/<slug>. */
-export default async function FaucetPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  return <FaucetClaimExperience slug={slug} />;
+/** The public slug is not an entry. NFC and QR use /tap#secret. */
+export default function FaucetPage() {
+  notFound()
 }

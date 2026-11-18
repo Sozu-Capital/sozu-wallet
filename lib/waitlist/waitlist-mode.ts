@@ -12,7 +12,7 @@ export const WAITLIST_BYPASS_QUERY = "access"
 
 /** Files directly under /public, like /robots.txt. Nested paths must sit in a known asset folder. */
 const ROOT_FILE = /^\/[^/]+\.[a-z0-9]+$/i
-const ASSET_FILE = /^\/(?:brand|icons|onboarding|sound|fonts|waitlist)\/(?:[^/]+\/)*[^/]+\.[a-z0-9]+$/i
+const ASSET_FILE = /^\/(?:brand|icons|onboarding|sound|fonts)\/(?:[^/]+\/)*[^/]+\.[a-z0-9]+$/i
 
 export function isWaitlistMode(): boolean {
   return process.env.WAITLIST_MODE === "1"
@@ -28,12 +28,15 @@ export function isValidBypass(value: string | null | undefined): boolean {
   return Boolean(token && value && value === token)
 }
 
-/** "asset": serve as-is, no session check. "pass": continue to the normal page flow. */
-export type WaitlistGateDecision = "asset" | "pass" | "rewrite" | "redirect"
+export type WaitlistGateDecision = "pass" | "rewrite" | "redirect"
 
 export function waitlistGate(pathname: string, hasBypass: boolean): WaitlistGateDecision {
-  if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return "asset"
-  if (ROOT_FILE.test(pathname) || ASSET_FILE.test(pathname)) return "asset"
+  if (pathname.startsWith("/api/") || pathname.startsWith("/.well-known/")) return "pass"
+  if (ROOT_FILE.test(pathname) || ASSET_FILE.test(pathname)) return "pass"
+  // Hang tags open /item/<slug> on a phone that has not joined the waitlist.
+  if (pathname === "/item" || pathname.startsWith("/item/")) return "pass"
+  // NFC/QR faucet. The secret is in the fragment; this path alone does not admit anyone.
+  if (pathname === "/tap") return "pass"
   if (hasBypass) return "pass"
   if (pathname === "/") return "rewrite"
   return "redirect"

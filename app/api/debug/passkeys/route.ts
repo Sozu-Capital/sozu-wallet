@@ -3,12 +3,16 @@ import { NextResponse } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import type { NextRequest } from "next/server"
 import { debugRoutesEnabled } from "@/lib/debug-routes"
+import { requireSession } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
 }
 
 export async function GET(request: NextRequest) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   try {
     if (!debugRoutesEnabled()) {
       return NextResponse.json(

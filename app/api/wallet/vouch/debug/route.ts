@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import { debugRoutesEnabled } from "@/lib/debug-routes"
+import { requireSession } from "@/lib/auth/session"
 
 /**
  * POST /api/wallet/vouch/debug
@@ -8,6 +9,9 @@ import { debugRoutesEnabled } from "@/lib/debug-routes"
  * This helps us identify the exact issue with the insert
  */
 export async function POST(request: Request) {
+  const caller = requireSession(request)
+  if (caller.error) return caller.error
+
   try {
     if (!debugRoutesEnabled()) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })

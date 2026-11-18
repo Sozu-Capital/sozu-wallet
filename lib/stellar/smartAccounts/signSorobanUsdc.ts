@@ -3,6 +3,7 @@
 import type { SmartAccountKit } from "smart-account-kit"
 import type { xdr } from "@stellar/stellar-sdk"
 import { ensureKitConnectedForSend } from "@/lib/stellar/smartAccounts/ensureKitConnected"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
 import {
   shouldFallbackPasskeySign,
   signAuthEntryWithResolvedKeyData,
@@ -107,8 +108,12 @@ export async function signSorobanPreparedTxWithPasskey(params: {
   })
 
   const signOne = async (entry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry> => {
-    const creds = entry.credentials().address()
-    const fromEntry = creds.signatureExpirationLedger()
+    const credentials = xdrField<xdr.SorobanCredentials>(entry, "credentials")
+    const creds =
+      xdrType(credentials) === "sorobanCredentialsAddress"
+        ? xdrField<xdr.SorobanAddressCredentials>(credentials, "address")
+        : null
+    const fromEntry = creds ? xdrField<number>(creds, "signatureExpirationLedger") : undefined
     const expirationFromPrepare =
       fromEntry != null && Number(fromEntry) > 0 ? Number(fromEntry) : undefined
 
@@ -165,18 +170,17 @@ export async function signSorobanPreparedTxWithPasskey(params: {
         fee: tx.fee,
         networkPassphrase: params.networkPassphrase,
         sorobanData,
+        timebounds: { minTime: 0, maxTime: Math.floor(Date.now() / 1000) + 300 },
       })
       builder.clearOperations()
       builder.addOperation(signedInvoke)
       const built = builder.build()
       const { Api } = await import("@stellar/stellar-sdk/rpc")
-      const sim = await params.kit.rpc.simulateTransaction(built)
+      const sim = await params.kit.rpc.simulateTransaction(built, undefined, "enforce")
       if (Api.isSimulationError(sim)) {
         const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
         if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
-          throw new Error(
-            "Soroban auth rejected after signing (__check_auth). Sign out, sign in at http://localhost:3001, and retry.",
-          )
+          throw new Error("The smart account rejected this passkey signature.")
         }
         throw new Error(`Post-sign simulation failed: ${detail.slice(0, 800)}`)
       }
@@ -208,28 +212,18 @@ export async function signSorobanPreparedTxWithPasskey(params: {
     networkPassphrase: params.networkPassphrase,
   })
     .addOperation(signedInvoke)
-    .setTimeout(60)
+    .setTimeout(300)
     .build()
 
   const { Api } = await import("@stellar/stellar-sdk/rpc")
   if (isDev) {
     console.log("[signSorobanUsdc] re-simulating with signed auth (no sorobanDataXdr on hand)")
   }
-  const sim = await params.kit.rpc.simulateTransaction(rebuilt)
+  const sim = await params.kit.rpc.simulateTransaction(rebuilt, undefined, "enforce")
   if (Api.isSimulationError(sim)) {
     const detail = typeof sim.error === "string" ? sim.error : JSON.stringify(sim.error)
     if (detail.includes("__check_auth") || detail.includes("InvalidAction")) {
-      const hint =
-        process.env.NODE_ENV === "development"
-          ? ` Simulation: ${detail.slice(0, 280)}`
-          : ""
-      throw new Error(
-        "Soroban auth rejected (__check_auth). Common causes: (1) passkey registered on a different URL than you use now (rpID mismatch — always use the same host, e.g. only localhost:3001), " +
-          "(2) smart wallet deployed before the pubkey fix (sign out, register again, complete wallet setup, fund the new C), " +
-          "(3) prepared transaction expired — refresh and send again. " +
-          "If Touch ID succeeded but you still see this, restart the dev server and retry on one canonical URL." +
-          hint,
-      )
+      throw new Error("The smart account rejected this passkey signature.")
     }
     throw new Error(`Simulation failed: ${detail.slice(0, 800)}`)
   }

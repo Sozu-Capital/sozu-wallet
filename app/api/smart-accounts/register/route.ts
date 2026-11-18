@@ -4,6 +4,9 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
+import { getSessionUserId } from "@/lib/auth/session"
+import { CANONICAL_SMART_ACCOUNT_IMMUTABLE } from "@/lib/wallet/canonical-smart-account"
+import { assignCanonicalSmartAccount } from "@/lib/wallet/persist-canonical-smart-account"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -12,7 +15,7 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const headers = corsHeaders(request)
 
-  const userId = request.headers.get("x-user-id")
+  const userId = getSessionUserId(request)
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers })
   }
@@ -20,9 +23,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}))
   const contractId = typeof body.contractId === "string" ? body.contractId.trim() : ""
   const credentialIdRaw = typeof body.credentialId === "string" ? body.credentialId.trim() : ""
-  const signerRaw =
-    typeof body.signerPublicKey === "string" ? body.signerPublicKey.trim().toUpperCase() : ""
-  const signerPublicKey = signerRaw.startsWith("G") && signerRaw.length === 56 ? signerRaw : null
 
   if (!contractId.startsWith("C") || !credentialIdRaw) {
     return NextResponse.json(
@@ -41,43 +41,57 @@ export async function POST(request: NextRequest) {
   const svc = createServiceClient(supabaseUrl, supabaseServiceKey)
   const stellarConfig = getStellarConfig()
 
-  const row: Record<string, string | null> = {
-    user_id: userId,
-    public_key: contractId.toUpperCase(),
-    wallet_type: "oz",
-    oz_credential_id: credentialId,
-    signer_public_key: signerPublicKey,
-    turnkey_wallet_id: null,
-    network: stellarConfig.network,
-    updated_at: new Date().toISOString(),
+  const { data: existing } = await svc
+    .from("stellar_wallets")
+    .select("public_key, wallet_type")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  // Factory accounts and classic G rows are not migrated by this route.
+  const existingPk = typeof existing?.public_key === "string" ? existing.public_key.trim().toUpperCase() : ""
+  if (existing?.wallet_type === "factory" && existingPk) {
+    return NextResponse.json(
+      {
+        ok: true,
+        contractId: existingPk,
+        walletType: "factory",
+        unchanged: true,
+      },
+      { headers },
+    )
   }
 
-  let { error } = await svc.from("stellar_wallets").upsert(row, { onConflict: "user_id" })
-
-  if (error?.message?.includes("wallet_type") || error?.message?.includes("oz_credential")) {
-    const fallback = {
-      user_id: userId,
-      public_key: contractId.toUpperCase(),
+  let assigned: { contractId: string; written: boolean; immutable: boolean }
+  try {
+    assigned = await assignCanonicalSmartAccount(userId, contractId, {
+      wallet_type: "oz",
+      oz_credential_id: credentialId,
       signer_public_key: null,
       turnkey_wallet_id: null,
       network: stellarConfig.network,
-      updated_at: new Date().toISOString(),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes("wallet_type") || message.includes("oz_credential")) {
+      assigned = await assignCanonicalSmartAccount(userId, contractId, {
+        signer_public_key: null,
+        turnkey_wallet_id: null,
+        network: stellarConfig.network,
+      })
+    } else {
+      console.error("[smart-accounts/register]", message)
+      return NextResponse.json({ error: message }, { status: 500, headers })
     }
-    const retry = await svc.from("stellar_wallets").upsert(fallback, { onConflict: "user_id" })
-    error = retry.error
-  }
-
-  if (error) {
-    console.error("[smart-accounts/register]", error.message)
-    return NextResponse.json({ error: error.message }, { status: 500, headers })
   }
 
   return NextResponse.json(
     {
       ok: true,
-      contractId: contractId.toUpperCase(),
+      contractId: assigned.contractId,
       walletType: "oz",
       credentialId,
+      unchanged: !assigned.written,
+      ...(assigned.immutable && { code: CANONICAL_SMART_ACCOUNT_IMMUTABLE }),
     },
     { headers }
   )

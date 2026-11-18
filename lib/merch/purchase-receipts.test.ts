@@ -1,0 +1,133 @@
+import { describe, expect, it } from "vitest"
+import { Asset, Keypair, Networks } from "@stellar/stellar-sdk"
+import { TRANSFER_TOPIC_COUNT, transferEventFilters } from "@/lib/stellar/soroban-event-filter"
+import { purchasePlaceholderReceipts } from "@/lib/merch/purchase-receipts"
+
+const wallet = new Asset("USDC", Keypair.random().publicKey()).contractId(Networks.TESTNET)
+const merchant = Keypair.random().publicKey()
+const hash = "a".repeat(64)
+
+describe("USDC transfer event filter", () => {
+  it("matches the four-topic Circle transfer, including payments sent and received", () => {
+    const filters = transferEventFilters(new Asset("USD", Keypair.random().publicKey()).contractId(Networks.TESTNET), wallet)
+    expect(filters).toHaveLength(2)
+    expect(filters[0].topics[0]).toHaveLength(TRANSFER_TOPIC_COUNT)
+    expect(filters[1].topics[0]).toHaveLength(TRANSFER_TOPIC_COUNT)
+    expect(filters[0].topics[0][2]).toBe("*")
+    expect(filters[1].topics[0][1]).toBe("*")
+    expect(filters[0].topics[0][1]).not.toBe("*")
+  })
+})
+
+describe("purchase placeholder receipts", () => {
+  it("shows a collectible product payment that is still on its way", () => {
+    const cards = purchasePlaceholderReceipts({
+      wallet,
+      transfers: [
+        {
+          hash,
+          createdAt: "2026-11-14T04:00:00.000Z",
+          from: wallet,
+          to: merchant,
+          amount: 8,
+          asset: "USDC",
+        },
+      ],
+      saved: [
+        {
+          hash,
+          merchantName: "UNBLCK",
+          itemName: "Polera UNBLCK Drop-002",
+          amount: "8.00",
+          createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: true,
+        },
+      ],
+      language: "en",
+      network: "testnet",
+    })
+    expect(cards).toHaveLength(1)
+    expect(cards[0].receipt.itemName).toBe("Polera UNBLCK Drop-002")
+    expect(cards[0].receipt.drop).toBe("UNBLCK")
+    expect(cards[0].receipt.price).toBe("8.00")
+    expect(cards[0].receipt.receiptPending).toBe(true)
+    expect(cards[0].receipt.statusLabel).toBe("Receipt pending")
+  })
+
+  it("keeps the merchant photo saved from the payment link", () => {
+    const photo = "https://pay.sozu.capital/api/public/stores/org/items/tee/image"
+    const cards = purchasePlaceholderReceipts({
+      wallet,
+      transfers: [
+        {
+          hash,
+          createdAt: "2026-11-14T04:00:00.000Z",
+          from: wallet,
+          to: merchant,
+          amount: 8,
+          asset: "USDC",
+        },
+      ],
+      saved: [
+        {
+          hash,
+          merchantName: "UNBLCK",
+          itemName: "Polera UNBLCK Drop-002",
+          amount: "8.00",
+          createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: true,
+          imageUrl: photo,
+        },
+      ],
+      language: "en",
+      network: "testnet",
+    })
+    expect(cards).toHaveLength(1)
+    expect(cards[0].receipt.imageUrl).toBe(photo)
+  })
+
+  it("ignores incoming transfers, drinks, and peer payments", () => {
+    const cards = purchasePlaceholderReceipts({
+      wallet,
+      transfers: [
+        {
+          hash: "b".repeat(64),
+          createdAt: "2026-11-14T04:00:00.000Z",
+          from: merchant,
+          to: wallet,
+          amount: 8,
+          asset: "USDC",
+        },
+        {
+          hash: "c".repeat(64),
+          createdAt: "2026-11-14T05:00:00.000Z",
+          from: wallet.toLowerCase(),
+          to: merchant,
+          amount: 3,
+          asset: "USDC",
+        },
+        {
+          hash: "d".repeat(64),
+          createdAt: "2026-11-14T06:00:00.000Z",
+          from: wallet,
+          to: merchant,
+          amount: 4.5,
+          asset: "USDC",
+        },
+      ],
+      saved: [
+        {
+          hash: "d".repeat(64),
+          merchantName: "Cafe",
+          itemName: "House latte",
+          amount: "4.50",
+          createdAt: "2026-11-14T06:00:00.000Z",
+          collectible: false,
+        },
+      ],
+      language: "es",
+      network: "testnet",
+    })
+    expect(cards).toHaveLength(0)
+  })
+})

@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import { isVouchReviewer } from "@/lib/wallet/vouch-reviewers"
+import { requireSession } from "@/lib/auth/session"
 
 /**
  * POST /api/wallet/vouches/review
@@ -15,6 +15,9 @@ import { isVouchReviewer } from "@/lib/wallet/vouch-reviewers"
  * }
  */
 export async function POST(request: Request) {
+  const caller = requireSession(request)
+  if (caller.error) return caller.error
+
   try {
     const { vouchId, isTrustworthy, reviewNotes } = await request.json()
     
@@ -24,16 +27,7 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
     
-    const supabase = await createClient()
-    
-    // Get the authenticated user (reviewer)
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!isVouchReviewer(user.id)) {
+    if (!isVouchReviewer(caller.userId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
     
@@ -65,7 +59,7 @@ export async function POST(request: Request) {
       .from("user_vouches")
       .update({
         is_trustworthy: isTrustworthy,
-        reviewed_by: user.id,
+        reviewed_by: caller.userId,
         reviewed_at: new Date().toISOString(),
         review_notes: reviewNotes || null
       })

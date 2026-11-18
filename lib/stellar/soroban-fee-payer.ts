@@ -1,32 +1,121 @@
 import "server-only"
 
-import type { Keypair } from "@stellar/stellar-sdk"
 import * as rpc from "@stellar/stellar-sdk/rpc"
+import { Keypair, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
-import {
-  funderKeypairFromResolution,
-  resolveFunderSecret,
-  type FunderSecretResolution,
-} from "@/lib/stellar/funder-secret"
-import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env"
+import { resolveSorobanRpcUrl } from "@/lib/stellar/soroban-env"
+import { selectSorobanFeePayer } from "@/lib/stellar/select-fee-payer"
+import { xdrField, xdrType } from "@/lib/stellar/xdr-access"
+import { funderKeypairFromResolution, resolveFunderSecret } from "@/lib/stellar/funder-secret"
+import { deploymentStellarNetwork } from "@/lib/stellar/network-env"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
-function funderResolution(network?: string | null): FunderSecretResolution {
-  return resolveFunderSecret(network)
+function funderKeypair(network?: string | null): Keypair | null {
+  return funderKeypairFromResolution(resolveFunderSecret(network ?? deploymentStellarNetwork()))
 }
 
-/** Classic G that pays Soroban fees for `network` (or the deployment network). */
+/** Classic G that pays Soroban fees for this network. */
 export function getConfiguredFunderPublicKey(network?: string | null): string | null {
-  return funderKeypairFromResolution(funderResolution(network))?.publicKey() ?? null
+  return funderKeypair(network)?.publicKey() ?? null
 }
 
 /** Server keypair for co-signing Soroban envelopes whose `source` is the funder G. */
 export function getFunderKeypair(network?: string | null): Keypair | null {
-  return funderKeypairFromResolution(funderResolution(network))
+  return funderKeypair(network)
+}
+
+/**
+ * Rebuild a fee-payer-sourced envelope on the fee payer's current sequence number.
+ * The envelope was built when the order/payment was created; any other fee-payer tx that
+ * landed since (another user's send) makes that sequence stale. Soroban auth entries are
+ * copied as signed: they bind to their own nonce and expiry ledger, not the tx sequence.
+ */
+export async function resequenceOnFeePayer(
+  server: Pick<rpc.Server, "getAccount">,
+  tx: Transaction,
+  networkPassphrase: string,
+): Promise<Transaction> {
+  const account = await server.getAccount(tx.source)
+  // Copy the envelope and change only the sequence. Rebuilding with TransactionBuilder
+  // adds the Soroban resource fee a second time on the SDK that CI installs.
+  const envelopeIn = tx.toEnvelope()
+  if (xdrType(envelopeIn) !== "envelopeTypeTx") {
+    throw new Error("Resequenced fee-payer envelope was not a v1 transaction.")
+  }
+  const inner = xdrField<xdr.Transaction>(xdrField(envelopeIn, "v1"), "tx")
+  const next = BigInt(account.sequenceNumber()) + BigInt(1)
+  const body = new xdr.Transaction({
+    sourceAccount: xdrField(inner, "sourceAccount"),
+    fee: xdrField(inner, "fee"),
+    seqNum: xdr.Int64.fromString(next.toString()),
+    cond: xdrField(inner, "cond"),
+    memo: xdrField(inner, "memo"),
+    operations: xdrField(inner, "operations"),
+    ext: xdrField(inner, "ext"),
+  })
+  const envelope = xdr.TransactionEnvelope.envelopeTypeTx(
+    new xdr.TransactionV1Envelope({ tx: body, signatures: [] }),
+  )
+  const rebuilt = TransactionBuilder.fromXDR(envelope.toXDR("base64"), networkPassphrase)
+  if (!(rebuilt instanceof Transaction)) {
+    throw new Error("Resequenced fee-payer envelope was not an inner transaction.")
+  }
+  return rebuilt
+}
+
+export function isBadSequenceResult(result: { status: string; errorResult?: xdr.TransactionResult }): boolean {
+  if (result.status !== "ERROR" || !result.errorResult) return false
+  try {
+    return xdrType(xdrField(result.errorResult, "result")) === "txBadSeq"
+  } catch {
+    return false
+  }
+}
+
+/** Shared by transfers and sponsored deploys. A second instance can still collide; callers retry on txBadSeq. */
+export const FEE_PAYER_SEQUENCE_ATTEMPTS = 3
+
+let feePayerQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * Serialize fee-payer submits inside one server instance so two requests never read the same
+ * sequence number. Other instances can still collide; callers retry on txBadSeq.
+ */
+/**
+ * Block the next fee-payer submit until this source's sequence has caught the tx we just sent.
+ * `sendTransaction` returns while the tx is still pending, and `getAccount` keeps the old sequence
+ * until a ledger includes it. Releasing the lock before that lets the next submit reuse it.
+ */
+export async function waitForSourceSequence(
+  server: Pick<rpc.Server, "getAccount">,
+  source: string,
+  minimumSequence: string,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<boolean> {
+  const attempts = opts.attempts ?? 12
+  const delayMs = opts.delayMs ?? 1000
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const account = await server.getAccount(source)
+      if (BigInt(account.sequenceNumber()) >= BigInt(minimumSequence)) return true
+    } catch {
+      /* account not visible yet */
+    }
+    if (i < attempts - 1 && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  return false
+}
+
+export function withFeePayerLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = feePayerQueue.then(fn, fn)
+  feePayerQueue = run.catch(() => undefined)
+  return run
 }
 
 async function sorobanAccountExists(publicKey: string, network: StellarNetwork): Promise<boolean> {
-  const rpcUrl = resolveSorobanRpcUrlForNetwork(network)
+  const rpcUrl = resolveSorobanRpcUrl()
   const server = new rpc.Server(rpcUrl, { allowHttp: network === "testnet" })
   try {
     await server.getAccount(publicKey.trim().toUpperCase())
@@ -70,70 +159,36 @@ export async function ensureTestnetAccountFunded(publicKey: string): Promise<voi
   }
 }
 
-function funderMissingOnNetworkMessage(
-  resolved: FunderSecretResolution,
-  publicKey: string,
-): string {
-  const prefix = publicKey.slice(0, 8)
-  const where = `${resolved.envName ?? resolved.expectedEnvName} account ${prefix}… is not on ${resolved.network}.`
-  if (resolved.envName === "STELLAR_FUNDER_SECRET") {
-    return (
-      `${where} Set ${resolved.expectedEnvName} to a classic G funded with XLM on ${resolved.network}. ` +
-      "A single STELLAR_FUNDER_SECRET cannot pay fees on both testnet and mainnet."
-    )
-  }
-  return `${where} Fund ${prefix}… with XLM on ${resolved.network}.`
-}
-
 /**
  * Soroban txs need a funded classic G as `source` (fee payer).
  * OZ smart accounts (C) authorize via passkey; signer G does not need USDC.
  *
- * - Default: use the fee-payer G for this network (passkey G may be unfunded).
+ * - Default: use STELLAR_FUNDER_SECRET G when configured (passkey G may be unfunded).
  * - Factory G-signer path: must use passkey G as source → fund on testnet if needed.
  */
 export async function resolveSorobanFeePayer(params: {
-  signerPublicKey: string
-  network: StellarNetwork | string
+  signerPublicKey?: string | null
+  network: StellarNetwork
   requireSignerAsSource?: boolean
 }): Promise<{ feePayer: string; usedFunder: boolean }> {
-  const resolved = resolveFunderSecret(params.network)
-  const network = resolved.network
-  const signer = params.signerPublicKey.trim().toUpperCase()
-  if (!signer.startsWith("G") || signer.length !== 56) {
-    throw new Error("Passkey signer (G…) is required for Soroban payments.")
+  const choice = selectSorobanFeePayer({
+    signerPublicKey: params.signerPublicKey,
+    funderPublicKey: getConfiguredFunderPublicKey(params.network),
+    requireSignerAsSource: params.requireSignerAsSource,
+  })
+
+  if (!choice.usedFunder && params.network === "testnet") {
+    await ensureTestnetAccountFunded(choice.feePayer)
+    return choice
   }
 
-  if (params.requireSignerAsSource) {
-    if (network === "testnet") {
-      await ensureTestnetAccountFunded(signer)
-    } else if (!(await sorobanAccountExists(signer, network))) {
-      throw new Error(
-        `Signer account ${signer.slice(0, 8)}… is not on ${network}. Fund it with XLM first.`,
-      )
-    }
-    return { feePayer: signer, usedFunder: false }
-  }
-
-  if (resolved.secret) {
-    const funderKp = funderKeypairFromResolution(resolved)
-    if (!funderKp) {
-      throw new Error(`${resolved.envName} is not a valid Stellar secret key.`)
-    }
-    const funder = funderKp.publicKey()
-    if (!(await sorobanAccountExists(funder, network))) {
-      throw new Error(funderMissingOnNetworkMessage(resolved, funder))
-    }
-    return { feePayer: funder, usedFunder: true }
-  }
-
-  if (network === "testnet") {
-    await ensureTestnetAccountFunded(signer)
-  } else if (!(await sorobanAccountExists(signer, network))) {
+  if (!(await sorobanAccountExists(choice.feePayer, params.network))) {
     throw new Error(
-      `No ${resolved.expectedEnvName} configured and signer ${signer.slice(0, 8)}… is not on mainnet.`,
+      choice.usedFunder
+        ? `STELLAR_FUNDER_SECRET account ${choice.feePayer.slice(0, 8)}… is not on ${params.network}. Fund the funder or fix .env.local.`
+        : `Signer account ${choice.feePayer.slice(0, 8)}… is not on ${params.network}. Fund it with XLM first.`,
     )
   }
 
-  return { feePayer: signer, usedFunder: false }
+  return choice
 }

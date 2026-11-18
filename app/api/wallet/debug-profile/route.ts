@@ -12,12 +12,16 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { debugRoutesEnabled } from "@/lib/debug-routes"
+import { getSessionUserId, requireSession } from "@/lib/auth/session"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
 }
 
 export async function GET(request: NextRequest) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   const headers = corsHeaders(request)
 
   if (!debugRoutesEnabled()) {
@@ -30,12 +34,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Service not configured" }, { status: 500, headers })
   }
 
-  const userId = request.headers.get("x-user-id")
+  const userId = getSessionUserId(request)
   const tag = request.nextUrl.searchParams.get("tag")
 
   if (!userId && !tag) {
     return NextResponse.json(
-      { error: "Provide x-user-id header or ?tag= query param" },
+      { error: "Sign in or pass ?tag= query param" },
       { status: 400, headers }
     )
   }

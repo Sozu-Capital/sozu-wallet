@@ -18,6 +18,7 @@ import { formatReferenceAmount } from "@/lib/ledger/format-fiat"
 import {
   fiatDecimals,
   fiatFromUsdcAmount,
+  formatSendInputAmount,
   usdcFromInputAmount,
 } from "@/lib/payment/send-amount-currency"
 import {
@@ -61,9 +62,6 @@ interface SendPaymentModalProps {
   referenceFiat: ReferenceFiat
   onSuccess: (receipt: PaymentReceipt) => void
   onRefresh: () => void | Promise<void>
-  /** When true, opens the QR scanner as soon as the modal mounts. */
-  openScannerOnMount?: boolean
-  onScannerOpenConsumed?: () => void
   initialAssetContractId?: string | null
 }
 
@@ -76,8 +74,6 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   referenceFiat,
   onSuccess,
   onRefresh,
-  openScannerOnMount = false,
-  onScannerOpenConsumed,
   initialAssetContractId = null,
 }: SendPaymentModalProps) {
   const { t } = useWalletLanguage()
@@ -89,6 +85,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
     isSending,
     sendPhase,
     sendStep,
+    resolvedRecipientAddress,
     isResolvingRecipient,
     isManualMode,
     sendMemo,
@@ -141,12 +138,6 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   }, [isOpen, onRefresh])
 
   useEffect(() => {
-    if (!isOpen || !openScannerOnMount) return
-    setIsScannerOpen(true)
-    onScannerOpenConsumed?.()
-  }, [isOpen, openScannerOnMount, onScannerOpenConsumed])
-
-  useEffect(() => {
     if (!isOpen) {
       setSendAssetContractId(null)
       return
@@ -190,6 +181,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   const manualRecipientInputRef = useRef<HTMLInputElement>(null)
   const amountInputRef = useRef<HTMLInputElement>(null)
   const [keyboardInset, setKeyboardInset] = useState(0)
+  const [amountFieldUnlocked, setAmountFieldUnlocked] = useState(false)
 
   const resetModalScroll = useCallback(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, left: 0 })
@@ -279,7 +271,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
 
       const res = await fetch("/api/wallet/resolve-recipient", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipient: normalizedTag }),
       })
       if (res.ok) {
@@ -379,6 +371,40 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   )
   const availableUsdcFormatted = `${formatBalance(availableBalance)} USDC`
 
+  const applyMaxAmount = () => {
+    setAmountError(null)
+    if (isPizzaSend) {
+      setSendAmount(String(Math.max(0, Math.floor(pizzaHeld ?? 0))))
+      return
+    }
+    if (amountInputCurrency === "usdc") {
+      const floored = Math.floor(availableBalance * 1e7) / 1e7
+      const trimmed = floored.toFixed(7).replace(/\.?0+$/, "")
+      setSendAmount(trimmed || "0")
+      return
+    }
+    const decimals = fiatDecimals(referenceFiat)
+    const factor = 10 ** decimals
+    let fiat = Number(
+      formatSendInputAmount(referenceDisplayValue(availableBalance), "fiat", referenceFiat),
+    )
+    while (fiat > 0 && usdcFromInputAmount(fiat, "fiat", referenceFiat) > availableBalance + 1e-8) {
+      fiat = Math.round((fiat - 1 / factor) * factor) / factor
+    }
+    setSendAmount(formatSendInputAmount(Math.max(0, fiat), "fiat", referenceFiat))
+  }
+
+  const recipientLabel = (() => {
+    const trimmed = sendRecipient.trim()
+    const compact = trimmed.replace(/\s/g, "")
+    const looksLikeAddress = /^[CG][A-Z0-9]{20,}$/i.test(compact)
+    if (!looksLikeAddress && trimmed) {
+      return `$${trimmed.replace(/^\$+/, "")}`
+    }
+    const addr = (resolvedRecipientAddress ?? compact).toUpperCase()
+    return addr.length > 12 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : trimmed
+  })()
+
   const displayUsdc = hasValidAmount
     ? amountInputCurrency === "usdc"
       ? parsedAmount
@@ -400,6 +426,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
   const amountUsdcFormatted = hasValidAmount
     ? `${formatBalance(displayUsdc)} USDC`
     : `${formatBalance(0)} USDC`
+
+  // Keep the amount field read-only until focus so Safari doesn't treat it as a password.
+  useEffect(() => {
+    if (!isOpen || sendStep !== "amount") setAmountFieldUnlocked(false)
+  }, [isOpen, sendStep])
 
   // Re-focus when currency toggles so iOS swaps numeric ↔ decimal pad.
   useEffect(() => {
@@ -641,6 +672,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                     <Input
                       ref={recipientInputRef}
                       type="text"
+                      name="sozu-tag"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       value={sendRecipient}
                       onChange={(e) => {
                         setSendRecipient(e.target.value)
@@ -764,6 +800,11 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                   <Input
                     ref={manualRecipientInputRef}
                     type="text"
+                    name="sozu-address"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     value={sendRecipient}
                     onChange={(e) => {
                       setSendRecipient(e.target.value)
@@ -846,16 +887,12 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                     requestAnimationFrame(() => recipientInputRef.current?.focus({ preventScroll: true }))
                   })
                 }}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 transition-colors hover:bg-white/[0.06]"
+                className="w-full flex flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 transition-colors hover:bg-white/[0.06]"
                 aria-label="Edit recipient"
               >
-                <span className="text-white/40 text-xs uppercase tracking-widest">To</span>
-                <span className="text-white/90 text-sm font-mono truncate max-w-[220px]">
-                  {sendRecipient.startsWith("$")
-                    ? sendRecipient
-                    : sendRecipient.length >= 12
-                      ? `${sendRecipient.slice(0, 6)}…${sendRecipient.slice(-4)}`
-                      : sendRecipient}
+                <span className="flex items-center gap-2">
+                  <span className="text-white/40 text-xs uppercase tracking-widest">{t.sendTo}</span>
+                  <span className="text-base font-medium text-white">{recipientLabel}</span>
                 </span>
               </button>
               {legacyPaymentNotice ? (
@@ -897,15 +934,24 @@ export const SendPaymentModal = memo(function SendPaymentModal({
               transition={{ duration: 0.5 }}
               className="space-y-2"
             >
+              <div className="relative">
               <Input
                 ref={amountInputRef}
                 type="text"
+                name="sozu-send-amount"
                 inputMode={amountInputMode}
                 pattern={amountUsesIntegerPad ? "[0-9]*" : "[0-9.,]*"}
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                readOnly={!amountFieldUnlocked}
                 value={sendAmount}
                 onChange={(e) => handleAmountChange(e.target.value)}
-                onFocus={resetModalScroll}
+                onFocus={() => {
+                  setAmountFieldUnlocked(true)
+                  resetModalScroll()
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && hasValidAmount && !isSending) {
                     e.preventDefault()
@@ -913,11 +959,20 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                   }
                 }}
                 placeholder={amountPlaceholder}
-                className={`bg-white/5 text-white placeholder:text-white/40 text-2xl text-center h-16 font-semibold tabular-nums transition-colors ${
+                className={`bg-white/5 text-white placeholder:text-white/40 text-2xl text-center h-16 font-semibold tabular-nums transition-colors pr-16 ${
                   amountError ? "border-red-500/60" : "border-white/20"
                 }`}
                 enterKeyHint="done"
               />
+              <button
+                type="button"
+                onClick={applyMaxAmount}
+                disabled={isSending}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+              >
+                {t.sendMax}
+              </button>
+              </div>
 
               <AnimatePresence>
                 {amountError && (

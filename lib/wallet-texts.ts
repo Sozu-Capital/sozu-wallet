@@ -41,6 +41,8 @@ export type WalletTexts = {
   confirmWithPasskey: string;
   submitting: string;
   send: string;
+  sendTo: string;
+  sendMax: string;
   sendTapToSwitchCurrency: string;
   sendApproxUsdc: string;
   sendApproxFiat: string;
@@ -204,6 +206,54 @@ export type WalletTexts = {
   cmdBatch: string;
   cmdOfframp: string;
   cmdDeposit: string;
+  cmdSend: string;
+  cmdWithdraw: string;
+  cmdEarn: string;
+  withdrawDestinationTitle: string;
+  withdrawToSozuWallet: string;
+  withdrawToSozuWalletHint: string;
+  withdrawToBank: string;
+  withdrawToBankHint: string;
+  withdrawBankUnavailable: string;
+  p2pWithdrawTitle: string;
+  p2pWithdrawBody: string;
+  p2pWithdrawName: string;
+  p2pWithdrawNamePlaceholder: string;
+  p2pWithdrawBank: string;
+  p2pWithdrawBankPlaceholder: string;
+  p2pWithdrawAccount: string;
+  p2pWithdrawAccountPlaceholder: string;
+  p2pWithdrawAmount: string;
+  p2pWithdrawSubmit: string;
+  p2pWithdrawSuccess: string;
+  p2pWithdrawInvalid: string;
+  offlineWindowTitle: string;
+  offlineWindowAvailable: string;
+  offlineWindowSaved: string;
+  offlineWindowEmpty: string;
+  cmdSavings: string;
+  homeDollarsEyebrow: string;
+  homeDollarsTitle: string;
+  homeDollarsBody: string;
+  homePayStoreTitle: string;
+  homePayStoreBody: string;
+  homeInviteTitle: string;
+  homeInviteBody: string;
+  homeInviteShare: string;
+  homeInviteReady: string;
+  homeInviteEyebrow: string;
+  homeInviteRewardBody: string;
+  homeInviteProgress: string;
+  homeInviteCodeLabel: string;
+  homeInviteShareCode: string;
+  homeInviteSoon: string;
+  homeLinkCopied: string;
+  homeFeedbackTitle: string;
+  homeFeedbackBody: string;
+  homeFeedbackPlaceholder: string;
+  homeFeedbackSend: string;
+  homeFeedbackReady: string;
+  homeFeedbackFailed: string;
   cmdPlan: string;
   cmdCredit: string;
   // Credit page
@@ -239,11 +289,13 @@ export type WalletTexts = {
   comingSoon: string;
   comingSoonDesc: string;
   testnetBadge: string;
+  publicNetBadge: string;
   activateWallet: string;
   activating: string;
   openCashflow: string;
   // Deposit modal
   depositTitle: string;
+  depositPesosTag: string;
   depositClose: string;
   depositQrTypeLabel: string;
   depositQrTag: string;
@@ -269,6 +321,7 @@ export type WalletTexts = {
   depositFaucetBusy: string;
   depositFaucetSuccess: string;
   depositFaucetError: string;
+  depositFaucetDailyLimit: string;
   // Fiat deposit flow (bank transfer)
   depositFiatTabLabel: string;
   depositCryptoTabLabel: string;
@@ -365,6 +418,10 @@ export type WalletTexts = {
   // Balance card
   hideBalance: string;
   showBalance: string;
+  arsQuoteLoading: string;
+  arsQuoteUnavailable: string;
+  arsQuoteRate: string;
+  arsQuoteAsOf: string;
   purchasingPowerSubline: string;
   apyBlendLabel: string;
   auditBreakdown: string;
@@ -441,6 +498,7 @@ export type WalletTexts = {
   mathPerYear: string;
   // Auth
   authEnter: string;
+  authCreateAccount: string;
   authPasskeyCaption: string;
   authLoading: string;
   authPwaBannerIos: string;
@@ -479,6 +537,28 @@ export type WalletTexts = {
   setupIncompleteBody: string;
   setupIncompleteCta: string;
   setupIncompleteBusy: string;
+  onbSetupLabel: string;
+  onbPickTagTitle: string;
+  onbPickTagBody: string;
+  onbTagContinue: string;
+  onbTagAvailable: string;
+  onbTagTaken: string;
+  onbTagSignIn: string;
+  onbTagPreview: string;
+  onbTagTry: string;
+  onbTagRules: string;
+  onbTagFilterHint: string;
+  onbTagTooShort: string;
+  onbTagCheckFailed: string;
+  onbTagRetry: string;
+  onbTagClear: string;
+  onbTagChecking: string;
+  onbTagHaveOne: string;
+  onbTagFieldLabel: string;
+  onbRecoveryHint: string;
+  onbRecoveryPlaceholder: string;
+  onbRecoveryInvalid: string;
+  onbRecoveryCta: string;
 };
 
 export type WalletLanguage = "en" | "es";
@@ -552,6 +632,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirmar con passkey...",
     submitting: "Enviando transacción...",
     send: "Enviar",
+    sendTo: "Para",
+    sendMax: "Máx",
     sendTapToSwitchCurrency: "Toca la moneda para cambiar",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -722,6 +804,56 @@ export const walletTexts = {
     cmdBatch: "Lote",
     cmdOfframp: "Retiro",
     cmdDeposit: "Depositar",
+    cmdSend: "Enviar",
+    cmdWithdraw: "Retirar",
+    cmdEarn: "Ganar",
+    withdrawDestinationTitle: "Retirar",
+    withdrawToSozuWallet: "Otra billetera Sozu",
+    withdrawToSozuWalletHint: "Envía USDC a un $sozutag o una dirección.",
+    withdrawToBank: "Cuenta bancaria",
+    withdrawToBankHint: "Convierte USDC y retíralo a tu banco.",
+    withdrawBankUnavailable: "El retiro a banco no está activo en este entorno.",
+    p2pWithdrawTitle: "Retiro P2P",
+    p2pWithdrawBody: "Dejá tus datos bancarios. Creamos un pedido para el mercado P2P.",
+    p2pWithdrawName: "Titular",
+    p2pWithdrawNamePlaceholder: "Nombre y apellido",
+    p2pWithdrawBank: "Banco",
+    p2pWithdrawBankPlaceholder: "Nombre del banco",
+    p2pWithdrawAccount: "CBU, CVU o alias",
+    p2pWithdrawAccountPlaceholder: "Tu cuenta",
+    p2pWithdrawAmount: "Monto en USDC",
+    p2pWithdrawSubmit: "Crear pedido",
+    p2pWithdrawSuccess: "Pedido creado. Queda en el mercado P2P.",
+    p2pWithdrawInvalid: "Completá titular, banco, cuenta y un monto para crear el pedido.",
+    offlineWindowTitle: "Sin conexión",
+    offlineWindowAvailable: "Disponible para pagos offline",
+    offlineWindowSaved: "Saldo guardado en este teléfono la última vez que hubo internet.",
+    offlineWindowEmpty: "Todavía no hay un saldo guardado. Abre la billetera una vez con internet.",
+    cmdSavings: "Ahorro",
+    homeDollarsEyebrow: "Dólares digitales",
+    homeDollarsTitle: "Conoce más",
+    homeDollarsBody:
+      "USDC es un dólar digital. En Sozu está en tu cuenta y lo puedes enviar a otra persona con un toque.",
+    homePayStoreTitle: "Pagar a un local",
+    homePayStoreBody: "Próximamente",
+    homeInviteTitle: "Invita a alguien",
+    homeInviteBody: "Gana $40",
+    homeInviteShare: "Prueba Sozu, dólares digitales en el teléfono.",
+    homeInviteReady: "Listo para invitar.",
+    homeInviteEyebrow: "Invitación",
+    homeInviteRewardBody:
+      "Cada persona que cree una cuenta con tu código y confirme su correo suma 1 de 20. Al llegar a 20, recibes $40.",
+    homeInviteProgress: "{count}/{goal} invitaciones",
+    homeInviteCodeLabel: "Tu código",
+    homeInviteShareCode: "Compartir código",
+    homeInviteSoon: "Pronto vas a poder invitar a otras personas.",
+    homeLinkCopied: "Enlace copiado.",
+    homeFeedbackTitle: "Deja tu opinión",
+    homeFeedbackBody: "Cuéntanos cómo se sintió",
+    homeFeedbackPlaceholder: "Qué te gustó, qué faltó…",
+    homeFeedbackSend: "Enviar",
+    homeFeedbackReady: "Gracias. Recibimos tu nota.",
+    homeFeedbackFailed: "No pudimos enviar tu nota. Intentá de nuevo.",
     cmdPlan: "Plan",
     cmdCredit: "Crédito",
     creditPageTitle: "Microcréditos",
@@ -756,10 +888,12 @@ export const walletTexts = {
     comingSoon: "Próximamente",
     comingSoonDesc: "{label} aún no está disponible.",
     testnetBadge: "Testnet",
+    publicNetBadge: "Public Net",
     activateWallet: "Activar billetera",
     activating: "Activando…",
     openCashflow: "Abrir cashflow",
     depositTitle: "Depositar",
+    depositPesosTag: "Depositar pesos con SumUp",
     depositClose: "Cerrar depósito",
     depositQrTypeLabel: "Tipo de código QR",
     depositQrTag: "Sozu",
@@ -781,11 +915,12 @@ export const walletTexts = {
       "Los pagos usan BlendUSDC en tu cuenta C (no el USDC clásico de Circle en G). Copia tu dirección C abajo y recibe BlendUSDC ahí.",
     depositBlendFaucet: "Abrir testnet.blend.capital",
     depositBlendPool: "Pool USDC (Blend)",
-    depositFaucetCta: "Obtener 20 USDC de prueba",
-    depositFaucetHint: "Un clic — Circle USDC (testnet) vía Sozu Faucet.",
+    depositFaucetCta: "Obtener 100 USDC de prueba",
+    depositFaucetHint: "Una vez por billetera al día.",
     depositFaucetBusy: "Fondeando…",
-    depositFaucetSuccess: "Listo — 20 USDC en camino. Yendo al inicio…",
+    depositFaucetSuccess: "Listo — 100 USDC en camino. Yendo al inicio…",
     depositFaucetError: "No se pudo fondear. Intenta de nuevo.",
+    depositFaucetDailyLimit: "Ya reclamaste hoy. 100 USDC de prueba, una vez por billetera al día.",
     depositFiatTabLabel: "Pesos CLP",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Depósito en pesos",
@@ -879,6 +1014,10 @@ export const walletTexts = {
     rampPixKeyTypeRandom: "Aleatoria",
     hideBalance: "Ocultar saldo",
     showBalance: "Mostrar saldo",
+    arsQuoteLoading: "Buscando cotización BCRA…",
+    arsQuoteUnavailable: "Cotización en pesos no disponible ahora",
+    arsQuoteRate: "Cotización BCRA: 1 USD = {rate}",
+    arsQuoteAsOf: "del {date} · consultada {time}",
     purchasingPowerSubline: "+{pct}% poder adquisitivo · {days}d",
     apyBlendLabel: "APY Blend",
     auditBreakdown: "Desglose y proyección",
@@ -959,6 +1098,7 @@ export const walletTexts = {
     mathPerYear: "/ yr",
     // Auth
     authEnter: "Entrar",
+    authCreateAccount: "Crear cuenta nueva",
     authPasskeyCaption: "Passkey en este dispositivo",
     authLoading: "Cargando…",
     authPwaBannerIos: "Instálala desde Safari → Compartir → Agregar a inicio",
@@ -1001,6 +1141,28 @@ export const walletTexts = {
       "Tu passkey ya existe, pero aún no hay una cuenta inteligente (C…) en este dispositivo. Toca para crearla una vez.",
     setupIncompleteCta: "Terminar configuración",
     setupIncompleteBusy: "Creando billetera…",
+    onbSetupLabel: "CUENTA · {current} DE {count}",
+    onbPickTagTitle: "Elige tu SozuTag",
+    onbPickTagBody: "Así te encuentran y te envían USDC.",
+    onbTagContinue: "Continuar",
+    onbTagAvailable: "{tag} está disponible",
+    onbTagTaken: "{tag} está ocupado.",
+    onbTagSignIn: "¿Es tuyo? Inicia sesión",
+    onbTagPreview: "Así aparecerás cuando alguien te pague",
+    onbTagTry: "Prueba",
+    onbTagRules: "3–30 caracteres · letras, números y _",
+    onbTagFilterHint: "Espacios, puntos y guiones se quitan al escribir",
+    onbTagTooShort: "Mínimo 3 caracteres",
+    onbTagCheckFailed: "No se pudo revisar. Inténtalo de nuevo.",
+    onbTagRetry: "Reintentar",
+    onbTagClear: "Borrar",
+    onbTagChecking: "Revisando {tag}…",
+    onbTagHaveOne: "Ya tengo un SozuTag",
+    onbTagFieldLabel: "SozuTag",
+    onbRecoveryHint: "Este correo es la única forma de recuperar tu cuenta si perdés este dispositivo.",
+    onbRecoveryPlaceholder: "Correo",
+    onbRecoveryInvalid: "Escribí un correo válido.",
+    onbRecoveryCta: "Crear cuenta",
   },
   en: {
     // Profile
@@ -1040,6 +1202,8 @@ export const walletTexts = {
     confirmWithPasskey: "Confirm with passkey...",
     submitting: "Submitting...",
     send: "Send",
+    sendTo: "To",
+    sendMax: "Max",
     sendTapToSwitchCurrency: "Tap currency to switch",
     sendApproxUsdc: "≈ {amount} USDC",
     sendApproxFiat: "≈ {amount} {fiat}",
@@ -1206,6 +1370,56 @@ export const walletTexts = {
     cmdBatch: "Batch",
     cmdOfframp: "Offramp",
     cmdDeposit: "Deposit",
+    cmdSend: "Send",
+    cmdWithdraw: "Withdraw",
+    cmdEarn: "Earn",
+    withdrawDestinationTitle: "Withdraw",
+    withdrawToSozuWallet: "Another Sozu wallet",
+    withdrawToSozuWalletHint: "Send USDC to a $sozutag or an address.",
+    withdrawToBank: "Bank account",
+    withdrawToBankHint: "Convert USDC and withdraw it to your bank.",
+    withdrawBankUnavailable: "Bank withdrawal isn't turned on in this environment.",
+    p2pWithdrawTitle: "P2P withdraw",
+    p2pWithdrawBody: "Enter your bank details. We create a request on the P2P marketplace.",
+    p2pWithdrawName: "Account holder",
+    p2pWithdrawNamePlaceholder: "Full name",
+    p2pWithdrawBank: "Bank",
+    p2pWithdrawBankPlaceholder: "Bank name",
+    p2pWithdrawAccount: "CBU, CVU, or alias",
+    p2pWithdrawAccountPlaceholder: "Your account",
+    p2pWithdrawAmount: "Amount in USDC",
+    p2pWithdrawSubmit: "Create request",
+    p2pWithdrawSuccess: "Request created. It is on the P2P marketplace.",
+    p2pWithdrawInvalid: "Add the holder, bank, account, and an amount to create the request.",
+    offlineWindowTitle: "No connection",
+    offlineWindowAvailable: "Available for offline payments",
+    offlineWindowSaved: "Balance saved on this phone the last time it was online.",
+    offlineWindowEmpty: "No balance is saved yet. Open the wallet once while online.",
+    cmdSavings: "Savings",
+    homeDollarsEyebrow: "Digital dollars",
+    homeDollarsTitle: "Learn more",
+    homeDollarsBody:
+      "USDC is a digital dollar. In Sozu it sits in your account, and you can send it to someone with a tap.",
+    homePayStoreTitle: "Pay a store",
+    homePayStoreBody: "Coming soon",
+    homeInviteTitle: "Invite someone",
+    homeInviteBody: "Earn $40",
+    homeInviteShare: "Try Sozu, digital dollars on your phone.",
+    homeInviteReady: "Ready to invite.",
+    homeInviteEyebrow: "Invite",
+    homeInviteRewardBody:
+      "Each person who creates an account with your code and confirms their email counts as 1 of 20. At 20, you get $40.",
+    homeInviteProgress: "{count}/{goal} invites",
+    homeInviteCodeLabel: "Your code",
+    homeInviteShareCode: "Share code",
+    homeInviteSoon: "You'll be able to invite other people soon.",
+    homeLinkCopied: "Link copied.",
+    homeFeedbackTitle: "Leave feedback",
+    homeFeedbackBody: "Tell us how it felt",
+    homeFeedbackPlaceholder: "What worked, what was missing…",
+    homeFeedbackSend: "Send",
+    homeFeedbackReady: "Thanks. We received your note.",
+    homeFeedbackFailed: "We couldn't send your note. Try again.",
     cmdPlan: "Plan",
     cmdCredit: "Credit",
     creditPageTitle: "Microcredit",
@@ -1240,10 +1454,12 @@ export const walletTexts = {
     comingSoon: "Coming soon",
     comingSoonDesc: "{label} is not available yet.",
     testnetBadge: "Testnet",
+    publicNetBadge: "Public Net",
     activateWallet: "Activate wallet",
     activating: "Activating…",
     openCashflow: "Open cashflow",
     depositTitle: "Deposit",
+    depositPesosTag: "Deposit pesos with SumUp",
     depositClose: "Close deposit",
     depositQrTypeLabel: "QR code type",
     depositQrTag: "Sozu",
@@ -1265,11 +1481,12 @@ export const walletTexts = {
       "Payments use BlendUSDC on your C smart account (not classic Circle USDC on G). Copy your C address below and receive BlendUSDC there.",
     depositBlendFaucet: "Open testnet.blend.capital",
     depositBlendPool: "USDC pool (Blend)",
-    depositFaucetCta: "Get 20 testnet USDC",
-    depositFaucetHint: "One click — Circle USDC (testnet) via Sozu Faucet.",
+    depositFaucetCta: "Get 100 testnet USDC",
+    depositFaucetHint: "Once per wallet per day.",
     depositFaucetBusy: "Funding…",
-    depositFaucetSuccess: "Done — 20 USDC on the way. Heading home…",
+    depositFaucetSuccess: "Done — 100 USDC on the way. Heading home…",
     depositFaucetError: "Could not fund. Try again.",
+    depositFaucetDailyLimit: "You already claimed today. 100 testnet USDC, once per wallet per day.",
     depositFiatTabLabel: "CLP pesos",
     depositCryptoTabLabel: "Crypto",
     depositFiatTitle: "Peso deposit",
@@ -1363,6 +1580,10 @@ export const walletTexts = {
     rampPixKeyTypeRandom: "Random",
     hideBalance: "Hide balance",
     showBalance: "Show balance",
+    arsQuoteLoading: "Loading BCRA rate…",
+    arsQuoteUnavailable: "Peso rate unavailable right now",
+    arsQuoteRate: "BCRA rate: 1 USD = {rate}",
+    arsQuoteAsOf: "as of {date} · checked {time}",
     purchasingPowerSubline: "+{pct}% purchasing power · {days}d",
     apyBlendLabel: "Blend APY",
     auditBreakdown: "Breakdown & projection",
@@ -1443,6 +1664,7 @@ export const walletTexts = {
     mathPerYear: "/ yr",
     // Auth
     authEnter: "Enter",
+    authCreateAccount: "Create a new account",
     authPasskeyCaption: "Passkey on this device",
     authLoading: "Loading…",
     authPwaBannerIos: "Install from Safari → Share → Add to Home Screen",
@@ -1485,6 +1707,28 @@ export const walletTexts = {
       "Your passkey is ready, but this device doesn’t have a smart account (C…) yet. Tap once to create it.",
     setupIncompleteCta: "Finish setup",
     setupIncompleteBusy: "Creating wallet…",
+    onbSetupLabel: "SETUP · {current} OF {count}",
+    onbPickTagTitle: "Pick your SozuTag",
+    onbPickTagBody: "It's how people find you and send you USDC.",
+    onbTagContinue: "Continue",
+    onbTagAvailable: "{tag} is available",
+    onbTagTaken: "{tag} is taken.",
+    onbTagSignIn: "Is it yours? Sign in",
+    onbTagPreview: "How you'll appear when someone pays you",
+    onbTagTry: "Try",
+    onbTagRules: "3–30 characters · letters, numbers and _",
+    onbTagFilterHint: "Spaces, dots and dashes are removed as you type",
+    onbTagTooShort: "At least 3 characters",
+    onbTagCheckFailed: "Couldn't check. Try again.",
+    onbTagRetry: "Retry",
+    onbTagClear: "Clear",
+    onbTagChecking: "Checking {tag}…",
+    onbTagHaveOne: "I already have a SozuTag",
+    onbTagFieldLabel: "SozuTag",
+    onbRecoveryHint: "This email is the only way to recover your account if you lose this device.",
+    onbRecoveryPlaceholder: "Email",
+    onbRecoveryInvalid: "Enter a valid email.",
+    onbRecoveryCta: "Create account",
   },
 } as const;
 

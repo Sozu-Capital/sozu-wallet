@@ -68,7 +68,7 @@ export function WelcomeModal() {
         <DialogHeader className="space-y-6">
           <div className="flex justify-center">
             <Image
-              src="/sozucapital_logo_tb.png"
+              src="/brand/november-2026/mark.png"
               alt="Sozu Wallet"
               width={120}
               height={120}

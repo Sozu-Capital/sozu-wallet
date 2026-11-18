@@ -45,9 +45,7 @@ export async function loadClientWalletSession(): Promise<ClientWalletSession> {
   }
   if (!credentialId && userId) {
     try {
-      const addrRes = await fetch("/api/wallet/stellar/address", {
-        headers: { "x-user-id": userId },
-      });
+      const addrRes = await fetch("/api/wallet/stellar/address");
       if (addrRes.ok) {
         const data = (await addrRes.json()) as { signerPublicKey?: string | null };
         const signer = data.signerPublicKey?.trim().toUpperCase();
@@ -61,9 +59,7 @@ export async function loadClientWalletSession(): Promise<ClientWalletSession> {
   }
   if (!credentialId && userId) {
     try {
-      const pkRes = await fetch("/api/auth/passkeys/primary", {
-        headers: { "x-user-id": userId },
-      });
+      const pkRes = await fetch("/api/auth/passkeys/primary");
       if (pkRes.ok) {
         const data = (await pkRes.json()) as { credentialId?: string };
         if (typeof data.credentialId === "string" && data.credentialId.trim()) {

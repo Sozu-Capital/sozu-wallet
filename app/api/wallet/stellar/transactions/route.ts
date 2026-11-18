@@ -2,21 +2,30 @@ import { NextRequest, NextResponse } from "next/server"
 import { Horizon } from "@stellar/stellar-sdk"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
-import { getSorobanWalletTransactions } from "@/lib/stellar/soroban-transfer-history"
+import {
+  getSorobanWalletTransactions,
+  SOROBAN_HISTORY_BACKFILL_LEDGERS,
+} from "@/lib/stellar/soroban-transfer-history"
+import { assembleAccountHistory, loadRememberedHistory } from "@/lib/db/account-tx-history"
+import { ACCOUNT_HISTORY_STORE_LIMIT, clampHistoryLimit } from "@/lib/wallet/account-tx-history"
 import { createClient } from "@/lib/supabase/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
+import { getSessionUserId } from "@/lib/auth/session"
 
 export async function OPTIONS(request: Request) {
   return handleOPTIONS(request as any)
 }
 
+const sorobanBackfillAttempted = new Set<string>()
+
 export async function GET(request: NextRequest) {
+  let publicKeyToUse: string | null = null
+  let limit = 100
   try {
     const url = new URL(request.url)
     const publicKeyParam = url.searchParams.get("publicKey")
-    const limit = parseInt(url.searchParams.get("limit") || "20")
+    limit = clampHistoryLimit(parseInt(url.searchParams.get("limit") || "100", 10))
     
-    let publicKeyToUse: string | null = null
     let wallet: any = null
     
     if (publicKeyParam && /^[GC][A-Z0-9]{55}$/.test(publicKeyParam)) {
@@ -32,7 +41,7 @@ export async function GET(request: NextRequest) {
         userId = user.id
         console.log("[Transaction History API] Using Supabase auth, userId:", userId)
       } else {
-        userId = request.headers.get("x-user-id")
+        userId = getSessionUserId(request)
         console.log("[Transaction History API] Dev mode, userId from header:", userId)
 
         if (!userId) {
@@ -83,10 +92,29 @@ export async function GET(request: NextRequest) {
     console.log("[Transaction History API] Network:", stellarConfig.network, "USDC Issuer:", usdcIssuer)
 
     // C smart accounts: Soroban token transfer events (Horizon payments are G-only).
+    // Stored history and faucet claims are merged in so a short RPC window cannot
+    // wipe this account's payments.
     if (publicKeyToUse.startsWith("C")) {
-      const transactions = await getSorobanWalletTransactions(publicKeyToUse, limit)
+      const remembered = await loadRememberedHistory(publicKeyToUse)
+      const backfill =
+        remembered.length === 0 && !sorobanBackfillAttempted.has(publicKeyToUse)
+      if (backfill) sorobanBackfillAttempted.add(publicKeyToUse)
+      let chain: Awaited<ReturnType<typeof getSorobanWalletTransactions>> = []
+      try {
+        chain = await getSorobanWalletTransactions(publicKeyToUse, ACCOUNT_HISTORY_STORE_LIMIT, {
+          lookbackLedgers: backfill ? SOROBAN_HISTORY_BACKFILL_LEDGERS : undefined,
+        })
+      } catch (error) {
+        console.warn("[Transaction History API] Soroban scan failed; using stored history", error)
+      }
+      const transactions = await assembleAccountHistory({
+        walletAddress: publicKeyToUse,
+        chain,
+        limit,
+        remembered,
+      })
       console.log(
-        "[Transaction History API] Soroban transfers for C account:",
+        "[Transaction History API] Account history for C:",
         publicKeyToUse.substring(0, 10) + "...",
         transactions.length,
       )
@@ -227,11 +255,17 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const transactions = await assembleAccountHistory({
+      walletAddress: publicKeyToUse,
+      chain: finalTransactions,
+      limit,
+    })
+
     return NextResponse.json(
       {
         success: true,
-        transactions: finalTransactions,
-        count: finalTransactions.length,
+        transactions,
+        count: transactions.length,
       },
       { headers: corsHeaders(request as any) }
     )
@@ -245,12 +279,17 @@ export async function GET(request: NextRequest) {
         : null
     const message = error instanceof Error ? error.message : String(error)
     // Brand-new accounts are not on Horizon until funded; payments.forAccount returns 404.
-    if (status === 404 || status === 400 || message === "Not Found") {
+    if ((status === 404 || status === 400 || message === "Not Found") && publicKeyToUse) {
       console.log(
-        "[Transaction History API] No Horizon account yet (404) — returning empty history"
+        "[Transaction History API] No Horizon account yet — returning stored history"
       )
+      const transactions = await assembleAccountHistory({
+        walletAddress: publicKeyToUse,
+        chain: [],
+        limit,
+      })
       return NextResponse.json(
-        { success: true, transactions: [], count: 0 },
+        { success: true, transactions, count: transactions.length },
         { headers: corsHeaders(request as any) }
       )
     }

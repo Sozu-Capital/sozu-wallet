@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { generateChallenge } from "@/lib/webauthn/utils"
 import { challengeStore, cleanupChallenges } from "@/lib/webauthn/config"
+import { CROSS_DEVICE_BINDING_COOKIE, crossDeviceBindingValue } from "@/lib/auth/cross-device-binding"
+import { getSessionCookieOptions } from "@/lib/auth/session-cookie"
+import { findCanonicalTagOwner } from "@/lib/wallet/tag-owner"
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,15 +33,7 @@ export async function POST(request: NextRequest) {
 
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
 
-    const { data: existingProfile, error: checkError } = await serviceClient
-      .from("profiles")
-      .select("id, username")
-      .eq("username", username)
-      .maybeSingle()
-
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error("[Cross-Device Init] Username check failed:", checkError)
-    }
+    const existingProfile = await findCanonicalTagOwner(serviceClient, username)
 
     if (existingProfile) {
       return NextResponse.json(
@@ -79,11 +74,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       sessionId,
       challenge,
       expiresAt: expiresAt.getTime(),
     })
+    response.cookies.set(
+      CROSS_DEVICE_BINDING_COOKIE,
+      crossDeviceBindingValue(sessionId),
+      getSessionCookieOptions(10 * 60)
+    )
+    return response
   } catch (error) {
     console.error("[Cross-Device Init] Error:", error)
     return NextResponse.json(

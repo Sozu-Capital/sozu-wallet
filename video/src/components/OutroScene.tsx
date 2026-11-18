@@ -75,7 +75,7 @@ export const OutroScene: React.FC = () => {
         }}
       >
         <Img
-          src={staticFile("sozucapital_logo_tb.png")}
+          src={staticFile("brand/november-2026/mark.png")}
           style={{
             width: 220,
             height: "auto",

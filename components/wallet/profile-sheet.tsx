@@ -16,6 +16,7 @@ import { copyToClipboard, getUserId } from "@/lib/wallet-utils"
 import { createClient as createSupabaseClient } from "@/lib/supabase/client"
 import { getPublicKeyFromSession } from "@/lib/storage/key-utils"
 import { clearClientSession } from "@/lib/storage/clear-session"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 
 type Tab = "profile" | "cashout" | "defi" | "logout"
 
@@ -142,7 +143,6 @@ const ProfileTab = memo(function ProfileTab({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(userId ? { "x-user-id": userId } : {}),
         },
         body: JSON.stringify({ username: tag }),
       })
@@ -176,6 +176,9 @@ const ProfileTab = memo(function ProfileTab({
 
   const handleRevealKey = useCallback(async () => {
     try {
+      if (process.env.NEXT_PUBLIC_PILOT_MAINNET === "1" || process.env.PILOT_MAINNET === "1") {
+        return
+      }
       const { retrieveKeypair } = await import("@/lib/storage/browser-keys")
       const { getCredentialIdFromSession } = await import("@/lib/storage/key-utils")
       const { Keypair } = await import("@stellar/stellar-sdk")
@@ -266,15 +269,17 @@ const ProfileTab = memo(function ProfileTab({
 
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-white/40 font-medium">Cashflow</p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onOpenLedger}
-          className="w-full bg-transparent border-white/20 text-white hover:bg-white/10 justify-start gap-2"
-        >
-          <Mail className="w-4 h-4 shrink-0" />
-          Libro por correo (Vaults)
-        </Button>
+        {!isPilotMainnet() && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onOpenLedger}
+            className="w-full bg-transparent border-white/20 text-white hover:bg-white/10 justify-start gap-2"
+          >
+            <Mail className="w-4 h-4 shrink-0" />
+            Libro por correo (Vaults)
+          </Button>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -319,8 +324,8 @@ const ProfileTab = memo(function ProfileTab({
         )}
       </div>
 
-      {/* Private Key */}
-      {walletAddress && (
+      {/* Private Key — derived G keys are not part of the mainnet passkey signer. */}
+      {walletAddress && !isPilotMainnet() && (
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-white/40 font-medium flex items-center gap-1.5">
             <Key className="w-3 h-3" /> Private Key
@@ -465,12 +470,13 @@ export const ProfileSheet = memo(function ProfileSheet({
     }
   }, [t])
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const allTabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "profile", label: "Profile", icon: <User className="w-3.5 h-3.5" /> },
     { id: "cashout", label: "Cash out", icon: <Banknote className="w-3.5 h-3.5" /> },
     { id: "defi", label: "DeFi", icon: <TrendingUp className="w-3.5 h-3.5" /> },
     { id: "logout", label: "Log out", icon: <LogOut className="w-3.5 h-3.5" /> },
   ]
+  const tabs = allTabs.filter((tab) => !(tab.id === "defi" && isPilotMainnet()))
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>

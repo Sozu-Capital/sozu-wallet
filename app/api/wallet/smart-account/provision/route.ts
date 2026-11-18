@@ -2,8 +2,12 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
-import { getStellarConfig } from "@/lib/turnkey/config"
 import { provisionSmartWalletForSigner } from "@/lib/stellar/smart-account-provision"
+import { getSessionUserId } from "@/lib/auth/session"
+import {
+  assignCanonicalSmartAccount,
+  resolveCanonicalSmartAccount,
+} from "@/lib/wallet/persist-canonical-smart-account"
 
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
@@ -17,7 +21,7 @@ export async function POST(request: NextRequest) {
   const headers = corsHeaders(request)
 
   try {
-    const userId = request.headers.get("x-user-id")
+    const userId = getSessionUserId(request)
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers })
     }
@@ -46,12 +50,16 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId)
       .maybeSingle()
 
-    if (existing?.public_key?.startsWith("C")) {
+    const canonical = await resolveCanonicalSmartAccount(userId).catch(() => null)
+    if (canonical) {
+      if (canonical.source === "org_treasury") {
+        await assignCanonicalSmartAccount(userId, canonical.contractId, { wallet_type: "oz" })
+      }
       return NextResponse.json(
         {
           ok: true,
-          contractId: existing.public_key.trim().toUpperCase(),
-          signerPublicKey: existing.signer_public_key ?? signerPublicKey,
+          contractId: canonical.contractId,
+          signerPublicKey: existing?.signer_public_key ?? signerPublicKey,
           alreadyProvisioned: true,
         },
         { headers },
@@ -63,44 +71,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: provisioned.error }, { status: 502, headers })
     }
 
-    const stellarConfig = getStellarConfig()
-    const row: Record<string, string | null> = {
-      user_id: userId,
-      public_key: provisioned.contractId,
-      signer_public_key: provisioned.signerPublicKey,
-      wallet_type: "factory",
-      turnkey_wallet_id: null,
-      network: stellarConfig.network,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error: upsertError } = await svc.from("stellar_wallets").upsert(row, {
-      onConflict: "user_id",
-    })
-
-    if (upsertError) {
-      const withoutSigner = { ...row }
-      delete withoutSigner.signer_public_key
-      const retry = await svc.from("stellar_wallets").upsert(withoutSigner, { onConflict: "user_id" })
-      if (retry.error) {
-        console.error("[smart-account/provision] upsert:", retry.error.message)
+    let assigned: { contractId: string; immutable: boolean }
+    try {
+      assigned = await assignCanonicalSmartAccount(userId, provisioned.contractId, {
+        signer_public_key: provisioned.signerPublicKey,
+        wallet_type: "factory",
+        turnkey_wallet_id: null,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!message.includes("signer_public_key")) {
         return NextResponse.json(
           {
-            error: `Smart account deployed (${provisioned.contractId}) but DB save failed. Run docs/supabase-stellar-wallet-signer.sql.`,
+            error: `Smart account deployed (${provisioned.contractId}) but DB save failed. ${message}`,
             contractId: provisioned.contractId,
           },
-          { status: 502, headers }
+          { status: 502, headers },
         )
       }
+      assigned = await assignCanonicalSmartAccount(userId, provisioned.contractId, {
+        wallet_type: "factory",
+        turnkey_wallet_id: null,
+      })
     }
 
     return NextResponse.json(
       {
         ok: true,
-        contractId: provisioned.contractId,
+        contractId: assigned.contractId,
         signerPublicKey: provisioned.signerPublicKey,
         funded: provisioned.funded,
-        alreadyProvisioned: false,
+        alreadyProvisioned: assigned.immutable,
       },
       { headers }
     )

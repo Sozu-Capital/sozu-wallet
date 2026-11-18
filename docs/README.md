@@ -26,6 +26,7 @@ Guides for developers and operators working in this repository. The root [README
 | Architecture and platform | [architecture-and-platform.md](./architecture-and-platform.md) |
 | Authentication and accounts | [authentication-and-accounts.md](./authentication-and-accounts.md) |
 | Smart account payments (C default) | [smart-account-default-payments.md](./smart-account-default-payments.md) |
+| One canonical smart account | [adr/0002-one-canonical-smart-account.md](./adr/0002-one-canonical-smart-account.md) |
 | Smart account signer migration | [smart-account-signer-migration.md](./smart-account-signer-migration.md) |
 | Wallet, Stellar, DeFindex | [wallet-stellar-defindex.md](./wallet-stellar-defindex.md) |
 | Blend USDC testnet | [obtain-blend-usdc-testnet.md](./obtain-blend-usdc-testnet.md) |
@@ -41,6 +42,7 @@ Guides for developers and operators working in this repository. The root [README
 | Legacy two-domain deploy | [deployment-two-domains.md](./deployment-two-domains.md) |
 | Development (PWA, scripts, testing) | [development-guide.md](./development-guide.md) |
 | Project history (milestones) | [project-history.md](./project-history.md) |
+| November 2026 logo | [brand/november-2026-logo.md](./brand/november-2026-logo.md) |
 | **Ten-day dev log (May 23 – Jun 2, 2026)** | [development-log-2026-05-23-to-2026-06-02.md](./development-log-2026-05-23-to-2026-06-02.md) |
 | **Master changelog & 4-week report** | [PROJECT-CHANGELOG-MASTER-REPORT.md](./PROJECT-CHANGELOG-MASTER-REPORT.md) |
 | **Ten-day changelog (May 24 – Jun 3, 2026)** | [changelog-2026-05-24-to-2026-06-03.md](./changelog-2026-05-24-to-2026-06-03.md) |

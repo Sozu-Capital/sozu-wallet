@@ -41,15 +41,10 @@ function WalletLandingSkeleton() {
         <Skeleton className="size-10 rounded-lg bg-white/10" />
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col px-4">
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-start pt-2">
-          <div className="flex min-h-0 w-full max-w-md flex-1 flex-col">
-            <BalanceCardSkeleton compact />
-          </div>
-        </div>
-
-        <div className="shrink-0 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-2">
-          <CommandBarSkeleton />
+      <div className="flex min-h-0 flex-1 flex-col items-center px-6 pt-4">
+        <div className="flex w-full max-w-md flex-col">
+          <BalanceCardSkeleton compact className="mb-8" />
+          <CommandBarSkeleton className="mt-2" />
         </div>
       </div>
     </div>

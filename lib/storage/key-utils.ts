@@ -6,7 +6,12 @@
 
 "use client"
 
-import { getAllStoredPublicKeys, getKeypairByPublicKey } from "./browser-keys"
+async function loadStoredKeys() {
+  if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+    return import("./browser-keys")
+  }
+  return null
+}
 
 /**
  * Get credential ID for a given public key
@@ -22,7 +27,9 @@ export async function getCredentialIdByPublicKey(
   }
 
   try {
-    const storedKeys = await getAllStoredPublicKeys()
+    const stored = await loadStoredKeys()
+    if (!stored) return null
+    const storedKeys = await stored.getAllStoredPublicKeys()
     const matchingKey = storedKeys.find((k) => k.publicKey === publicKey)
     return matchingKey ? matchingKey.credentialId : null
   } catch (error) {

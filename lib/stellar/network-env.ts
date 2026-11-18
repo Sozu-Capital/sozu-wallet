@@ -2,7 +2,7 @@ import { Networks } from "@stellar/stellar-sdk"
 import type { StellarNetwork } from "@/lib/stellar/asset-types"
 
 const TESTNET_RPC = "https://soroban-testnet.stellar.org"
-const MAINNET_RPC = "https://soroban.stellar.org"
+const MAINNET_RPC = "https://mainnet.sorobanrpc.com"
 const TESTNET_HORIZON = "https://horizon-testnet.stellar.org"
 const MAINNET_HORIZON = "https://horizon.stellar.org"
 

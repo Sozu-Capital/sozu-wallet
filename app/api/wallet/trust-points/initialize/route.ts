@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import { maxflowClient } from "@/lib/maxflow/client"
+import { getSessionUserId } from "@/lib/auth/session"
 
 /**
  * POST /api/wallet/trust-points/initialize
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
       userId = user.id
     } else {
       // In dev mode, check for userId in headers
-      userId = request.headers.get("x-user-id")
+      userId = getSessionUserId(request)
       
       if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

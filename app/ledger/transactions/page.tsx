@@ -25,7 +25,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import type { LedgerChartWindow } from "@/lib/ledger/ledger-chart-window"
 import { ledgerChartWindowLabel, ledgerWindowUtcBounds } from "@/lib/ledger/ledger-chart-window"
 import { DEFAULT_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from "@/lib/ledger/types"
@@ -191,9 +190,7 @@ function LedgerTransactionsContent() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/ledger/transactions?limit=500", {
-        headers: ledgerUserHeaders(),
-        cache: "no-store",
+      const res = await fetch("/api/ledger/transactions?limit=500", { cache: "no-store",
       })
       const json = await res.json()
       if (!res.ok) {
@@ -217,7 +214,7 @@ function LedgerTransactionsContent() {
     try {
       const res = await fetch("/api/gmail/sync", {
         method: "POST",
-        headers: { ...ledgerUserHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "incremental" }),
         signal: AbortSignal.timeout(280_000),
       })
@@ -261,9 +258,7 @@ function LedgerTransactionsContent() {
     setVaultsLoading(true)
     ;(async () => {
       try {
-        const res = await fetch("/api/ledger/vaults", {
-          headers: ledgerUserHeaders(),
-          cache: "no-store",
+        const res = await fetch("/api/ledger/vaults", { cache: "no-store",
         })
         const j = (await res.json().catch(() => ({}))) as { vaults?: { id: string; name: string }[] }
         if (!cancelled && res.ok && Array.isArray(j.vaults)) {
@@ -495,7 +490,7 @@ function LedgerTransactionsContent() {
     try {
       const res = await fetch(`/api/ledger/transactions/${row.id}/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category: nextCategory }),
       })
       const json = (await res.json().catch(() => ({}))) as { error?: string; category?: string }
@@ -524,7 +519,7 @@ function LedgerTransactionsContent() {
           try {
             const res = await fetch(`/api/ledger/transactions/${id}/update`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ dismissed: true }),
             })
             if (res.ok) return { id, ok: true as const }
@@ -567,7 +562,7 @@ function LedgerTransactionsContent() {
           try {
             const res = await fetch(`/api/ledger/transactions/${id}/update`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ category: nextCategory }),
             })
             const j = (await res.json().catch(() => ({}))) as { error?: string; category?: string }
@@ -603,9 +598,7 @@ function LedgerTransactionsContent() {
     setDismissedLoading(true)
     setDismissedDialogError(null)
     try {
-      const res = await fetch("/api/ledger/transactions?limit=500&dismissedOnly=1", {
-        headers: ledgerUserHeaders(),
-        cache: "no-store",
+      const res = await fetch("/api/ledger/transactions?limit=500&dismissedOnly=1", { cache: "no-store",
       })
       const json = (await res.json().catch(() => ({}))) as { error?: string; transactions?: Row[] }
       if (!res.ok) {
@@ -629,7 +622,7 @@ function LedgerTransactionsContent() {
     try {
       const res = await fetch(`/api/ledger/transactions/${id}/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dismissed: false }),
       })
       const j = (await res.json().catch(() => ({}))) as { error?: string }
@@ -658,7 +651,7 @@ function LedgerTransactionsContent() {
     try {
       const res = await fetch("/api/ledger/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, kind }),
       })
       const json = (await res.json().catch(() => ({}))) as {
@@ -691,7 +684,7 @@ function LedgerTransactionsContent() {
     try {
       const res = await fetch("/api/ledger/transactions", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date,
           amount: n,

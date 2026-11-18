@@ -7,8 +7,14 @@
 
 import { Keypair } from "@stellar/stellar-sdk"
 import { get, set, remove, getByIndex, getAllByIndex, STORES } from "./indexeddb"
-import { deriveKeypairWithSeed, deriveStellarKeypair } from "../webauthn/key-derivation"
 import { normalizeCredentialId } from "../webauthn/normalize-credential-id"
+
+async function loadDerivation() {
+  if (process.env.NEXT_PUBLIC_PILOT_MAINNET !== "1" && process.env.PILOT_MAINNET !== "1") {
+    return import("@/lib/webauthn/key-derivation")
+  }
+  throw new Error("HKDF key derivation is not in the mainnet build.")
+}
 
 /**
  * Encrypted key data structure stored in IndexedDB
@@ -285,6 +291,7 @@ export async function deriveAndStoreKey(
   }
 
   const variants: (string | undefined)[] = userId ? [userId, undefined] : [undefined]
+  const { deriveKeypairWithSeed } = await loadDerivation()
 
   for (const uid of variants) {
     const { keypair, publicKey, seed } = await deriveKeypairWithSeed(cid, uid)

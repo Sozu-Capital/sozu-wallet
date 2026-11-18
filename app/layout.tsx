@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import { AppReadyFallback } from "@/components/app-ready-fallback"
 import { DeferredAnalytics } from "@/components/deferred-analytics"
+import { OfflineBalanceWindow } from "@/components/offline/offline-balance-window"
 import { PWARegister } from "@/components/pwa-register"
 import { PaperShaderBackgroundShell } from "@/components/paper-shader-background-shell"
 import { ViewportHeightSync } from "@/components/viewport-height-sync"
@@ -85,6 +86,7 @@ export default function RootLayout({
         <AppReadyFallback />
         <DeferredAnalytics />
         <PWARegister />
+        <OfflineBalanceWindow />
         <Toaster />
       </body>
     </html>

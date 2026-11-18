@@ -1,6 +1,5 @@
 import "server-only"
 
-import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { getStellarWallet } from "@/lib/turnkey/stellar-wallet"
 import { provisionSmartWalletForSigner } from "@/lib/stellar/smart-account-provision"
@@ -8,6 +7,10 @@ import {
   describeMissingSmartWalletEnv,
   isFactorySmartAccountConfigured,
 } from "@/lib/stellar/soroban-env"
+import {
+  assignCanonicalSmartAccount,
+  resolveCanonicalSmartAccount,
+} from "@/lib/wallet/persist-canonical-smart-account"
 
 export type CanonicalWalletRow = {
   publicKey: string
@@ -27,6 +30,18 @@ export async function ensureFactorySmartWalletForUser(
 ): Promise<CanonicalWalletRow | { error: string }> {
   const existing = await getStellarWallet(userId, true)
   const pk = existing?.publicKey?.trim().toUpperCase() ?? ""
+
+  const canonical = await resolveCanonicalSmartAccount(userId).catch(() => null)
+  if (canonical && !(pk.startsWith("C") && pk.length === 56)) {
+    await assignCanonicalSmartAccount(userId, canonical.contractId, { wallet_type: "oz" })
+    return {
+      publicKey: canonical.contractId,
+      signerPublicKey: existing?.signerPublicKey?.trim().toUpperCase() ?? null,
+      walletType: "oz",
+      network: existing?.network ?? getStellarConfig().network,
+      migrated: canonical.source === "org_treasury",
+    }
+  }
 
   if (pk.startsWith("C") && pk.length === 56) {
     const wt =
@@ -70,49 +85,36 @@ export async function ensureFactorySmartWalletForUser(
   }
 
   const contractId = provisioned.contractId.trim().toUpperCase()
-  const stellarConfig = getStellarConfig()
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return { error: "Server configuration error" }
-  }
-
-  const svc = createServiceClient(supabaseUrl, supabaseServiceKey)
-  const row: Record<string, string | null> = {
-    user_id: userId,
-    public_key: contractId,
-    signer_public_key: provisioned.signerPublicKey,
-    wallet_type: "factory",
-    turnkey_wallet_id: null,
-    network: stellarConfig.network,
-    updated_at: new Date().toISOString(),
-  }
-
-  let { error: upsertError } = await svc.from("stellar_wallets").upsert(row, {
-    onConflict: "user_id",
-  })
-
-  if (upsertError?.message?.includes("signer_public_key")) {
-    const { signer_public_key: _s, wallet_type: _w, ...without } = row
-    const retry = await svc.from("stellar_wallets").upsert(without, {
-      onConflict: "user_id",
+  let assigned: { contractId: string }
+  try {
+    assigned = await assignCanonicalSmartAccount(userId, contractId, {
+      signer_public_key: provisioned.signerPublicKey,
+      wallet_type: "factory",
+      turnkey_wallet_id: null,
     })
-    upsertError = retry.error
-  }
-
-  if (upsertError) {
-    return {
-      error: `Smart account ${contractId} deployed but DB update failed: ${upsertError.message}`,
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (!message.includes("signer_public_key")) {
+      return { error: `Smart account ${contractId} deployed but DB update failed: ${message}` }
+    }
+    try {
+      assigned = await assignCanonicalSmartAccount(userId, contractId, {
+        wallet_type: "factory",
+        turnkey_wallet_id: null,
+      })
+    } catch (retryErr) {
+      const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr)
+      return { error: `Smart account ${contractId} deployed but DB update failed: ${retryMessage}` }
     }
   }
 
-  console.log("[migrate-legacy-wallet] ✅ G → C for user", userId.slice(0, 8), contractId.slice(0, 12))
+  console.log("[migrate-legacy-wallet] ✅ G → C for user", userId.slice(0, 8), assigned.contractId.slice(0, 12))
 
   return {
-    publicKey: contractId,
+    publicKey: assigned.contractId,
     signerPublicKey: provisioned.signerPublicKey,
     walletType: "factory",
-    network: stellarConfig.network,
+    network: getStellarConfig().network,
     migrated: true,
   }
 }

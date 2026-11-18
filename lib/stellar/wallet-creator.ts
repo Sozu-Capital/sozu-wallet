@@ -22,7 +22,6 @@ import {
   Operation,
   TransactionBuilder,
   BASE_FEE,
-  Account,
   Transaction,
   FeeBumpTransaction,
 } from "@stellar/stellar-sdk"
@@ -136,7 +135,7 @@ export async function createRealStellarAccount(
     })
 
     let accountExists = false
-    let account: Account | null = null
+    let account: Horizon.AccountResponse | null = null
 
     try {
       account = await server.loadAccount(publicKey)
@@ -301,7 +300,7 @@ export async function createRealStellarAccount(
 export async function createUSDCTrustlineReal(
   keypair: Keypair,
   publicKey: string,
-  account: Account,
+  account: Horizon.AccountResponse,
   network: "testnet" | "mainnet",
   credentialId?: string,
   userId?: string

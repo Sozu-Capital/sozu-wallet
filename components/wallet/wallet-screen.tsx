@@ -7,13 +7,13 @@ import { Wallet } from "lucide-react"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faCoins } from "@fortawesome/free-solid-svg-icons"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { WalletLazySectionSkeleton, WalletSkeleton } from "@/components/ui/wallet-skeleton"
-import { BalanceCardSkeleton } from "@/components/wallet/wallet-skeleton-parts"
+import { BalanceCardSkeleton, CommandBarSkeleton } from "@/components/wallet/wallet-skeleton-parts"
 import { WalletErrorBoundary } from "@/components/wallet/wallet-error-boundary"
 import { useWalletLanguage } from "@/lib/wallet-language"
 import { getUserId } from "@/lib/wallet-utils"
 import { cn } from "@/lib/utils"
-import { rampEnabled } from "@/lib/app-config"
 import { getOrCreateRealWallet } from "@/lib/stellar/wallet-creator"
 import {
   isSmartContractWalletAddress,
@@ -37,14 +37,25 @@ import { useSetOnboardingOverlayOpen } from "@/lib/onboarding-overlay-context"
 import { WalletActivationOnboarding } from "@/components/wallet/wallet-activation-onboarding"
 import { BalanceDisplay } from "@/components/wallet/balance-display"
 import { PizzaBalanceRow } from "@/components/wallet/pizza-balance-row"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
 import { TransactionHistory } from "@/components/wallet/transaction-history"
 import { BottomMenuBar } from "@/components/wallet/bottom-menu-bar"
 import { PullToRefreshIndicator } from "@/components/wallet/pull-to-refresh-indicator"
 import { WalletActivityList } from "@/components/wallet/wallet-activity-list"
+import { HomeDiscoverGrid } from "@/components/home/home-discover-grid"
 import { UniversalCommandBar } from "@/components/home/universal-command-bar"
+import { P2pWithdrawSheet } from "@/components/home/p2p-withdraw-sheet"
 import type { WalletActivityItem } from "@/hooks/use-wallet-activity"
 import type { PaymentReceipt } from "@/lib/payment/payment-receipt"
-import { transactionToPaymentReceipt } from "@/lib/payment/transaction-to-receipt"
+import {
+  historyReceiptForPurchase,
+  historyReceiptForTransaction,
+  type HistoryReceiptView,
+} from "@/lib/payment/history-receipt"
+import { readCollectibleReturn } from "@/lib/checkout/collectible-return"
+import { readSavedPurchases } from "@/lib/checkout/saved-purchases"
+import type { CollectibleReceiptModel } from "@/lib/merch/receipt"
+import { CollectibleReceipt } from "@/components/merch/collectible-receipt"
 import type { Transaction } from "@/hooks/use-wallet-data"
 import type { ReceiptModalVariant } from "@/components/wallet/success-modal"
 
@@ -52,7 +63,6 @@ import type { ReceiptModalVariant } from "@/components/wallet/success-modal"
 import { WalletSwitcherModal } from "@/components/wallet/wallet-switcher-modal"
 const SendPaymentModal = lazy(() => import("@/components/wallet/send-payment-modal").then(mod => ({ default: mod.SendPaymentModal })))
 const DepositModal = lazy(() => import("@/components/home/deposit-modal").then(mod => ({ default: mod.DepositModal })))
-const OfframpModal = lazy(() => import("@/components/home/offramp-modal").then(mod => ({ default: mod.OfframpModal })))
 const ProfileSheet = lazy(() => import("@/components/wallet/profile-sheet").then(mod => ({ default: mod.ProfileSheet })))
 const TrustPointsModal = lazy(() => import("@/components/wallet/trust-points-modal").then(mod => ({ default: mod.TrustPointsModal })))
 const BalanceAuditModal = lazy(() => import("@/components/wallet/balance-audit-modal").then(mod => ({ default: mod.BalanceAuditModal })))
@@ -71,7 +81,6 @@ export type WalletScreenProps = {
   hideBottomBar?: boolean
   /** Mobile shell panel layout — landing merges balance + commands; history is tx list only. */
   shellLayout?: WalletShellLayout
-  onPayClick?: () => void
 }
 
 export function WalletScreen({
@@ -81,10 +90,10 @@ export function WalletScreen({
   onDepositModalOpenChange,
   hideBottomBar = false,
   shellLayout,
-  onPayClick,
 }: WalletScreenProps) {
   const searchParams = useSearchParams()
-  const { t } = useWalletLanguage()
+  const { t, language } = useWalletLanguage()
+  const merchLanguage = language === "en" ? "en" : "es"
 
   // Wallet data hook
   const walletData = useWalletDataContext()
@@ -120,13 +129,15 @@ export function WalletScreen({
 
   // UI State
   const [isWalletSwitcherOpen, setIsWalletSwitcherOpen] = useState(false)
+  const [returnCollectibleHash, setReturnCollectibleHash] = useState<string | null>(null)
+  const consumedCollectibleReturnRef = useRef(false)
   const swipeUpStartY = useRef<number | null>(null)
   const swipeUpStartX = useRef<number | null>(null)
-  const [openPayScannerOnMount, setOpenPayScannerOnMount] = useState(false)
   const [sendAssetContractId, setSendAssetContractId] = useState<string | null>(null)
   const [isBalanceVisible, setIsBalanceVisible] = useState(true)
   const [animatedBalance, setAnimatedBalance] = useState<number>(0)
   const [isTrustModalOpen, setIsTrustModalOpen] = useState(false)
+  const pilotMainnet = isPilotMainnet()
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
 
   // Send modal: controlled externally or internally
@@ -137,6 +148,21 @@ export function WalletScreen({
     if (onSendModalOpenChange) onSendModalOpenChange(open)
     else setIsSendModalOpenInternal(open)
   }, [onSendModalOpenChange])
+
+  // Checkout return: /home?profile=souvenirs&collectible=<hash> opens that collectible on the profile.
+  useEffect(() => {
+    if (shellLayout !== "landing" || !searchParams || consumedCollectibleReturnRef.current) return
+    const hash = readCollectibleReturn(searchParams)
+    if (!hash) return
+    consumedCollectibleReturnRef.current = true
+    setReturnCollectibleHash(hash)
+    setIsWalletSwitcherOpen(true)
+    const url = new URL(window.location.href)
+    url.searchParams.delete("profile")
+    url.searchParams.delete("collectible")
+    const next = `${url.pathname}${url.search}${url.hash}`
+    window.history.replaceState(window.history.state, "", next)
+  }, [searchParams, shellLayout])
 
   // Desktop deep-link: /wallet?send=1 opens send modal on mount
   useEffect(() => {
@@ -162,11 +188,12 @@ export function WalletScreen({
     },
     [onDepositModalOpenChange],
   )
-  const [isOfframpOpen, setIsOfframpOpen] = useState(false)
+  const [isP2pWithdrawOpen, setIsP2pWithdrawOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentReceipt, setPaymentReceipt] = useState<PaymentReceipt | null>(null)
   const [receiptModalVariant, setReceiptModalVariant] = useState<ReceiptModalVariant>("success")
+  const [collectibleReceipt, setCollectibleReceipt] = useState<CollectibleReceiptModel | null>(null)
   const [welcomeNeeded, setWelcomeNeeded] = useState(false)
   const [activationNeeded, setActivationNeeded] = useState(false)
   const [isActivating, setIsActivating] = useState(false)
@@ -347,8 +374,6 @@ export function WalletScreen({
       isDepositOpen,
   })
 
-  const handlePay = onPayClick ?? (() => setSendModalOpen(true))
-
   const landingRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (shellLayout !== "landing") return
@@ -374,28 +399,62 @@ export function WalletScreen({
     [setSendModalOpen, refreshWalletData],
   )
 
+  const presentReceipt = useCallback((view: HistoryReceiptView | null) => {
+    if (!view) return
+    if (view.kind === "collectible") {
+      setShowSuccessModal(false)
+      setPaymentReceipt(null)
+      setCollectibleReceipt(view.receipt)
+      return
+    }
+    setCollectibleReceipt(null)
+    setPaymentReceipt(view.receipt)
+    setReceiptModalVariant("success")
+    setShowSuccessModal(true)
+  }, [])
+
   const handleTransactionSelect = useCallback(
     (tx: Transaction) => {
-      const receipt = transactionToPaymentReceipt(
-        tx,
-        walletAddress,
-        walletNetwork,
-        addressToTagMap,
+      presentReceipt(
+        historyReceiptForTransaction({
+          tx,
+          walletAddress,
+          walletNetwork,
+          addressToTagMap,
+          saved: readSavedPurchases(),
+          language: merchLanguage,
+        }),
       )
-      if (!receipt) return
-      setPaymentReceipt(receipt)
-      setReceiptModalVariant("history")
-      setShowSuccessModal(true)
     },
-    [walletAddress, walletNetwork, addressToTagMap],
+    [addressToTagMap, merchLanguage, presentReceipt, walletAddress, walletNetwork],
   )
 
   const handleActivitySelect = useCallback(
     (item: WalletActivityItem) => {
-      if (!item.chainTx) return
-      handleTransactionSelect(item.chainTx)
+      if (item.chainTx) {
+        presentReceipt(
+          historyReceiptForTransaction({
+            tx: item.chainTx,
+            walletAddress,
+            walletNetwork,
+            addressToTagMap,
+            saved: readSavedPurchases(),
+            language: merchLanguage,
+            purchase: item.purchase,
+          }),
+        )
+        return
+      }
+      if (!item.purchase) return
+      presentReceipt(
+        historyReceiptForPurchase({
+          purchase: item.purchase,
+          walletNetwork,
+          language: merchLanguage,
+        }),
+      )
     },
-    [handleTransactionSelect],
+    [addressToTagMap, merchLanguage, presentReceipt, walletAddress, walletNetwork],
   )
 
   const handleDepositClose = useCallback(() => {
@@ -408,14 +467,9 @@ export function WalletScreen({
     setIsDepositOpen(true)
   }, [setIsDepositOpen])
 
-  const handleOfframp = useCallback(() => {
-    setIsOfframpOpen(true)
+  const handleWithdraw = useCallback(() => {
+    setIsP2pWithdrawOpen(true)
   }, [])
-
-  const handleOfframpClose = useCallback(() => {
-    setIsOfframpOpen(false)
-    void refreshWalletData({ pollSoroban: true })
-  }, [refreshWalletData])
 
   const refreshOnboardingState = useCallback(async () => {
     if (walletNetwork !== "testnet") {
@@ -615,14 +669,14 @@ export function WalletScreen({
       try {
         await fetch("/api/wallet/stellar/create", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-user-id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ publicKey }),
         })
       } catch (e) {
         console.warn("[Wallet] Register wallet after create:", e)
       }
       try {
-        await fetch("/api/wallet/stellar/balance", { headers: { "x-user-id": userId } })
+        await fetch("/api/wallet/stellar/balance")
       } catch (error) {
         console.error("[Wallet] Error fetching balance after wallet creation:", error)
       }
@@ -665,18 +719,21 @@ export function WalletScreen({
         treasuryPrefs={treasuryData.prefs}
         onUpdateTreasuryPrefs={treasuryData.updatePrefs}
         walletNetwork={walletNetwork}
+        pilotMainnet={pilotMainnet}
         onRefresh={handleEarnRefresh}
       />
-      <PizzaBalanceRow
-        tokenBalances={defindexBalance?.tokenBalances}
-        onSend={() => {
-          const row = defindexBalance?.tokenBalances?.find(
-            (r) => r.assetId === "pizza_token" || r.symbol?.toUpperCase() === "PIZZA",
-          )
-          setSendAssetContractId(row?.contractId ?? null)
-          setSendModalOpen(true)
-        }}
-      />
+      {!pilotMainnet && (
+        <PizzaBalanceRow
+          tokenBalances={defindexBalance?.tokenBalances}
+          onSend={() => {
+            const row = defindexBalance?.tokenBalances?.find(
+              (r) => r.assetId === "pizza_token" || r.symbol?.toUpperCase() === "PIZZA",
+            )
+            setSendAssetContractId(row?.contractId ?? null)
+            setSendModalOpen(true)
+          }}
+        />
+      )}
     </Suspense>
   )
 
@@ -692,8 +749,6 @@ export function WalletScreen({
           referenceFiat={treasuryData.prefs.referenceFiat}
           onSuccess={handleSendSuccess}
           onRefresh={handleSendModalRefresh}
-          openScannerOnMount={openPayScannerOnMount}
-          onScannerOpenConsumed={() => setOpenPayScannerOnMount(false)}
           initialAssetContractId={sendAssetContractId}
         />
       </Suspense>
@@ -707,11 +762,10 @@ export function WalletScreen({
         />
       </Suspense>
 
-      {rampEnabled ? (
-        <Suspense fallback={null}>
-          <OfframpModal open={isOfframpOpen} onClose={handleOfframpClose} />
-        </Suspense>
-      ) : null}
+      <P2pWithdrawSheet
+        open={isP2pWithdrawOpen}
+        onClose={() => setIsP2pWithdrawOpen(false)}
+      />
 
       <Suspense fallback={null}>
         <SuccessModal
@@ -725,6 +779,27 @@ export function WalletScreen({
           variant={receiptModalVariant}
         />
       </Suspense>
+
+      <Dialog
+        open={collectibleReceipt != null}
+        onOpenChange={(open) => {
+          if (!open) setCollectibleReceipt(null)
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/20 bg-black/90 text-white backdrop-blur-md sm:max-w-md">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{t.receiptDetailTitle}</DialogTitle>
+            <DialogDescription>{t.receiptDetailDesc}</DialogDescription>
+          </DialogHeader>
+          {collectibleReceipt ? <CollectibleReceipt model={collectibleReceipt} embedded /> : null}
+          <Button
+            onClick={() => setCollectibleReceipt(null)}
+            className="h-14 w-full bg-white text-lg font-semibold text-black hover:bg-white/90"
+          >
+            {t.done}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <Suspense fallback={null}>
         <ProfileSheet
@@ -741,9 +816,11 @@ export function WalletScreen({
         />
       </Suspense>
 
-      <Suspense fallback={null}>
-        <TrustPointsModal isOpen={isTrustModalOpen} onClose={() => setIsTrustModalOpen(false)} />
-      </Suspense>
+      {!pilotMainnet && (
+        <Suspense fallback={null}>
+          <TrustPointsModal isOpen={isTrustModalOpen} onClose={() => setIsTrustModalOpen(false)} />
+        </Suspense>
+      )}
 
       {shellLayout !== "landing" ? (
         <Suspense fallback={null}>
@@ -775,10 +852,14 @@ export function WalletScreen({
 
       <WalletSwitcherModal
         isOpen={isWalletSwitcherOpen}
-        onClose={() => setIsWalletSwitcherOpen(false)}
+        onClose={() => {
+          setIsWalletSwitcherOpen(false)
+          setReturnCollectibleHash(null)
+        }}
         walletAddress={walletAddress}
         walletNetwork={walletNetwork}
         sozuTag={username}
+        openCollectibleHash={returnCollectibleHash}
       />
     </>
   )
@@ -799,13 +880,13 @@ export function WalletScreen({
         {activationOnboarding}
         <div
           className={cn(
-            "relative h-full w-full overflow-hidden touch-pan-x select-none",
+            "sozu-night sozu-night-clear relative h-full w-full overflow-hidden touch-pan-x select-none",
             walletContentClass,
           )}
         >
           <div
             ref={landingRef}
-            className="flex h-full flex-col overflow-hidden"
+            className="relative z-10 flex h-full flex-col overflow-hidden"
             onTouchStart={(e) => {
               if (setupIncomplete) return
               pullHandlers.onTouchStart(e)
@@ -823,11 +904,12 @@ export function WalletScreen({
               swipeUpStartX.current = null
               const dy = startY - e.changedTouches[0].clientY
               const dx = Math.abs(e.changedTouches[0].clientX - startX)
+              const touchTarget = e.target instanceof Element ? e.target : null
+              if (touchTarget?.closest("[data-home-discover]")) return
               if (dx > 48) return
               if (dy > 32 && startY < 140) {
                 setIsWalletSwitcherOpen(true)
               } else if (dy > 48 && startY >= 140) {
-                setOpenPayScannerOnMount(true)
                 setSendModalOpen(true)
               }
             }}
@@ -844,16 +926,20 @@ export function WalletScreen({
                 aria-label="Cambiar billetera"
               >
                 <img
-                  src="/sozucapital_logo_tb.png"
+                  src="/brand/november-2026/mark.png"
                   alt="Sozu Wallet"
                   className="h-10 w-10 object-contain opacity-90 hover:opacity-100 transition-opacity"
                 />
               </button>
-              {walletNetwork === "testnet" && (
-                <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase border border-yellow-500/40 text-yellow-400 bg-yellow-500/10">
-                  {t.testnetBadge}
-                </span>
-              )}
+              <span
+                className={
+                  walletNetwork === "testnet"
+                    ? "inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase border border-yellow-500/40 text-yellow-400 bg-yellow-500/10"
+                    : "inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase border border-white/25 text-white/80 bg-white/10"
+                }
+              >
+                {walletNetwork === "testnet" ? t.testnetBadge : t.publicNetBadge}
+              </span>
             </header>
 
             {setupIncomplete && !showActivationOnboarding ? (
@@ -876,57 +962,38 @@ export function WalletScreen({
               </div>
             ) : (
               <>
-                <div className="pt-6">
+                <div className="pt-1">
                   <PullToRefreshIndicator pull={pull} progress={progress} refreshing={refreshing} />
                 </div>
 
                 <div
-                  className="flex min-h-0 flex-1 flex-col px-4 transition-transform duration-150 ease-out"
+                  className="flex min-h-0 flex-1 flex-col px-6 transition-transform duration-150 ease-out"
                   style={{ transform: pull > 0 ? `translateY(${pull * 0.35}px)` : undefined }}
                 >
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-start pt-2">
-                    <div className="flex min-h-0 w-full max-w-md flex-1 flex-col">
-                      <div className="flex min-h-0 w-full flex-col">
-                        {isBalanceLoading ? (
-                          <BalanceCardSkeleton compact />
-                        ) : (
-                          balanceBlock
-                        )}
-                      </div>
+                  <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center overflow-hidden pt-1 pb-[max(2.75rem,env(safe-area-inset-bottom)+2.25rem)]">
+                    <div className="flex w-full max-w-md flex-col">
+                      {isBalanceLoading ? (
+                        <BalanceCardSkeleton compact className="mb-8" />
+                      ) : (
+                        balanceBlock
+                      )}
 
-                      <div
-                        className={cn(
-                          "overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-                          isBalanceLoading ? "max-h-0 opacity-0" : "max-h-32 opacity-100",
-                        )}
-                        aria-hidden={isBalanceLoading}
-                      >
-                        {activationMessage ? (
-                          <p className="mt-4 text-center text-xs text-red-300/90">{activationMessage}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 pb-[calc(env(safe-area-inset-bottom)+2.75rem)] pt-2">
-                    <div className="mx-auto w-full max-w-[17rem] rounded-[2rem] border border-white/10 bg-black/20 p-3 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md">
-                      <div className="mb-2 text-center text-[8px] font-light uppercase tracking-[0.28em] text-white/40">
-                        {t.commandTitle}
-                      </div>
-                      <UniversalCommandBar
-                        bare
-                        onPayClick={handlePay}
-                        onDepositClick={handleDeposit}
-                      />
-                      {rampEnabled ? (
-                        <button
-                          type="button"
-                          onClick={handleOfframp}
-                          className="mt-2 flex h-12 w-full flex-col items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04] text-[9px] font-medium uppercase tracking-[0.16em] text-white/90 transition-colors hover:bg-white/[0.08] active:scale-[0.97] active:bg-white/12"
-                        >
-                          {t.cmdOfframp}
-                        </button>
+                      {activationMessage && !isBalanceLoading ? (
+                        <p className="mt-4 text-center text-xs text-red-300/90">{activationMessage}</p>
                       ) : null}
+                      {isBalanceLoading ? (
+                        <CommandBarSkeleton className="mt-2" />
+                      ) : (
+                        <>
+                          <UniversalCommandBar
+                            className="mt-2"
+                            onDepositClick={handleDeposit}
+                            onSendClick={() => setSendModalOpen(true)}
+                            onWithdrawClick={handleWithdraw}
+                          />
+                          <HomeDiscoverGrid className="mt-4" />
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -980,12 +1047,17 @@ export function WalletScreen({
           >
             <WalletErrorBoundary>
               <div className="relative mx-auto w-full max-w-7xl xl:max-w-[1320px] px-4 pt-16 pb-8 sm:px-6 md:py-12 lg:px-10 xl:px-12">
-                <div className={`mb-6 flex flex-col items-center gap-3 sm:mb-8 lg:items-center ${walletNetwork === "testnet" ? "lg:flex-row lg:justify-between" : ""}`}>
-                  {walletNetwork === "testnet" && (
-                    <span className="inline-flex px-3 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-yellow-500/40 text-yellow-400 bg-yellow-500/10">
-                      {t.testnetBadge}
-                    </span>
-                  )}
+                <div className="mb-6 flex flex-col items-center gap-3 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
+                  <span
+                    className={
+                      walletNetwork === "testnet"
+                        ? "inline-flex px-3 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-yellow-500/40 text-yellow-400 bg-yellow-500/10"
+                        : "inline-flex px-3 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase border border-white/25 text-white/80 bg-white/10"
+                    }
+                  >
+                    {walletNetwork === "testnet" ? t.testnetBadge : t.publicNetBadge}
+                  </span>
+{!pilotMainnet && (
                   <Link
                     href="/ledger"
                     className={`group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-2 py-1.5 text-sm text-white/85 transition-colors hover:border-white/30 hover:bg-white/[0.08] ${walletNetwork === "testnet" ? "lg:ml-auto" : ""}`}
@@ -996,6 +1068,7 @@ export function WalletScreen({
                       <FontAwesomeIcon icon={faCoins} style={{ color: "rgb(255, 255, 255)" }} />
                     </span>
                   </Link>
+                  )}
                 </div>
 
                 <div className={walletAddress ? "flex flex-col gap-8 lg:grid lg:grid-cols-12 lg:items-start lg:gap-8 xl:gap-10" : "mx-auto flex max-w-lg flex-col"}>

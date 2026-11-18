@@ -22,7 +22,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { ledgerUserHeaders } from "@/lib/ledger/client-headers"
 import { formatFiatAmount } from "@/lib/ledger/format-fiat"
 import type { GoalsCoachChatMessage, GoalsCoachSuggestedGoal } from "@/lib/ledger/goals-coach-openrouter"
 import {
@@ -36,9 +35,7 @@ import {
   type LedgerStoredMilestone,
 } from "@/lib/ledger/goals-local-storage"
 
-const ledgerFetchInit = {
-  headers: ledgerUserHeaders(),
-  cache: "no-store" as RequestCache,
+const ledgerFetchInit = { cache: "no-store" as RequestCache,
 }
 
 const WELCOME =
@@ -259,7 +256,7 @@ export default function LedgerGoalsPage() {
       try {
         const res = await fetch("/api/ledger/goals-coach", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...ledgerUserHeaders() },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: history,
             ledgerContext: ledgerContextForApi,

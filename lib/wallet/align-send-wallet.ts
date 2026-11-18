@@ -3,11 +3,13 @@
 import { getSmartAccountKit } from "@/lib/stellar/smartAccounts/client"
 import { registerOzSmartAccount } from "@/lib/stellar/smartAccounts/registerWalletClient"
 import { discoverFirstContractIdSafe } from "@/lib/stellar/smartAccounts/discover-contracts"
-import { deriveAndStoreKey } from "@/lib/storage/browser-keys"
 import { getCurrentCredentialId, storeCredentialIdInSession } from "@/lib/storage/key-utils"
 import { persistCanonicalWalletSession } from "@/lib/wallet/persist-wallet-session"
 
 type AlignResult = { contractId: string; signerG: string; credentialId: string; realigned: boolean }
+
+/** Passkey accounts have no classic signer. The field stays empty so callers skip G signing. */
+const NO_G_SIGNER = ""
 
 const ALIGN_CACHE_KEY = "sozu_wallet_align_v1"
 const ALIGN_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
@@ -102,11 +104,6 @@ export async function alignWalletForSend(
   }
 
   storeCredentialIdInSession(credId)
-  const { publicKey: signerG } = await deriveAndStoreKey(credId, userId)
-  const g = signerG.trim().toUpperCase()
-  if (!g.startsWith("G") || g.length !== 56) {
-    throw new Error("Invalid passkey signer (G…). Sign in again.")
-  }
 
   const sessionNorm = sessionC.trim().toUpperCase()
   let onChainC: string | null = null
@@ -133,8 +130,7 @@ export async function alignWalletForSend(
         `/api/smart-accounts/resolve-key-data?${new URLSearchParams({
           contractId: derived,
           credentialId: credId,
-        })}`,
-        { headers: { "x-user-id": userId } },
+        })}`
       )
       if (probe.ok) onChainC = derived
     }
@@ -155,8 +151,7 @@ export async function alignWalletForSend(
       `/api/smart-accounts/resolve-key-data?${new URLSearchParams({
         contractId: onChainC,
         credentialId: credId,
-      })}`,
-      { headers: { "x-user-id": userId } },
+      })}`
     )
     if (!keyProbe.ok) {
       console.warn(
@@ -165,37 +160,42 @@ export async function alignWalletForSend(
       )
     }
 
-    if (onChainC !== sessionNorm) {
-      console.warn("[alignWalletForSend] Realigning C", {
-        session: sessionNorm.slice(0, 12),
-        onChain: onChainC.slice(0, 12),
-      })
-      const { parsePasskeyPublicKey65 } = await import(
-        "@/lib/stellar/smartAccounts/passkeyPublicKey"
-      )
-      const primaryRes = await fetch("/api/auth/passkeys/primary", {
-        headers: { "x-user-id": userId },
-      })
-      const primary = (await primaryRes.json().catch(() => ({}))) as {
-        publicKey65b?: string
+    if (sessionNorm.startsWith("C") && sessionNorm.length === 56) {
+      if (onChainC !== sessionNorm) {
+        console.warn("[alignWalletForSend] Passkey contract differs from canonical; keeping canonical", {
+          canonical: sessionNorm.slice(0, 12),
+          passkey: onChainC.slice(0, 12),
+        })
       }
-      if (!primaryRes.ok || !primary.publicKey65b) {
-        throw new Error("Passkey public key missing. Sign in again.")
-      }
-      await registerOzSmartAccount({
-        contractId: onChainC,
-        credentialId: credId,
-        publicKey: parsePasskeyPublicKey65(primary.publicKey65b),
-        signerPublicKey: g,
-      })
-      persistCanonicalWalletSession(onChainC, "oz", credId)
-      return { contractId: onChainC, signerG: g, credentialId: credId, realigned: true }
+      return { contractId: sessionNorm, signerG: NO_G_SIGNER, credentialId: credId, realigned: false }
     }
-    return { contractId: onChainC, signerG: g, credentialId: credId, realigned: false }
+
+    const { parsePasskeyPublicKey65 } = await import(
+      "@/lib/stellar/smartAccounts/passkeyPublicKey"
+    )
+    const primaryRes = await fetch("/api/auth/passkeys/primary")
+    const primary = (await primaryRes.json().catch(() => ({}))) as {
+      publicKey65b?: string
+    }
+    if (!primaryRes.ok || !primary.publicKey65b) {
+      throw new Error("Passkey public key missing. Sign in again.")
+    }
+    const saved = await registerOzSmartAccount({
+      contractId: onChainC,
+      credentialId: credId,
+      publicKey: parsePasskeyPublicKey65(primary.publicKey65b),
+    })
+    persistCanonicalWalletSession(saved.contractId, "oz", credId)
+    return {
+      contractId: saved.contractId,
+      signerG: NO_G_SIGNER,
+      credentialId: credId,
+      realigned: saved.contractId !== sessionNorm,
+    }
   }
 
   if (sessionNorm.startsWith("C") && sessionNorm.length === 56) {
-    return { contractId: sessionNorm, signerG: g, credentialId: credId, realigned: false }
+    return { contractId: sessionNorm, signerG: NO_G_SIGNER, credentialId: credId, realigned: false }
   }
 
   throw new Error(

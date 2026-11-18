@@ -4,13 +4,18 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { allowCredentialTransportsForRequest } from "@/lib/webauthn/credential-transports"
 import { generateChallenge } from "@/lib/webauthn/utils"
 import { challengeStore, cleanupChallenges, getRpID, rpName } from "@/lib/webauthn/config"
+import { requireSession } from "@/lib/auth/session"
 export async function OPTIONS(request: NextRequest) {
   return handleOPTIONS(request)
 }
 
 export async function POST(request: NextRequest) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   try {
-    const { transactionHash, userId } = await request.json()
+    const userId = caller.userId
+    const { transactionHash } = await request.json()
 
     if (!transactionHash || typeof transactionHash !== "string" || transactionHash.length === 0) {
       return NextResponse.json(
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
     const { createClient: createServiceClient } = await import("@supabase/supabase-js")
     const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey)
 
-    // Use service role: cookie-based Supabase client often has no session here (x-user-id only),
+    // Use service role: cookie-based Supabase client often has no session here (wallet session cookie only),
     // so RLS would hide the profile and break signing on production.
     const { data: profile } = await serviceClient
       .from("profiles")

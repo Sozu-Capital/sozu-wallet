@@ -3,12 +3,11 @@
 import type { SmartAccountKit } from "smart-account-kit"
 import { rpc, xdr } from "@stellar/stellar-sdk"
 import { Client as SmartAccountClient } from "smart-account-kit-bindings"
-import { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
-import { getUserId } from "@/lib/wallet-utils"
-import {
-  buildExternalSignerKeyData,
-  resolveCredentialIdBytes,
-} from "@/lib/stellar/smartAccounts/passkeyPublicKey"
+import { resolveCredentialIdBytes } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
+import { passkeyNativeDeploySigners } from "@/lib/stellar/smartAccounts/passkeyNativeSigner"
+import { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/ozContractId"
+
+export { deriveOzContractIdForUser, ozDeploySalt }
 
 /** Kit fields used for deploy — avoid intersecting SmartAccountKit (private fields break types). */
 type KitDeployInternals = {
@@ -30,8 +29,6 @@ function asDeployKit(kit: SmartAccountKit): KitDeployInternals {
 function sorobanServer(rpcUrl: string): rpc.Server {
   return new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith("http://") })
 }
-
-export { deriveOzContractIdForUser, ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
 
 export async function isOzContractDeployedOnChain(
   rpcUrl: string,
@@ -75,6 +72,7 @@ function activateKitWallet(
 
 /**
  * Deploy OZ smart account with user-scoped salt (not kit default hash(credentialId) only).
+ * The fee payer sponsors the create. The public deployer has no XLM, so this never calls send().
  */
 export async function deployOzSmartAccountForUser(params: {
   kit: SmartAccountKit
@@ -95,18 +93,17 @@ export async function deployOzSmartAccountForUser(params: {
     return { contractId: derivedId }
   }
 
-  // Match smart-account-kit: suffix is raw credential id bytes (prefer stored rawId).
   const credentialIdBuffer = resolveCredentialIdBytes(params.credentialId)
   const salt = ozDeploySalt(params.credentialId, params.userId)
-  const keyData = buildExternalSignerKeyData(params.publicKey65, credentialIdBuffer)
-  const signer = {
-    tag: "External" as const,
-    values: [kit.webauthnVerifierAddress, keyData] as [string, Buffer],
-  }
+  const signers = passkeyNativeDeploySigners({
+    webauthnVerifierAddress: kit.webauthnVerifierAddress,
+    publicKey65: params.publicKey65,
+    credentialIdBytes: credentialIdBuffer,
+  })
 
   try {
     const deployTx = await SmartAccountClient.deploy(
-      { signers: [signer], policies: new Map() },
+      { signers, policies: new Map() },
       {
         networkPassphrase: kit.networkPassphrase,
         rpcUrl: kit.rpcUrl,
@@ -122,13 +119,9 @@ export async function deployOzSmartAccountForUser(params: {
     if (!signedXdr) {
       throw new Error("Deploy transaction was not signed.")
     }
-    const userId = getUserId()
     const sponsored = await fetch("/api/smart-accounts/submit-deploy", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(userId ? { "x-user-id": userId } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ signedXdr }),
     })
     const sponsoredBody = (await sponsored.json().catch(() => ({}))) as { error?: string }

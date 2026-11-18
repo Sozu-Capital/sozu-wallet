@@ -7,7 +7,18 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { getUserId } from "@/lib/wallet-utils"
 import { parseApyFromApiResponse } from "@/lib/defindex/parse-apy-response"
 import { deferNonCritical } from "@/lib/defer-non-critical"
+import { recoverStaleWalletSession } from "@/lib/auth/wallet-session-client"
 import { isClientAuthed } from "@/lib/client-auth-gate"
+import { isPilotMainnet } from "@/lib/pilot/pilot-mainnet"
+import { clientStellarNetwork } from "@/lib/stellar/client-network"
+import {
+  readCachedUsdcBalance,
+  writeCachedUsdcBalance,
+  type CachedUsdcBalance,
+} from "@/lib/wallet/cached-usdc-balance"
+import { offlineCardUsdc, saveOfflineBalanceLocal } from "@/lib/offline/offline-balance"
+import { mergeAccountHistory, FAUCET_COUNTERPARTY } from "@/lib/wallet/account-tx-history"
+import { readCachedTxHistory, writeCachedTxHistory } from "@/lib/wallet/cached-tx-history"
 
 export interface Vault {
   id: string
@@ -88,7 +99,7 @@ export function useWalletData() {
       ""
     )
   })
-  const [walletNetwork, setWalletNetwork] = useState<"testnet" | "mainnet">("testnet")
+  const [walletNetwork, setWalletNetwork] = useState<"testnet" | "mainnet">(() => clientStellarNetwork())
   const [username, setUsername] = useState("")
   const [xlmPriceUSD, setXlmPriceUSD] = useState<number | null>(null)
   const [defindexBalance, setDefindexBalance] = useState<DefindexBalance | null>(null)
@@ -96,16 +107,28 @@ export function useWalletData() {
   const [apyValue, setApyValue] = useState<number | null>(null)
   const [apyLoading, setApyLoading] = useState(true)
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
+  const historyAddressRef = useRef(walletAddress.trim().toUpperCase())
+  historyAddressRef.current = walletAddress.trim().toUpperCase()
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
   const [addressToTagMap, setAddressToTagMap] = useState<Record<string, string>>({})
   /** One-shot client bootstrap: avoids Strict Mode double-fetch and dependency churn loops. */
   const walletBootstrapDoneRef = useRef(false)
+  /** True once a balance is on screen, so a refresh must not put the skeleton back. */
+  const paintedBalanceRef = useRef(false)
+  const balanceInflightRef = useRef<{ pk: string; promise: Promise<void> } | null>(null)
   const [setupIncomplete, setSetupIncomplete] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(() => {
     if (typeof window === "undefined") return null
     return sessionStorage.getItem("wallet_setup_error")
   })
   const [isFinishingSetup, setIsFinishingSetup] = useState(false)
+
+  useEffect(() => {
+    if (!walletAddress || !defindexBalance) return
+    const usdc = offlineCardUsdc(defindexBalance)
+    if (usdc == null) return
+    saveOfflineBalanceLocal({ wallet: walletAddress, usdc })
+  }, [walletAddress, defindexBalance])
 
   // LRU cache for address-to-tag mapping (limit to 100 entries)
   const updateAddressToTagMap = useCallback((address: string, tag: string) => {
@@ -132,18 +155,27 @@ export function useWalletData() {
 
   /** Single balance source: C-wallet spendable USDC + DeFindex strategy (no G+C double count). */
   const refreshUnifiedBalance = useCallback(async (userId: string, publicKey?: string) => {
+    const pk =
+      publicKey?.trim().toUpperCase() ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("stellar_public_key") ??
+          sessionStorage.getItem("stellar_public_key") ??
+          ""
+        : "")
+    const flightKey = pk || userId
+    const inflight = balanceInflightRef.current
+    if (inflight?.pk === flightKey) return inflight.promise
+
+    const run = async () => {
     try {
       const { fetchUnifiedUsdcBalance } = await import("@/lib/wallet/unified-usdc-balance")
-      const pk =
-        publicKey?.trim().toUpperCase() ||
-        (typeof window !== "undefined"
-          ? localStorage.getItem("stellar_public_key") ??
-            sessionStorage.getItem("stellar_public_key") ??
-            ""
-          : "")
 
       const requestedPk = publicKey?.trim().toUpperCase()
       const unified = await fetchUnifiedUsdcBalance(userId, pk || undefined)
+      const remember = (address: string, balance: CachedUsdcBalance) => {
+        writeCachedUsdcBalance(address, balance)
+        paintedBalanceRef.current = true
+      }
       if (!unified) {
         console.warn("[Wallet] Unified balance fetch failed for", pk?.slice(0, 12) || userId)
         setIsBalanceLoading(false)
@@ -173,7 +205,7 @@ export function useWalletData() {
         )
         const retry = await fetchUnifiedUsdcBalance(userId, sessionPk)
         if (retry && retry.displayBalance > 0) {
-          setDefindexBalance((prev) => ({
+          const next = {
             walletBalance: retry.walletBalance,
             sorobanSacBalance: retry.sorobanSacBalance,
             spendableOnC: retry.spendableOnC,
@@ -182,17 +214,21 @@ export function useWalletData() {
             displayBalance: retry.displayBalance,
             classicOnSigner: retry.classicOnSigner,
             legacyUsdcOnSigner: retry.legacyUsdcOnSigner,
+          }
+          setDefindexBalance((prev) => ({
+            ...next,
             strategyShares: prev?.strategyShares ?? 0,
             apy: prev?.apy ?? 15.5,
             tokenBalances: retry.tokenBalances,
             contractIds: retry.contractIds,
           }))
+          remember(sessionPk, next)
           setWalletAddress(sessionPk)
           return
         }
       }
 
-      setDefindexBalance((prev) => ({
+      const next = {
         walletBalance: unified.walletBalance,
         sorobanSacBalance: unified.sorobanSacBalance,
         spendableOnC: unified.spendableOnC,
@@ -201,6 +237,9 @@ export function useWalletData() {
         displayBalance: unified.displayBalance,
         classicOnSigner: unified.classicOnSigner,
         legacyUsdcOnSigner: unified.legacyUsdcOnSigner,
+      }
+      setDefindexBalance((prev) => ({
+        ...next,
         strategyShares: prev?.strategyShares ?? 0,
         apy: prev?.apy ?? 15.5,
         tokenBalances: unified.tokenBalances,
@@ -227,10 +266,20 @@ export function useWalletData() {
           sessionStorage.setItem("stellar_public_key", addressToPersist)
         }
       }
+      remember(addressToPersist || unified.walletAddress, next)
     } catch (error) {
       console.error("[Wallet] ❌ Error fetching unified balance:", error)
     } finally {
       setIsBalanceLoading(false)
+    }
+    }
+
+    const promise = run()
+    balanceInflightRef.current = { pk: flightKey, promise }
+    try {
+      await promise
+    } finally {
+      if (balanceInflightRef.current?.promise === promise) balanceInflightRef.current = null
     }
   }, [])
 
@@ -287,44 +336,64 @@ export function useWalletData() {
     return null
   }, [addressToTagMap, updateAddressToTagMap])
 
+  // Paint this account's saved history immediately. A later fetch must not
+  // leave another account's rows on screen.
+  useEffect(() => {
+    const pk = walletAddress.trim().toUpperCase()
+    if (!/^[GC][A-Z0-9]{55}$/.test(pk)) {
+      setTransactionHistory([])
+      return
+    }
+    setTransactionHistory(readCachedTxHistory(pk) ?? [])
+  }, [walletAddress])
+
   // Fetch transaction history
   const fetchTransactionHistory = useCallback(async (publicKey: string) => {
-    if (!publicKey) {
+    const pk = publicKey.trim().toUpperCase()
+    if (!/^[GC][A-Z0-9]{55}$/.test(pk)) {
       console.warn("[Wallet] No public key provided for transaction history fetch")
       return
     }
-    
+
+    const cached = readCachedTxHistory(pk) ?? []
+    if (historyAddressRef.current === pk) {
+      setTransactionHistory(cached)
+    }
+
     setIsLoadingTransactions(true)
     try {
-      const userId = getUserId()
-      
-      console.log("[Wallet] 🔍 Fetching transaction history for:", publicKey.substring(0, 10) + "...")
-      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${publicKey}&limit=100`, {
-        headers: {
-          "x-user-id": userId || "",
-        },
-      })
-      
+      console.log("[Wallet] 🔍 Fetching transaction history for:", pk.substring(0, 10) + "...")
+      const response = await fetch(`/api/wallet/stellar/transactions?publicKey=${pk}&limit=200`)
+
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.transactions) {
+        if (data.success && Array.isArray(data.transactions)) {
           console.log("[Wallet] ✅ Transaction history fetched:", data.transactions.length, "transactions")
-          
-          // Resolve addresses to tags for all transactions
-          const addressesToResolve = new Set<string>()
-          data.transactions.forEach((tx: any) => {
-            const paymentOp = tx.operations.find((op: any) => op.type === "payment")
-            if (paymentOp) {
-              if (paymentOp.from && paymentOp.from !== publicKey) addressesToResolve.add(paymentOp.from)
-              if (paymentOp.to && paymentOp.to !== publicKey) addressesToResolve.add(paymentOp.to)
-            }
+
+          const merged = mergeAccountHistory({
+            walletAddress: pk,
+            remembered: cached,
+            chain: data.transactions as Transaction[],
+            faucet: [],
           })
-          
-          // Resolve all addresses in parallel
-          const resolvePromises = Array.from(addressesToResolve).map(addr => resolveAddressToTag(addr))
-          await Promise.all(resolvePromises)
-          
-          setTransactionHistory(data.transactions)
+
+          const addressesToResolve = new Set<string>()
+          for (const tx of merged) {
+            const paymentOp = tx.operations.find((op) => op.type === "payment")
+            if (!paymentOp) continue
+            for (const address of [paymentOp.from, paymentOp.to]) {
+              const normalized = address.trim().toUpperCase()
+              if (!normalized || normalized === pk || normalized === FAUCET_COUNTERPARTY) continue
+              addressesToResolve.add(normalized)
+            }
+          }
+
+          await Promise.all(Array.from(addressesToResolve).map((addr) => resolveAddressToTag(addr)))
+
+          writeCachedTxHistory(pk, merged)
+          if (historyAddressRef.current === pk) {
+            setTransactionHistory(merged)
+          }
         }
       } else {
         console.warn("[Wallet] Could not fetch transaction history:", response.status)
@@ -332,23 +401,22 @@ export function useWalletData() {
     } catch (error) {
       console.error("[Wallet] ❌ Error fetching transaction history:", error)
     } finally {
-      setIsLoadingTransactions(false)
+      if (historyAddressRef.current === pk) {
+        setIsLoadingTransactions(false)
+      }
     }
   }, [resolveAddressToTag])
 
   // Fetch DeFindex balance
   const fetchDefindexBalance = useCallback(async (userId: string, publicKey?: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching DeFindex balance")
       const qs =
         publicKey && /^(C|G)[A-Z0-9]{55}$/.test(publicKey)
           ? `?publicKey=${encodeURIComponent(publicKey)}`
           : ""
-      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`, {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const defindexResponse = await fetch(`/api/wallet/defindex/balance${qs}`)
 
       if (defindexResponse.ok) {
         const defindexData = await defindexResponse.json()
@@ -392,13 +460,13 @@ export function useWalletData() {
 
   // Fetch APY
   const fetchAPY = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) {
+      setApyLoading(false)
+      return
+    }
     try {
       setApyLoading(true)
-      const apyResponse = await fetch("/api/wallet/defindex/apy", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const apyResponse = await fetch("/api/wallet/defindex/apy")
 
       if (apyResponse.ok) {
         const apyData = await apyResponse.json()
@@ -416,13 +484,10 @@ export function useWalletData() {
 
   // Fetch auto-deposit status
   const fetchAutoDepositStatus = useCallback(async (userId: string) => {
+    if (isPilotMainnet()) return
     try {
       console.log("[Wallet] Fetching auto-deposit status")
-      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const autoDepositResponse = await fetch("/api/wallet/defindex/auto-deposit")
 
       if (autoDepositResponse.ok) {
         const autoDepositData = await autoDepositResponse.json()
@@ -449,13 +514,9 @@ export function useWalletData() {
     options?: { gateBalance?: boolean },
   ) => {
     try {
-      if (options?.gateBalance) setIsBalanceLoading(true)
+      if (options?.gateBalance && !paintedBalanceRef.current) setIsBalanceLoading(true)
       console.log("[Wallet] Fetching XLM balance for wallet:", publicKey)
-      const balanceResponse = await fetch("/api/wallet/stellar/balance", {
-        headers: {
-          "x-user-id": userId,
-        },
-      })
+      const balanceResponse = await fetch("/api/wallet/stellar/balance")
 
       if (balanceResponse.ok) {
         const balanceData = await balanceResponse.json()
@@ -478,7 +539,7 @@ export function useWalletData() {
       const pk = publicKey.trim().toUpperCase()
       if (!pk.startsWith("C") && !pk.startsWith("G")) return
 
-      setIsBalanceLoading(true)
+      if (!paintedBalanceRef.current) setIsBalanceLoading(true)
       // Unified USDC must finish before DeFindex — otherwise defindex sets displayBalance: 0 and the card sticks at $0.
       await refreshUnifiedBalance(userId, pk)
       deferNonCritical(() => {
@@ -595,6 +656,20 @@ export function useWalletData() {
     if (sessionPublicKey?.startsWith("C") && !walletAddress) {
       setWalletAddress(sessionPublicKey)
     }
+    if (sessionPublicKey?.startsWith("C") && sessionPublicKey.length === 56) {
+      const cached = readCachedUsdcBalance(sessionPublicKey)
+      if (cached) {
+        paintedBalanceRef.current = true
+        setDefindexBalance((prev) =>
+          prev ?? {
+            ...cached,
+            strategyShares: 0,
+            apy: 15.5,
+          },
+        )
+        setIsBalanceLoading(false)
+      }
+    }
 
     const checkAuth = () => {
       if (!isClientAuthed()) {
@@ -614,23 +689,32 @@ export function useWalletData() {
           return
         }
         
-        const [vaultResponse, trustResponse] = await Promise.all([
-          fetch("/api/wallet/vault", { headers: { "x-user-id": userId } }),
-          fetch("/api/wallet/trust-points", { headers: { "x-user-id": userId } }),
-        ])
-
-        if (!vaultResponse.ok) {
-          throw new Error("Failed to fetch vault data")
-        }
-
-        const vaultData = await vaultResponse.json()
-        setVault(vaultData.vault)
-
-        if (trustResponse.ok) {
-          const trustData = await trustResponse.json()
-          setTrustPoints(trustData.trustPoints)
-        } else {
+        if (isPilotMainnet()) {
           setTrustPoints({ balance: 0, last_daily_credit: null })
+        } else {
+          const [vaultResponse, trustResponse] = await Promise.all([
+            fetch("/api/wallet/vault"),
+            fetch("/api/wallet/trust-points"),
+          ])
+
+          if (vaultResponse.status === 401) {
+            recoverStaleWalletSession()
+            return
+          }
+
+          if (!vaultResponse.ok) {
+            throw new Error("Failed to fetch vault data")
+          }
+
+          const vaultData = await vaultResponse.json()
+          setVault(vaultData.vault)
+
+          if (trustResponse.ok) {
+            const trustData = await trustResponse.json()
+            setTrustPoints(trustData.trustPoints)
+          } else {
+            setTrustPoints({ balance: 0, last_daily_credit: null })
+          }
         }
         
         // Get username

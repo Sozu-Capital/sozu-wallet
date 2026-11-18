@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital";
+import { sozuPayOriginFromRequest } from "@/lib/sozupay-origin";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -11,9 +10,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${SOZUPAY_URL}/api/checkout/public?id=${sessionId}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${sozuPayOriginFromRequest(request)}/api/checkout/public?id=${sessionId}`,
+      {
+        cache: "no-store",
+      },
+    );
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

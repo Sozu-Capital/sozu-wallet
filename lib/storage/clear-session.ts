@@ -4,6 +4,7 @@
  */
 export function clearClientSession(): void {
   if (typeof window === "undefined") return
+  void fetch("/api/auth/logout", { method: "POST", keepalive: true }).catch(() => {})
   // Persistent keys (localStorage)
   localStorage.removeItem("dev_authenticated")
   localStorage.removeItem("dev_username")

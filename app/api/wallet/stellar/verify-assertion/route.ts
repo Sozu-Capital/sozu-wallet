@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server"
 import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { challengeStore } from "@/lib/webauthn/config"
 import { base64URLToBuffer } from "@/lib/webauthn/utils"
+import { requireSession } from "@/lib/auth/session"
 
 /** Accept clientDataJSON.origin if it matches any plausible app URL (prod env drift, Vercel previews, missing Origin). */
 function isWebAuthnOriginAllowed(clientOrigin: string, request: NextRequest): boolean {
@@ -56,8 +57,12 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const caller = requireSession(request, corsHeaders(request as any))
+  if (caller.error) return caller.error
+
   try {
-    const { credential, transactionHash, userId, challenge: providedChallenge } = await request.json()
+    const userId = caller.userId
+    const { credential, transactionHash, challenge: providedChallenge } = await request.json()
 
     if (!credential || !credential.id) {
       return NextResponse.json(

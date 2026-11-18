@@ -32,7 +32,7 @@ Assets are symlinked from the main app:
 - `public/onboarding/` — slide screenshots + background
 - `public/icons/` — Sozu app icon
 - `public/sound/` — transition SFX
-- `public/sozucapital_logo_tb.png` — outro logo
+- `public/brand/november-2026/mark.png` — November 2026 logo (outro)
 
 ## Structure
 

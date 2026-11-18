@@ -65,7 +65,7 @@ export function useFaucetDeposit() {
         // Build the unsigned Soroban transfer (user C → vault C).
         const buildResponse = await fetch("/api/wallet/stellar/payment", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-user-id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             destination: vaultAddress,
             amount: amount.toString(),
@@ -157,7 +157,7 @@ export function useFaucetDeposit() {
 
         const submitResponse = await fetch("/api/wallet/stellar/payment", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-user-id": userId },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signedEnvelopeXdr }),
         });
         if (!submitResponse.ok) {

@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
+import { corsHeaders } from "@/lib/cors"
 import { getAssetRegistry } from "@/lib/stellar/asset-registry"
 import { getHolderTokenBalances } from "@/lib/stellar/token-balances"
 import { getStellarConfig } from "@/lib/turnkey/config"
 import { isStellarHolderAddress } from "@/lib/stellar/stellar-holder"
 
-const corsHeaders = () => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id",
-})
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders() })
+export async function OPTIONS(request: NextRequest) {
+  return NextResponse.json({}, { headers: corsHeaders(request) })
 }
 
 /**
@@ -50,10 +46,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       { network, registry, balances },
-      { headers: corsHeaders() },
+      { headers: corsHeaders(request) },
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return NextResponse.json({ error: message }, { status: 500, headers: corsHeaders() })
+    return NextResponse.json({ error: message }, { status: 500, headers: corsHeaders(request) })
   }
 }

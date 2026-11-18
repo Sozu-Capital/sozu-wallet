@@ -1,4 +1,5 @@
 import type React from "react"
+import { AuthShaderLayer } from "@/components/auth-shader-layer"
 
 export function PaperShaderBackgroundShell({
   children,
@@ -10,6 +11,7 @@ export function PaperShaderBackgroundShell({
       <div aria-hidden className="sozu-app-viewport sozu-app-viewport-bg pointer-events-none z-0">
         <div className="sozu-app-viewport-inner bg-black" />
       </div>
+      <AuthShaderLayer />
       {children}
     </>
   )

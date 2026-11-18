@@ -37,6 +37,21 @@ async function alignWalletMaterialAfterLoginImpl(
       return { publicKey: existing.publicKey, needsWalletSync: false }
     }
 
+    // Existing classic G-signer rows stay put. This login does not deploy a replacement account.
+    const legacyRes = await fetch("/api/wallet/stellar/address", { cache: "no-store" })
+    if (legacyRes.ok) {
+      const legacy = (await legacyRes.json()) as { publicKey?: string | null }
+      const legacyPk = legacy.publicKey?.trim().toUpperCase()
+      if (legacyPk?.startsWith("G") && legacyPk.length === 56) {
+        persistWalletPublicKey(legacyPk)
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("wallet_type", "legacy")
+          sessionStorage.removeItem("wallet_sync_pending")
+        }
+        return { publicKey: legacyPk, needsWalletSync: false }
+      }
+    }
+
     const { publicKey, walletType } = await ensureSmartWallet(userId, credentialId)
     if (publicKey.startsWith("C") && publicKey.length === 56) {
       persistWalletPublicKey(publicKey)
