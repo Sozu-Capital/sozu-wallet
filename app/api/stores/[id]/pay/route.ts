@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-
-const SOZUPAY_URL = process.env.NEXT_PUBLIC_SOZUPAY_URL || "https://pay.sozu.capital"
+import { sozuPayOriginFromRequest } from "@/lib/sozupay-origin"
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -13,7 +12,9 @@ export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   try {
-    const res = await fetch(`${SOZUPAY_URL}/api/public/stores/${encodeURIComponent(id)}/pay`, {
+    const res = await fetch(
+      `${sozuPayOriginFromRequest(request)}/api/public/stores/${encodeURIComponent(id)}/pay`,
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
