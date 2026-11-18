@@ -128,7 +128,6 @@ export function CollectionsPanel({ onLeavePrevious }: { onLeavePrevious?: () => 
         imageUrl: item.imagePath,
         priceLabel: item.priceUsdc && item.priceUsdc !== UNRECORDED_PRICE_USDC ? `${item.priceUsdc} USDC` : null,
         excerpt: copy.receiptLine,
-        tags: [copy.testnet],
         actionLabel: copy.findOpen,
       }]
     }),
