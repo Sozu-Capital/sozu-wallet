@@ -589,7 +589,7 @@ export const SendPaymentModal = memo(function SendPaymentModal({
           {/* Drag handle */}
           <div className="mx-auto mt-3 mb-0 h-[3px] w-8 shrink-0 rounded-full bg-white/[0.10]" />
 
-          {/* Balance reference — matches balance card: fiat primary, USDC subline */}
+          {/* Balance reference — large number is the selected send currency. */}
           <div className="flex flex-col items-start px-5 pt-4 pb-2 shrink-0">
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/30 mb-1">
               Disponible
@@ -602,6 +602,18 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                     {t.sendAssetPizza}
                   </span>
                 </div>
+              ) : amountInputCurrency === "usdc" ? (
+                <>
+                  <div className="flex max-w-full items-baseline gap-1.5 justify-start">
+                    <div className={balanceSizeClass}>{formatBalance(availableBalance)}</div>
+                    <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/40">
+                      USDC
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm">
+                    {availableFiatFormatted} {referenceFiat}
+                  </p>
+                </>
               ) : (
                 <>
                   <div className="flex max-w-full items-baseline gap-1.5 justify-start">
@@ -916,15 +928,33 @@ export const SendPaymentModal = memo(function SendPaymentModal({
                 className="w-full py-2 text-center transition-colors hover:bg-white/[0.03] rounded-xl"
                 aria-label={t.sendTapToSwitchCurrency}
               >
-                <div className="flex max-w-full items-baseline gap-1.5 justify-center">
-                  <div className={balanceSizeClass}>{amountFiatFormatted}</div>
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/40">
-                    {referenceFiat}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm">
-                  {amountUsdcFormatted}
-                </p>
+                {amountInputCurrency === "usdc" ? (
+                  <>
+                    <div className="flex max-w-full items-baseline gap-1.5 justify-center">
+                      <div className={balanceSizeClass}>
+                        {hasValidAmount ? formatBalance(displayUsdc) : formatBalance(0)}
+                      </div>
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/40">
+                        USDC
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm">
+                      {amountFiatFormatted} {referenceFiat}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex max-w-full items-baseline gap-1.5 justify-center">
+                      <div className={balanceSizeClass}>{amountFiatFormatted}</div>
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-white/40">
+                        {referenceFiat}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-xs tabular-nums text-white/35 sm:text-sm">
+                      {amountUsdcFormatted}
+                    </p>
+                  </>
+                )}
                 <p className="text-white/35 text-xs mt-2">{t.sendTapToSwitchCurrency}</p>
               </button>
               )}

@@ -95,7 +95,7 @@ export function rememberClaimedSouvenir(claim: ClaimedSouvenir): void {
 }
 
 /**
- * Bought collectibles become 3D receipts. Event badges appear only after this account claims them.
+ * Bought collectibles become receipts with the merchant photo when the payment link had one.
  * A claim is once per account. After that the badge stays collected even when the window closes.
  * Unclaimed catalog entries are offered only while their timeframe is open.
  */
@@ -139,6 +139,7 @@ export function profileSouvenirs(input: {
           sale.editionNumber && sale.editionSize
             ? { number: sale.editionNumber, size: sale.editionSize }
             : null,
+        imageUrl: purchase.imageUrl,
       }),
     }
   })

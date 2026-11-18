@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest"
-import { LIQUID_SOCIETY_SOUVENIR_SLUG, listCollectibleSouvenirs } from "@/lib/merch/catalog"
 import {
   allocateSouvenirSlug,
   isSouvenirClaimOpen,
@@ -20,10 +19,16 @@ describe("souvenir claim window", () => {
     expect(isSouvenirClaimOpen(souvenir, Date.parse("2026-11-19T00:00:00.000-03:00"))).toBe(false)
   })
 
-  it("keeps Liquid Society claimable on the night before the event", () => {
-    const seeded = listCollectibleSouvenirs().find((item) => item.slug === LIQUID_SOCIETY_SOUVENIR_SLUG)
-    expect(seeded).toBeTruthy()
-    expect(isSouvenirClaimOpen(seeded!, NOW)).toBe(true)
+  it("lets a merchant drop stay claimable the night before its window ends", () => {
+    expect(
+      isSouvenirClaimOpen(
+        {
+          claimStartsAt: "2026-11-17T00:00:00.000-03:00",
+          claimEndsAt: "2026-11-19T00:00:00.000-03:00",
+        },
+        NOW,
+      ),
+    ).toBe(true)
   })
 })
 
@@ -60,7 +65,7 @@ describe("merchant souvenir launch", () => {
     ).toEqual({ error: "invalid_window" })
   })
 
-  it("puts a merchant drop next to the seeded event badge", () => {
+  it("lists merchant drops without a hardcoded seed badge", () => {
     const merged = mergeSouvenirCatalog([
       {
         slug: "noche-pizza-abc123",
@@ -71,8 +76,7 @@ describe("merchant souvenir launch", () => {
         claimEndsAt: "2026-11-19T00:00:00.000Z",
       },
     ])
-    expect(merged.map((item) => item.slug)).toContain(LIQUID_SOCIETY_SOUVENIR_SLUG)
-    expect(merged.map((item) => item.slug)).toContain("noche-pizza-abc123")
+    expect(merged.map((item) => item.slug)).toEqual(["noche-pizza-abc123"])
   })
 
   it("builds a stable slug from the title", () => {

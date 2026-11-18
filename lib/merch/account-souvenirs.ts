@@ -1,10 +1,9 @@
-import { listCollectibleSouvenirs, type CollectibleSouvenir } from "@/lib/merch/catalog"
+import type { CollectibleSouvenir } from "@/lib/merch/catalog"
 import { isSouvenirClaimOpen, mergeSouvenirCatalog, souvenirSlugKey } from "@/lib/merch/souvenir-window"
 import {
   getSouvenirClaim,
   getSouvenirDrop,
   insertSouvenirClaim,
-  insertSouvenirDrop,
   isSouvenirStoreUnavailable,
   listSouvenirClaimsForUser,
   listSouvenirDrops,
@@ -15,7 +14,7 @@ export async function loadSouvenirCatalog(): Promise<CollectibleSouvenir[]> {
   try {
     return mergeSouvenirCatalog(await listSouvenirDrops())
   } catch (error) {
-    if (isSouvenirStoreUnavailable(error)) return [...listCollectibleSouvenirs()]
+    if (isSouvenirStoreUnavailable(error)) return []
     throw error
   }
 }
@@ -37,12 +36,11 @@ export async function resolveSouvenir(slug: string): Promise<CollectibleSouvenir
   const key = souvenirSlugKey(slug)
   if (!key) return null
   try {
-    const row = await getSouvenirDrop(key)
-    if (row) return row
+    return await getSouvenirDrop(key)
   } catch (error) {
     if (!isSouvenirStoreUnavailable(error)) throw error
+    return null
   }
-  return listCollectibleSouvenirs().find((item) => souvenirSlugKey(item.slug) === key) ?? null
 }
 
 export async function claimSouvenirForAccount(input: {
@@ -61,19 +59,6 @@ export async function claimSouvenirForAccount(input: {
     if (existing) return { ok: true, claim: existing, already: true }
 
     if (!isSouvenirClaimOpen(souvenir)) return { ok: false, error: "closed" }
-
-    const seeded = listCollectibleSouvenirs().find((item) => souvenirSlugKey(item.slug) === souvenirSlugKey(souvenir.slug))
-    if (seeded) {
-      await insertSouvenirDrop({
-        slug: seeded.slug,
-        title: seeded.name,
-        drop: seeded.drop,
-        imageUrl: seeded.imagePath,
-        merchantOrgId: null,
-        claimStartsAt: seeded.claimStartsAt,
-        claimEndsAt: seeded.claimEndsAt,
-      }).catch(() => "conflict")
-    }
 
     const saved = await insertSouvenirClaim({
       userId: input.userId,

@@ -1,54 +1,65 @@
 import { describe, expect, it } from "vitest"
-import { LIQUID_SOCIETY_SOUVENIR_SLUG, listCollectibleSouvenirs } from "@/lib/merch/catalog"
 import { profileSouvenirs } from "@/lib/merch/souvenirs"
 import { buildCollectibleReceipt } from "@/lib/merch/receipt"
+import type { CollectibleSouvenir } from "@/lib/merch/catalog"
 
 const hash = "a".repeat(64)
 const DURING_EVENT = Date.parse("2026-11-18T12:00:00.000-03:00")
 const AFTER_EVENT = Date.parse("2026-11-20T12:00:00.000-03:00")
+const PHOTO = "https://dev.pay.sozu.capital/api/public/stores/org/items/tee/image"
+
+const DROP: CollectibleSouvenir = {
+  slug: "noche-pizza-abc123",
+  name: "Noche Pizza",
+  drop: "Da Bruno",
+  imagePath: "data:image/jpeg;base64,aaaa",
+  claimStartsAt: "2026-11-17T00:00:00.000-03:00",
+  claimEndsAt: "2026-11-19T00:00:00.000-03:00",
+}
 
 describe("profile souvenirs", () => {
-  it("keeps a bought 1/10 as a 3D receipt and an unclaimed event badge as something to sign for", () => {
+  it("keeps a bought 1/10 as a receipt with the merchant photo, and an unclaimed launch as something to sign for", () => {
     const { held, claimable } = profileSouvenirs({
       purchases: [
         {
           hash,
-          merchantName: "Liquid Society",
+          merchantName: "UNBLCK",
           itemName: "T-shirt 1/10",
           amount: "15.00",
           createdAt: "2026-11-14T04:00:00.000Z",
-          collectible: false,
+          collectible: true,
+          imageUrl: PHOTO,
         },
       ],
       claims: [],
-      catalog: listCollectibleSouvenirs(),
+      catalog: [DROP],
       language: "en",
       network: "testnet",
       nowMs: DURING_EVENT,
     })
 
-    expect(claimable.map((item) => item.slug)).toEqual([LIQUID_SOCIETY_SOUVENIR_SLUG])
+    expect(claimable.map((item) => item.slug)).toEqual([DROP.slug])
     expect(held).toHaveLength(1)
     expect(held[0]?.kind).toBe("receipt")
     if (held[0]?.kind === "receipt") {
       expect(held[0].name).toBe("T-shirt")
       expect(held[0].receipt.editionLabel).toBe("1/10")
       expect(held[0].receipt.itemName).toBe("T-shirt")
+      expect(held[0].receipt.imageUrl).toBe(PHOTO)
     }
   })
 
   it("turns a signed event claim into a badge and stops offering it", () => {
-    const catalog = listCollectibleSouvenirs()
     const { held, claimable } = profileSouvenirs({
       purchases: [],
       claims: [
         {
-          slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
+          slug: DROP.slug,
           walletAddress: "C".padEnd(56, "A"),
           claimedAt: "2026-11-18T22:00:00.000Z",
         },
       ],
-      catalog,
+      catalog: [DROP],
       language: "es",
       network: "testnet",
       nowMs: DURING_EVENT,
@@ -58,29 +69,28 @@ describe("profile souvenirs", () => {
     expect(held).toEqual([
       {
         kind: "badge",
-        id: `badge:${LIQUID_SOCIETY_SOUVENIR_SLUG}`,
-        name: "Collectible Souvenir",
-        drop: catalog[0]?.drop,
-        imagePath: "/merch/liquid-society-souvenir.svg",
+        id: `badge:${DROP.slug}`,
+        name: DROP.name,
+        drop: DROP.drop,
+        imagePath: DROP.imagePath,
       },
     ])
   })
 
   it("keeps a claimed badge forever after the window closes, and will not offer a second claim", () => {
-    const catalog = listCollectibleSouvenirs()
     const claimed = profileSouvenirs({
       purchases: [],
       claims: [
         {
-          slug: LIQUID_SOCIETY_SOUVENIR_SLUG,
+          slug: DROP.slug,
           walletAddress: "C".padEnd(56, "A"),
           claimedAt: "2026-11-18T22:00:00.000Z",
-          name: "Collectible Souvenir",
-          drop: catalog[0]?.drop,
-          imagePath: "/merch/liquid-society-souvenir.svg",
+          name: DROP.name,
+          drop: DROP.drop,
+          imagePath: DROP.imagePath,
         },
       ],
-      catalog,
+      catalog: [DROP],
       language: "en",
       network: "testnet",
       nowMs: AFTER_EVENT,
@@ -89,14 +99,14 @@ describe("profile souvenirs", () => {
     expect(claimed.held).toHaveLength(1)
     expect(claimed.held[0]).toMatchObject({
       kind: "badge",
-      id: `badge:${LIQUID_SOCIETY_SOUVENIR_SLUG}`,
-      name: "Collectible Souvenir",
+      id: `badge:${DROP.slug}`,
+      name: DROP.name,
     })
 
     const missed = profileSouvenirs({
       purchases: [],
       claims: [],
-      catalog,
+      catalog: [DROP],
       language: "en",
       network: "testnet",
       nowMs: AFTER_EVENT,
@@ -105,9 +115,9 @@ describe("profile souvenirs", () => {
     expect(missed.held).toEqual([])
   })
 
-  it("does not invent a receipt image for the badge model", () => {
+  it("does not invent a receipt image when the purchase had none", () => {
     const receipt = buildCollectibleReceipt({
-      item: { name: "T-shirt", drop: "Liquid Society", network: "testnet" },
+      item: { name: "T-shirt", drop: "UNBLCK", network: "testnet" },
       language: "en",
       status: "paid",
       priceUsdc: "15",
@@ -116,5 +126,6 @@ describe("profile souvenirs", () => {
       edition: { number: 1, size: 10 },
     })
     expect(receipt.editionLabel).toBe("1/10")
+    expect(receipt.imageUrl).toBeNull()
   })
 })

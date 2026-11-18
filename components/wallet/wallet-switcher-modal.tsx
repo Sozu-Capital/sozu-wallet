@@ -10,7 +10,7 @@ import { BadgePopup, SouvenirPopup } from "@/components/merch/souvenir-popup"
 import { SouvenirList, type SouvenirListItem } from "@/components/merch/souvenir-list"
 import { SozuShaderAvatar } from "@/components/ui/sozu-shader-avatar"
 import { readSavedPurchases, type SavedPurchase } from "@/lib/checkout/saved-purchases"
-import { listCollectibleSouvenirs, type CollectibleSouvenir } from "@/lib/merch/catalog"
+import type { CollectibleSouvenir } from "@/lib/merch/catalog"
 import { claimEventSouvenir, fetchAccountSouvenirs } from "@/lib/merch/claim-souvenir"
 import { merchCopy } from "@/lib/merch/copy"
 import { profileSouvenirs, readClaimedSouvenirs, type ClaimedSouvenir, type HeldSouvenir } from "@/lib/merch/souvenirs"
@@ -55,7 +55,7 @@ export function WalletSwitcherModal({
   const [view, setView] = useState<"wallets" | "souvenirs">("wallets")
   const [purchases, setPurchases] = useState<SavedPurchase[]>([])
   const [claims, setClaims] = useState<ClaimedSouvenir[]>([])
-  const [catalog, setCatalog] = useState<readonly CollectibleSouvenir[]>(() => listCollectibleSouvenirs())
+  const [catalog, setCatalog] = useState<readonly CollectibleSouvenir[]>([])
   const [openSouvenir, setOpenSouvenir] = useState<HeldSouvenir | null>(null)
   const [claimingId, setClaimingId] = useState<string | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -72,7 +72,13 @@ export function WalletSwitcherModal({
   const souvenirItems: SouvenirListItem[] = [
     ...held.map((item) =>
       item.kind === "receipt"
-        ? { id: item.id, kind: "receipt" as const, name: item.name, drop: item.drop }
+        ? {
+            id: item.id,
+            kind: "receipt" as const,
+            name: item.name,
+            drop: item.drop,
+            imageUrl: item.receipt.imageUrl,
+          }
         : { id: item.id, kind: "badge" as const, name: item.name, drop: item.drop, imagePath: item.imagePath },
     ),
     ...claimable.map((item) => ({
@@ -138,10 +144,10 @@ export function WalletSwitcherModal({
     }
     setPurchases(readSavedPurchases())
     setClaims(readClaimedSouvenirs(walletAddress))
-    setCatalog(listCollectibleSouvenirs())
+    setCatalog([])
     void fetchAccountSouvenirs().then((remote) => {
       if (!remote) return
-      setCatalog(remote.catalog.length > 0 ? remote.catalog : listCollectibleSouvenirs())
+      setCatalog(remote.catalog)
       setClaims(remote.claims)
     })
   }, [isOpen, walletAddress])
