@@ -5,6 +5,7 @@ import { corsHeaders, handleOPTIONS } from "@/lib/cors"
 import { resolveUserId } from "@/lib/auth/resolve-user"
 import { normalizeCredentialId } from "@/lib/webauthn/normalize-credential-id"
 import { ozDeploySalt } from "@/lib/stellar/smartAccounts/oz-deploy-id"
+import { parsePasskeyPublicKey65 } from "@/lib/stellar/smartAccounts/passkeyPublicKey"
 import {
   SponsoredDeployRejected,
   submitSponsoredDeploy,
@@ -36,15 +37,25 @@ export async function POST(request: NextRequest) {
     const svc = createServiceClient(supabaseUrl, supabaseServiceKey)
     const { data: passkeys, error } = await svc
       .from("passkeys")
-      .select("credential_id")
+      .select("credential_id, public_key")
       .eq("user_id", session.userId)
     if (error) throw new Error("Could not load passkeys for this account.")
-    const salts = (passkeys ?? [])
-      .map((row) => (typeof row.credential_id === "string" ? normalizeCredentialId(row.credential_id) : ""))
-      .filter((id) => id.length > 0)
-      .map((id) => ozDeploySalt(id, session.userId))
+    const passkeySigners = (passkeys ?? []).flatMap((row) => {
+      const id = typeof row.credential_id === "string" ? normalizeCredentialId(row.credential_id) : ""
+      if (!id || typeof row.public_key !== "string") return []
+      try {
+        return [
+          {
+            salt: ozDeploySalt(id, session.userId),
+            publicKey: Buffer.from(parsePasskeyPublicKey65(row.public_key)),
+          },
+        ]
+      } catch {
+        return []
+      }
+    })
 
-    const submitted = await submitSponsoredDeploy(signedXdr, salts)
+    const submitted = await submitSponsoredDeploy(signedXdr, passkeySigners)
     return NextResponse.json(
       {
         ok: true,
