@@ -42,10 +42,10 @@ describe("waitlist middleware", () => {
     expect(rewriteTarget(response)).toBe("https://app.sozu.capital/waitlist")
   })
 
-  it("leaves the app open during the signup window", async () => {
+  it("keeps the waitlist up during the signup window without the cookie", async () => {
     vi.setSystemTime(EVENT_SIGNUP_OPENS_AT_MS)
     const response = await middleware(request("/"))
-    expect(rewriteTarget(response)).toBeNull()
+    expect(rewriteTarget(response)).toBe("https://app.sozu.capital/waitlist")
   })
 
   it("redirects app pages and dotted page URLs to the root", async () => {
@@ -87,8 +87,23 @@ describe("waitlist middleware", () => {
     expect(response.headers.get("location")).toBe("https://app.sozu.capital/")
   })
 
-  it("keeps sign-in reachable after the window closes", async () => {
-    const response = await middleware(request("/auth"))
-    expect(response.headers.get("location")).toBe("https://app.sozu.capital/auth")
+  it("keeps sign-in behind the event cookie", async () => {
+    vi.setSystemTime(EVENT_SIGNUP_OPENS_AT_MS)
+    const closed = await middleware(request("/auth"))
+    expect(closed.status).toBe(307)
+    expect(closed.headers.get("location")).toBe("https://app.sozu.capital/")
+
+    const admitted = await middleware(request("/auth", TOKEN))
+    expect(admitted.headers.get("location")).toBe("https://app.sozu.capital/auth")
+  })
+
+  it("refuses account entry APIs without the event cookie", async () => {
+    vi.setSystemTime(EVENT_SIGNUP_OPENS_AT_MS)
+    for (const path of ["/api/auth/login/verify", "/api/auth/register/challenge"]) {
+      const closed = await middleware(request(path))
+      expect(closed.status).toBe(403)
+      const admitted = await middleware(request(path, TOKEN))
+      expect(isNext(admitted)).toBe(true)
+    }
   })
 })

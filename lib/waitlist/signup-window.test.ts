@@ -26,9 +26,11 @@ describe("event signup window", () => {
     expect(isEventSignupOpen(AT_CLOSE)).toBe(false)
   })
 
-  it("keeps the app open for the whole of Wednesday on production", () => {
-    const input = { pathname: "/", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: DURING }
-    expect(betaAccessDecision(input)).toBe("open")
+  it("keeps production on the waitlist during Wednesday unless the event cookie is present", () => {
+    const closed = { pathname: "/", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: DURING }
+    const admitted = { ...closed, hasBypass: true, hasSession: true }
+    expect(betaAccessDecision(closed)).toBe("rewrite")
+    expect(betaAccessDecision(admitted)).toBe("pass")
   })
 
   it("refuses a new production account after Thursday 00:00 ART", () => {
@@ -46,12 +48,13 @@ describe("event signup window", () => {
     ).toBe("open")
   })
 
-  it("shows the waitlist after midnight and still lets an existing session through", () => {
+  it("keeps the waitlist up after midnight even for a passkey session", () => {
     expect(betaAccessDecision({ pathname: "/", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("rewrite")
     expect(betaAccessDecision({ pathname: "/home", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("redirect")
-    expect(betaAccessDecision({ pathname: "/home", host: "app.sozu.capital", hasBypass: false, hasSession: true, nowMs: AT_CLOSE })).toBe("pass")
-    expect(betaAccessDecision({ pathname: "/auth", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("pass")
-    expect(betaAccessDecision({ pathname: "/auth/add-device", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("pass")
+    expect(betaAccessDecision({ pathname: "/home", host: "app.sozu.capital", hasBypass: false, hasSession: true, nowMs: AT_CLOSE })).toBe("redirect")
+    expect(betaAccessDecision({ pathname: "/auth", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("redirect")
+    expect(betaAccessDecision({ pathname: "/auth", host: "app.sozu.capital", hasBypass: true, hasSession: false, nowMs: AT_CLOSE })).toBe("pass")
+    expect(betaAccessDecision({ pathname: "/auth/add-device", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("redirect")
     expect(betaAccessDecision({ pathname: "/auth/cross-device", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("redirect")
     expect(betaAccessDecision({ pathname: "/api/auth/login/verify", host: "app.sozu.capital", hasBypass: false, hasSession: false, nowMs: AT_CLOSE })).toBe("pass")
   })
