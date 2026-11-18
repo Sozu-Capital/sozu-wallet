@@ -61,7 +61,7 @@ export function toPublicFaucet(row: FaucetRow): FaucetPublic {
     locationName: row.location_name,
     lat: row.lat,
     lng: row.lng,
-    claimAmount: row.claim_amount,
+    claimAmount: resolveClaimAmount(row.claim_amount),
     dailyLimit: row.daily_limit,
     status: row.status,
   };
