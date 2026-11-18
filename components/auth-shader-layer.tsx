@@ -1,8 +1,13 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { ShaderBackground } from "@/components/ui/adisyon-shader"
+
+const ShaderBackground = dynamic(
+  () => import("@/components/ui/adisyon-shader").then((mod) => mod.ShaderBackground),
+  { ssr: false },
+)
 
 const FADE_MS = 700
 

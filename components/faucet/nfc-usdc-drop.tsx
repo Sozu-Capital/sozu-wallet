@@ -1,9 +1,14 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { HapticProbe } from "@/components/faucet/haptic-probe"
+
+const HapticProbe = dynamic(
+  () => import("@/components/faucet/haptic-probe").then((mod) => mod.HapticProbe),
+  { ssr: false },
+)
 import { isClientAuthed } from "@/lib/client-auth-gate"
 import { NFC_USDC_DROP_PATH } from "@/lib/faucet/nfc-usdc-drop"
 import {
