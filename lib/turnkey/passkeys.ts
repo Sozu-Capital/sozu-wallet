@@ -325,6 +325,18 @@ export async function createPasskey(
       }
     }
 
+    // getAuthenticatorData is newer than the passkey ceremony. The attestation
+    // object already carries the same bytes, and calling a missing method here
+    // used to throw after the phone had already saved the passkey.
+    let authenticatorData: string | undefined
+    if (typeof response.getAuthenticatorData === "function") {
+      try {
+        authenticatorData = arrayBufferToBase64URL(response.getAuthenticatorData())
+      } catch (authDataError) {
+        console.warn("[createPasskey] authenticatorData unavailable:", authDataError)
+      }
+    }
+
     return {
       id: credential.id,
       rawId: arrayBufferToBase64URL(credential.rawId),
@@ -332,7 +344,7 @@ export async function createPasskey(
       response: {
         clientDataJSON: arrayBufferToBase64URL(response.clientDataJSON),
         attestationObject: arrayBufferToBase64URL(response.attestationObject),
-        authenticatorData: arrayBufferToBase64URL(response.getAuthenticatorData()),
+        ...(authenticatorData ? { authenticatorData } : {}),
         ...(publicKeyB64 ? { publicKey: publicKeyB64 } : {}),
         userHandle: userHandle,
         ...(transports.length > 0 ? { transports } : {}),
@@ -422,16 +434,20 @@ export async function getPasskey(
       window.location.hostname
 
     const listed = options?.uiMode === "immediate" ? [] : challenge.allowCredentials
+    // An empty allowCredentials list means "no credentials", so the phone
+    // rejects the new passkey. Omit the field so the device can discover it.
+    const allowCredentials =
+      listed && listed.length > 0
+        ? listed.map((cred) => ({
+            id: base64URLToArrayBuffer(cred.id),
+            type: cred.type as PublicKeyCredentialType,
+            ...(cred.transports && cred.transports.length > 0 ? { transports: cred.transports } : {}),
+          }))
+        : undefined
     const publicKeyOptions: PublicKeyCredentialRequestOptions = {
       challenge: base64URLToArrayBuffer(challenge.challenge),
       rpId,
-      allowCredentials: listed?.map((cred) => ({
-        id: base64URLToArrayBuffer(cred.id),
-        type: cred.type as PublicKeyCredentialType,
-        // Only include transports if explicitly provided
-        // Omitting transports allows browser to use any available transport for that credential
-        ...(cred.transports && cred.transports.length > 0 ? { transports: cred.transports } : {}),
-      })) || [],
+      ...(allowCredentials ? { allowCredentials } : {}),
       timeout: challenge.timeout || 60000,
       userVerification: challenge.userVerification || "required",
     }
@@ -519,7 +535,8 @@ function arrayBufferToBase64URL(buffer: ArrayBuffer): string {
 
 function base64URLToArrayBuffer(base64url: string): ArrayBuffer {
   const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/")
-  const binary = atob(base64)
+  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4))
+  const binary = atob(base64 + pad)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)

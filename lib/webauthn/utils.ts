@@ -11,7 +11,8 @@ export function bufferToBase64URL(buffer: ArrayBuffer): string {
 // Convert Base64URL to ArrayBuffer
 export function base64URLToBuffer(base64url: string): ArrayBuffer {
   const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/")
-  const binary = atob(base64)
+  const pad = base64.length % 4 === 0 ? "" : "=".repeat(4 - (base64.length % 4))
+  const binary = atob(base64 + pad)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)

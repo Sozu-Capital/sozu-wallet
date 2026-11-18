@@ -34,8 +34,8 @@ function simulationSourcePublicKey(): string | null {
   return getConfiguredFunderPublicKey();
 }
 
-function getSorobanRpcUrl(): string {
-  return resolveSorobanRpcUrlForNetwork("testnet");
+function getSorobanRpcUrl(network: "testnet" | "mainnet"): string {
+  return resolveSorobanRpcUrlForNetwork(network);
 }
 
 const BALANCE_CACHE_MS = 30_000;
@@ -68,26 +68,30 @@ async function readFaucetVaultBalanceMinor(): Promise<bigint | null> {
   const cfg = getStellarConfig();
   const network = cfg.network === "mainnet" ? "mainnet" : "testnet";
 
-  const server = new rpc.Server(getSorobanRpcUrl(), { allowHttp: network === "testnet" });
-  const account = await server.getAccount(sourcePk);
-  const faucet = new Contract(contractId);
+  const server = new rpc.Server(getSorobanRpcUrl(network), { allowHttp: network === "testnet" });
+  try {
+    const account = await server.getAccount(sourcePk);
+    const faucet = new Contract(contractId);
 
-  const tx = new TransactionBuilder(account, {
-    fee: "100",
-    networkPassphrase: network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
-  })
-    .addOperation(faucet.call("balance"))
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(account, {
+      fee: "100",
+      networkPassphrase: network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET,
+    })
+      .addOperation(faucet.call("balance"))
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (Api.isSimulationError(sim) || !sim.result?.retval) return null;
+    const sim = await server.simulateTransaction(tx);
+    if (Api.isSimulationError(sim) || !sim.result?.retval) return null;
 
-  const native = scValToNative(sim.result.retval);
-  if (typeof native === "bigint") return native;
-  if (typeof native === "number") return BigInt(Math.trunc(native));
-  if (typeof native === "string") return BigInt(native);
-  return null;
+    const native = scValToNative(sim.result.retval);
+    if (typeof native === "bigint") return native;
+    if (typeof native === "number") return BigInt(Math.trunc(native));
+    if (typeof native === "string") return BigInt(native);
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -547,11 +547,13 @@ function AuthPageContent() {
         return
       }
 
+      // The phone accepted a passkey that this account does not have. Drop the
+      // remembered tag so Enter opens the account windows instead of looping
+      // on the lock screen with no error.
       setIsAuthenticating(false)
-      if (result.error && /not found/i.test(result.error)) {
-        localStorage.removeItem("sozu_username")
-        startSignup()
-      }
+      if (typeof window !== "undefined") localStorage.removeItem("sozu_username")
+      toast.error(t.authFailed)
+      startSignup()
       return
     }
 
@@ -1021,7 +1023,9 @@ function AuthPageContent() {
         return
       }
       setIsAuthenticating(false)
+      if (typeof window !== "undefined") localStorage.removeItem("sozu_username")
       toast.error(t.authFailed)
+      openAccountWindows()
       console.log("[Auth] Authentication failed - setting isAuthenticating to false")
     } finally {
       console.log("[Auth] ====== Authentication flow complete ======")

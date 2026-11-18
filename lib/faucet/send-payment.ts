@@ -38,6 +38,7 @@ import { getAssetById, getBlendUsdcAsset } from "@/lib/stellar/asset-registry";
 import { normalizeHolderAddress } from "@/lib/stellar/stellar-holder";
 import { ensureTestnetAccountFunded } from "@/lib/stellar/soroban-fee-payer";
 import { xdrField, xdrType } from "@/lib/stellar/xdr-access";
+import { resolveSorobanRpcUrlForNetwork } from "@/lib/stellar/network-env";
 import { getStellarConfig } from "@/lib/turnkey/config";
 import {
   getFaucetVaultBalanceMinor,
@@ -94,13 +95,7 @@ function getFaucetTokenContractId(network: "testnet" | "mainnet"): string {
 }
 
 function getSorobanRpcUrl(network: "testnet" | "mainnet"): string {
-  return (
-    process.env.SOROBAN_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SOROBAN_RPC_URL?.trim() ||
-    (network === "testnet"
-      ? "https://soroban-testnet.stellar.org"
-      : "https://soroban.stellar.org")
-  );
+  return resolveSorobanRpcUrlForNetwork(network);
 }
 
 function amountToI128ScVal(amount: number, decimals: number): xdr.ScVal {
