@@ -1,7 +1,7 @@
 /**
  * Sellable merch items. One record per hang-tag slug.
  * Prices recorded by Joaquín on 13 Nov 2026 (szw #57):
- * the Liquid Society shirt is 15 USDC, pre-mint 10;
+ * the Liquid Society shirt is 10 USDC, the Unblck checkout price, pre-mint 10;
  * the 5-panel is 8 USDC, pre-mint supply not stated.
  * Contract, distributor, and the merch address stay empty until he records them.
  * The page reads this record. It does not invent a contract or a supply.
@@ -49,7 +49,7 @@ const SHIRT: MerchItemRecord = {
   slug: LIQUID_SOCIETY_SLUG,
   name: "T-shirt",
   imagePath: "/merch/liquid-society.svg",
-  priceUsdc: "15",
+  priceUsdc: "10",
   preMintSupply: 10,
   drop: LIQUID_SOCIETY_DROP,
   network: "testnet",

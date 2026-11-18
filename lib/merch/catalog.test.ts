@@ -23,7 +23,7 @@ describe("merch catalog", () => {
       slug: LIQUID_SOCIETY_SLUG,
       name: "T-shirt",
       imagePath: "/merch/liquid-society.svg",
-      priceUsdc: "15",
+      priceUsdc: "10",
       preMintSupply: 10,
       drop: LIQUID_SOCIETY_DROP,
       network: "testnet",
