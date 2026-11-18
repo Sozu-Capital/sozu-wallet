@@ -1,20 +1,20 @@
 # Architecture and platform
 
-High-level view of how SozuCredit is structured: custody models, backend responsibilities, and where truth lives.
-
-**Strategic direction:** Long-term privacy, compliance, and self-custody phasing is in [privacy-wallet-roadmap.md](./privacy-wallet-roadmap.md) (Phases 1–10). This file describes the **current** platform shape.
+Current platform shape. Product surface and integration status: root [README](../README.md). Privacy/compliance phasing (not shipped): [privacy-wallet-roadmap.md](./privacy-wallet-roadmap.md).
 
 ## Frontend and API
 
-- **Next.js (App Router)** hosts the PWA UI and route handlers (wallet, auth, ledger, payment rail).
-- **Supabase (PostgreSQL + RLS)** stores profiles, passkeys, trust/vouches data, wallet metadata, email-ledger rows, and payment sessions as implemented per migration.
+- **Next.js 16 App Router** — PWA at `/home` (Settings · Pay/Deposit · History) plus `/auth` and env-flagged rails (deposits, SDP, ledger).
+- **Route handlers** under `app/api/` — Node, not a separate Edge service.
+- **Supabase (PostgreSQL + RLS)** — profiles, passkeys, `stellar_wallets`, ledger, deposit intents. Incremental DDL in `supabase/migrations/` does not recreate a full database from scratch.
 
 ## Custody and wallets
 
-- **Turnkey** backs passkey-based authentication and Stellar wallet provisioning for the product UX described in the main README.
-- Users interact with **Stellar** (classic + Soroban paths depending on feature) for balances and DeFi strategies where integrated.
-
-Design discussions around “self-custodial vs assisted” evolution belong here conceptually: prefer enforcing least-privilege API keys, clear separation of **signing** vs **read-only** operations, and documented recovery flows (passkey reset) rather than ad-hoc DB edits.
+- **WebAuthn passkey** stored in `passkeys`. That credential is the spend authority.
+- **OpenZeppelin smart account (`C…`)** via `smart-account-kit`. Provisioned at auth ([ADR 0001](./adr/0001-auth-owned-oz-wallet-provisioning.md)). `stellar_wallets.public_key` is the `C…` address; `wallet_type` is `oz`.
+- **Fee-payer `G…`** (`STELLAR_FUNDER_SECRET`) is the Soroban transaction source. It sponsors gas; it cannot spend user USDC without the passkey `__check_auth`.
+- **Turnkey** is leftover (`lib/turnkey/`, `createStellarWallet`). New users do not get a Turnkey HD wallet.
+- Balances and sends are **Soroban token contracts** (Circle USDC SAC by default). Earn is an optional DeFindex vault → Blend USDC reserve. See [wallet-stellar-defindex.md](./wallet-stellar-defindex.md).
 
 ## Schema source of truth
 
