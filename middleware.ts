@@ -7,10 +7,17 @@ import {
   WAITLIST_PATH,
   isValidBypass,
 } from "@/lib/waitlist/waitlist-mode"
-import { betaAccessDecision } from "@/lib/waitlist/signup-window"
+import { betaAccessDecision, isProductionBetaHost } from "@/lib/waitlist/signup-window"
 import { NextResponse, type NextRequest } from "next/server"
 
 const IMAGE_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp)$/i
+
+function requestHost(request: NextRequest): string | null {
+  const forwarded = request.headers.get("x-forwarded-host") ?? request.headers.get("host")
+  return forwarded?.split(",")[0]?.trim() || request.nextUrl.host || null
+}
+/** Account entry points. Other APIs stay open for pay, the faucet, and SDP. */
+const EVENT_ENTRY_API = /^\/api\/auth\/(?:register|login|recovery|pin|cross-device|username)(?:\/|$)/
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
@@ -72,12 +79,23 @@ async function waitlistResponse(request: NextRequest): Promise<NextResponse | nu
   }
 
   const hasBypass = isValidBypass(request.cookies.get(WAITLIST_BYPASS_COOKIE)?.value)
+  if (
+    !hasBypass &&
+    isProductionBetaHost(requestHost(request)) &&
+    EVENT_ENTRY_API.test(request.nextUrl.pathname)
+  ) {
+    return NextResponse.json(
+      { error: "Closed beta. Open the event link to continue.", code: "beta_closed" },
+      { status: 403 },
+    )
+  }
+
   const hasSession = await hasValidWalletSessionCookie(request.cookies.get(WALLET_SESSION_COOKIE)?.value)
   const decision = betaAccessDecision({
     pathname: request.nextUrl.pathname,
     hasBypass,
     hasSession,
-    host: request.headers.get("host"),
+    host: requestHost(request),
     nowMs: Date.now(),
   })
   if (decision === "open" || decision === "pass") return null

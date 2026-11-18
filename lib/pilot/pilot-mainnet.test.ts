@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { buildSessionCookieValue } from "@/lib/auth/session-cookie"
 import { WALLET_SESSION_COOKIE } from "@/lib/auth/wallet-session-edge"
+import { WAITLIST_BYPASS_COOKIE } from "@/lib/waitlist/waitlist-mode"
 import { isPilotBlockedPath, PILOT_BLOCKED_PREFIXES } from "./pilot-mainnet"
 
 vi.mock("@/lib/supabase/middleware", () => ({
@@ -144,10 +145,19 @@ describe("middleware under PILOT_MAINNET=1", () => {
   it("still runs the page session check for allowed pages", async () => {
     vi.stubEnv("PILOT_MAINNET", "1")
     vi.stubEnv("WALLET_SESSION_SECRET", "test-secret")
+    vi.stubEnv("WAITLIST_BYPASS_TOKEN", "event-bypass-token-0123456789")
     const cookie = buildSessionCookieValue("user-1", Date.now(), "test-secret")
-    const response = await middleware(
+    const locked = await middleware(
       new NextRequest("https://app.sozu.capital/home", {
         headers: { cookie: `${WALLET_SESSION_COOKIE}=${cookie}` },
+      }),
+    )
+    expect(locked.status).toBe(307)
+    const response = await middleware(
+      new NextRequest("https://app.sozu.capital/home", {
+        headers: {
+          cookie: `${WALLET_SESSION_COOKIE}=${cookie}; ${WAITLIST_BYPASS_COOKIE}=event-bypass-token-0123456789`,
+        },
       }),
     )
     expect(response.status).toBe(299)
