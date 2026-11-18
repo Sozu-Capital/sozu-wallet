@@ -81,6 +81,7 @@ export function purchasePlaceholderReceipts(input: {
           sale.editionNumber && sale.editionSize
             ? { number: sale.editionNumber, size: sale.editionSize }
             : null,
+        imageUrl: saved.imageUrl,
       }),
     })
   }

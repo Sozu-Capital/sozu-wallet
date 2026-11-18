@@ -95,6 +95,23 @@ describe("collectible receipt", () => {
     expect(card).not.toContain('data-product="shirt"')
   })
 
+  it("keeps a JPEG data URL from the SozuPay payment-link row", () => {
+    const item = getMerchItem(LIQUID_SOCIETY_SLUG)
+    if (!item) throw new Error("missing seed")
+    const photo = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD"
+    const receipt = buildCollectibleReceipt({
+      item,
+      language: "en",
+      status: "paid",
+      priceUsdc: "15",
+      paymentHash: PAYMENT,
+      transferHash: null,
+      createdAt: "2026-11-18T22:00:00.000Z",
+      imageUrl: photo,
+    })
+    expect(receipt.imageUrl).toBe(photo)
+  })
+
   it("shows receipt pending when the order is paid and the transfer hash is missing", () => {
     const receipt = model("es", null, "paid")
     const card = renderToStaticMarkup(createElement(CollectibleReceipt, { model: receipt }))

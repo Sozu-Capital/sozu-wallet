@@ -54,6 +54,38 @@ describe("purchase placeholder receipts", () => {
     expect(cards[0].receipt.statusLabel).toBe("Receipt pending")
   })
 
+  it("keeps the merchant photo saved from the payment link", () => {
+    const photo = "https://pay.sozu.capital/api/public/stores/org/items/tee/image"
+    const cards = purchasePlaceholderReceipts({
+      wallet,
+      transfers: [
+        {
+          hash,
+          createdAt: "2026-11-14T04:00:00.000Z",
+          from: wallet,
+          to: merchant,
+          amount: 8,
+          asset: "USDC",
+        },
+      ],
+      saved: [
+        {
+          hash,
+          merchantName: "UNBLCK",
+          itemName: "Polera UNBLCK Drop-002",
+          amount: "8.00",
+          createdAt: "2026-11-14T04:00:00.000Z",
+          collectible: true,
+          imageUrl: photo,
+        },
+      ],
+      language: "en",
+      network: "testnet",
+    })
+    expect(cards).toHaveLength(1)
+    expect(cards[0].receipt.imageUrl).toBe(photo)
+  })
+
   it("ignores incoming transfers, drinks, and peer payments", () => {
     const cards = purchasePlaceholderReceipts({
       wallet,

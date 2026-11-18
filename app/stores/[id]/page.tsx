@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 
-type Item = { slug: string; name: string; amountUsd: string; collectibleReceipt?: boolean }
+type Item = {
+  slug: string
+  name: string
+  amountUsd: string
+  collectibleReceipt?: boolean
+  imageUrl?: string | null
+}
 type Profile = { id: string; name: string; items: Item[] }
 
 export default function StoreProfilePage() {
@@ -67,9 +73,18 @@ export default function StoreProfilePage() {
                 type="button"
                 disabled={busy}
                 onClick={() => void pay({ slug: item.slug })}
-                className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left disabled:opacity-50"
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left disabled:opacity-50"
               >
-                <span>
+                {item.imageUrl ? (
+                  // Merchant photo, not a Next image: the file is served by the pay host.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-xl object-cover"
+                  />
+                ) : null}
+                <span className="min-w-0 flex-1">
                   <span className="font-medium">{item.name}</span>
                   {item.collectibleReceipt ? (
                     <span className="mt-1 block text-xs font-normal text-white/50">Coleccionable</span>
